@@ -1,0 +1,1 @@
+ALTER TABLE public.participantes_eventos ADD COLUMN IF NOT EXISTS adicionado_por_nome text;
