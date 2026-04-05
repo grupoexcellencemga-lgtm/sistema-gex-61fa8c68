@@ -22,7 +22,6 @@ const Dashboard = () => {
   const [mes, setMes] = useState(brNow.getMonth());
   const [ano, setAno] = useState(brNow.getFullYear());
   const { userRole, isReady } = usePermissions();
-
   const role = userRole || "admin";
   const description = roleDescriptions[role] || roleDescriptions.admin;
 
@@ -33,7 +32,9 @@ const Dashboard = () => {
           <PageHeader title="Dashboard" description={description} />
           <MonthFilter mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
         </div>
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
@@ -44,12 +45,13 @@ const Dashboard = () => {
         <PageHeader title="Dashboard" description={description} />
         <MonthFilter mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
       </div>
-
       {role === "comercial" && <DashboardComercial mes={mes} ano={ano} />}
       {role === "financeiro" && <DashboardFinanceiro mes={mes} ano={ano} />}
       {role === "profissional" && <DashboardProfissional mes={mes} ano={ano} />}
       {role === "suporte" && <DashboardSuporte mes={mes} ano={ano} />}
-      {(role === "admin" || !["comercial", "financeiro", "profissional", "suporte"].includes(role)) && <DashboardAdmin mes={mes} ano={ano} />}
+      {(role === "admin" || !["comercial", "financeiro", "profissional", "suporte"].includes(role)) && (
+        <DashboardAdmin mes={mes} ano={ano} />
+      )}
     </div>
   );
 };
