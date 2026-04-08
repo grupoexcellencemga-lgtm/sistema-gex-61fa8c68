@@ -12,8 +12,7 @@ interface Props {
 
 export function ModalScannerNota({ aberto, onFechar, onDadosExtraidos }: Props) {
   const [imagem, setImagem] = useState<string | null>(null);
-  const [imagemBase64, setImagemBase64] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState('image/jpeg');
+  const [arquivo, setArquivo] = useState<File | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -21,28 +20,23 @@ export function ModalScannerNota({ aberto, onFechar, onDadosExtraidos }: Props) 
   const processarArquivo = (file: File) => {
     if (!file.type.startsWith('image/')) return;
     setErro(null);
+    setArquivo(file);
     const url = URL.createObjectURL(file);
     setImagem(url);
-    setMimeType(file.type);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = (e.target?.result as string).split(',')[1];
-      setImagemBase64(base64);
-    };
-    reader.readAsDataURL(file);
   };
 
   const analisar = async () => {
-    if (!imagemBase64) return;
+    if (!arquivo) return;
     setCarregando(true);
     setErro(null);
     try {
-      const dados = await escanearNota(imagemBase64, mimeType);
+      const dados = await escanearNota(arquivo);
       onDadosExtraidos(dados);
       onFechar();
       resetar();
-    } catch {
-      setErro('Não foi possível extrair os dados. Tente uma foto mais nítida.');
+    } catch (err) {
+      console.error('Erro scanner:', err);
+      setErro('Nao foi possivel extrair os dados. Tente uma foto mais nitida.');
     } finally {
       setCarregando(false);
     }
@@ -50,7 +44,7 @@ export function ModalScannerNota({ aberto, onFechar, onDadosExtraidos }: Props) 
 
   const resetar = () => {
     setImagem(null);
-    setImagemBase64(null);
+    setArquivo(null);
     setErro(null);
   };
 
@@ -71,7 +65,6 @@ export function ModalScannerNota({ aberto, onFechar, onDadosExtraidos }: Props) 
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Área de upload */}
           <div
             onClick={() => inputRef.current?.click()}
             onDrop={handleDrop}
@@ -103,14 +96,12 @@ export function ModalScannerNota({ aberto, onFechar, onDadosExtraidos }: Props) 
             )}
           </div>
 
-          {/* Erro */}
           {erro && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
-              ⚠️ {erro}
+              {erro}
             </div>
           )}
 
-          {/* Botões */}
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => { onFechar(); resetar(); }} className="flex-1">
               Cancelar
