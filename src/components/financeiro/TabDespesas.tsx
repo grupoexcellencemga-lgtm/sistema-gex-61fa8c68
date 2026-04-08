@@ -12,10 +12,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { TrendingDown, Loader2, Plus, Receipt, Wallet, Pencil, Trash2 } from "lucide-react";
+import { TrendingDown, Loader2, Plus, Receipt, Wallet, Pencil, Trash2, Camera } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
+import { ModalScannerNota } from "./ModalScannerNota";
+import { DadosNota } from "@/services/scannerNota";
+
+// Default blank form state
+const blankForm = {
+  descricao: "",
+  valor: "",
+  data: new Date().toISOString().split("T")[0],
+  categoria_id: "",
+  conta_bancaria_id: "",
+  produto_id: "",
+  turma_id: "",
+  fornecedor: "",
+  forma_pagamento: "",
+  recorrente: "false",
+  observacoes: "",
+};
 
 export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
@@ -26,6 +43,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<any>(null);
   const [formProdutoId, setFormProdutoId] = useState("");
+  const [modalScannerAberto, setModalScannerAberto] = useState(false);
+  const [formValues, setFormValues] = useState<typeof blankForm>(blankForm);
+  const setFormField = (key: string, value: string) => setFormValues((f) => ({ ...f, [key]: value }));
 
   const { data: despesas = [], isLoading } = useQuery({
     queryKey: ["despesas"],
@@ -125,10 +145,36 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const form: any = Object.fromEntries(fd.entries());
+    const form: any = { ...formValues };
     if (editingDespesa) form.id = editingDespesa.id;
     saveDespesa.mutate(form);
+  };
+
+  const handleDadosExtraidos = (dados: DadosNota) => {
+    // Convert DD/MM/AAAA → AAAA-MM-DD for the date input
+    let dataFormatada = new Date().toISOString().split("T")[0];
+    if (dados.data) {
+      const parts = dados.data.split("/");
+      if (parts.length === 3) {
+        dataFormatada = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    setFormValues({
+      descricao: dados.descricao || dados.fornecedor || "",
+      valor: dados.valor || "",
+      data: dataFormatada,
+      categoria_id: "",
+      conta_bancaria_id: "",
+      produto_id: "",
+      turma_id: "",
+      fornecedor: dados.fornecedor || "",
+      forma_pagamento: dados.forma_pagamento || "",
+      recorrente: "false",
+      observacoes: dados.itens ? `Itens: ${dados.itens}` : "",
+    });
+    setFormProdutoId("");
+    setEditingDespesa(null);
+    setDialogOpen(true);
   };
 
   const inMonth = (d: string | null | undefined) => isInMonth(d, mes, ano);
@@ -161,12 +207,26 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const openEdit = (d: any) => {
     setEditingDespesa(d);
     setFormProdutoId(d.produto_id || "");
+    setFormValues({
+      descricao: d.descricao || "",
+      valor: d.valor ? String(d.valor) : "",
+      data: d.data || new Date().toISOString().split("T")[0],
+      categoria_id: d.categoria_id || "",
+      conta_bancaria_id: d.conta_bancaria_id || "",
+      produto_id: d.produto_id || "",
+      turma_id: d.turma_id || "",
+      fornecedor: d.fornecedor || "",
+      forma_pagamento: d.forma_pagamento || "",
+      recorrente: d.recorrente ? "true" : "false",
+      observacoes: d.observacoes || "",
+    });
     setDialogOpen(true);
   };
 
   const openNew = () => {
     setEditingDespesa(null);
     setFormProdutoId("");
+    setFormValues(blankForm);
     setDialogOpen(true);
   };
 
@@ -225,6 +285,10 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base font-semibold">Todas as Despesas</CardTitle>
             <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setModalScannerAberto(true)} className="flex items-center gap-2">
+                <Camera className="h-4 w-4" />
+                Escanear Nota
+              </Button>
               <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingDespesa(null); }}>
                 <DialogTrigger asChild>
                   <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Despesa</Button>
@@ -237,51 +301,51 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
                         <Label>Descrição *</Label>
-                        <Input name="descricao" required defaultValue={editingDespesa?.descricao || ""} />
+                        <Input required value={formValues.descricao} onChange={(e) => setFormField("descricao", e.target.value)} />
                       </div>
                       <div>
                         <Label>Valor (R$) *</Label>
-                        <Input name="valor" type="number" step="0.01" required defaultValue={editingDespesa?.valor || ""} />
+                        <Input type="number" step="0.01" required value={formValues.valor} onChange={(e) => setFormField("valor", e.target.value)} />
                       </div>
                       <div>
                         <Label>Data *</Label>
-                        <Input name="data" type="date" required defaultValue={editingDespesa?.data || new Date().toISOString().split("T")[0]} />
+                        <Input type="date" required value={formValues.data} onChange={(e) => setFormField("data", e.target.value)} />
                       </div>
                       <div>
                         <Label>Categoria</Label>
-                        <select name="categoria_id" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingDespesa?.categoria_id || ""}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.categoria_id} onChange={(e) => setFormField("categoria_id", e.target.value)}>
                           <option value="">Selecione</option>
                           {categorias.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
                       <div>
                         <Label>Conta Bancária</Label>
-                        <select name="conta_bancaria_id" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingDespesa?.conta_bancaria_id || ""}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.conta_bancaria_id} onChange={(e) => setFormField("conta_bancaria_id", e.target.value)}>
                           <option value="">Selecione</option>
                           {contas.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
                       <div>
                         <Label>Produto</Label>
-                        <select name="produto_id" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formProdutoId} onChange={(e) => { setFormProdutoId(e.target.value); }}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.produto_id} onChange={(e) => { setFormProdutoId(e.target.value); setFormField("produto_id", e.target.value); setFormField("turma_id", ""); }}>
                           <option value="">Nenhum</option>
                           {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                         </select>
                       </div>
                       <div>
                         <Label>Turma</Label>
-                        <select name="turma_id" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingDespesa?.turma_id || ""} disabled={!formProdutoId}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.turma_id} onChange={(e) => setFormField("turma_id", e.target.value)} disabled={!formProdutoId}>
                           <option value="">{formProdutoId ? "Selecione a turma" : "Selecione um produto primeiro"}</option>
                           {turmasFiltradas.map((t: any) => <option key={t.id} value={t.id}>{t.nome}</option>)}
                         </select>
                       </div>
                       <div>
                         <Label>Fornecedor</Label>
-                        <Input name="fornecedor" defaultValue={editingDespesa?.fornecedor || ""} />
+                        <Input value={formValues.fornecedor} onChange={(e) => setFormField("fornecedor", e.target.value)} />
                       </div>
                       <div>
                         <Label>Forma de Pagamento</Label>
-                        <select name="forma_pagamento" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingDespesa?.forma_pagamento || ""}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.forma_pagamento} onChange={(e) => setFormField("forma_pagamento", e.target.value)}>
                           <option value="">Selecione</option>
                           <option value="pix">PIX</option>
                           <option value="boleto">Boleto</option>
@@ -296,14 +360,14 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                       </div>
                       <div>
                         <Label>Recorrente?</Label>
-                        <select name="recorrente" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingDespesa?.recorrente ? "true" : "false"}>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formValues.recorrente} onChange={(e) => setFormField("recorrente", e.target.value)}>
                           <option value="false">Não</option>
                           <option value="true">Sim</option>
                         </select>
                       </div>
                       <div className="col-span-2">
                         <Label>Observações</Label>
-                        <Textarea name="observacoes" rows={2} defaultValue={editingDespesa?.observacoes || ""} />
+                        <Textarea rows={2} value={formValues.observacoes} onChange={(e) => setFormField("observacoes", e.target.value)} />
                       </div>
                     </div>
                     <Button type="submit" className="w-full" disabled={saveDespesa.isPending}>
@@ -382,6 +446,11 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
           )}
         </CardContent>
       </Card>
+      <ModalScannerNota
+        aberto={modalScannerAberto}
+        onFechar={() => setModalScannerAberto(false)}
+        onDadosExtraidos={handleDadosExtraidos}
+      />
     </div>
   );
 };
