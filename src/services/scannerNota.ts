@@ -51,7 +51,7 @@ function redimensionarImagem(file: File): Promise<{ base64: string; mimeType: st
 }
 
 export async function escanearNota(file: File): Promise<DadosNota> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBRI3KmTr-TxLQ-CDrPWuycmtkM_su_BMg';
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBbUX8nPwUBnKShovncfsOdEdV6zUGdr-Q';
 
   const { base64, mimeType } = await redimensionarImagem(file);
 
@@ -73,7 +73,7 @@ export async function escanearNota(file: File): Promise<DadosNota> {
   ].join('\n');
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
