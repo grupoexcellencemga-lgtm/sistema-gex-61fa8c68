@@ -11,7 +11,7 @@ export interface DadosNota {
 }
 
 export async function escanearNota(imageBase64: string, mimeType: string = 'image/jpeg'): Promise<DadosNota> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBbUX8nPwUBnKShovncfsOdEdV6zUGdr-Q';
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
