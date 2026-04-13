@@ -26,6 +26,15 @@ const Dashboard = () => {
   const role = userRole || "admin";
   const description = roleDescriptions[role] || roleDescriptions.admin;
 
+  // Realtime: quando qualquer tabela muda, atualiza o dashboard
+  useRealtimeSync("pagamentos", [["dashboard-metrics"]]);
+  useRealtimeSync("alunos", [["dashboard-metrics"]]);
+  useRealtimeSync("matriculas", [["dashboard-metrics"]]);
+  useRealtimeSync("despesas", [["dashboard-metrics"]]);
+  useRealtimeSync("leads", [["dashboard-metrics"]]);
+  useRealtimeSync("processos_individuais", [["dashboard-metrics"]]);
+  useRealtimeSync("tarefas", [["tarefas"]]);
+
   if (!isReady) {
     return (
       <div>

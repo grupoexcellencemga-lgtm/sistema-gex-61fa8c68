@@ -20,6 +20,11 @@ const Financeiro = () => {
   const [mes, setMes] = useState(brNow.getMonth());
   const [ano, setAno] = useState(brNow.getFullYear());
 
+  useRealtimeSync("pagamentos", [["entradas"], ["dashboard-metrics"]]);
+  useRealtimeSync("despesas", [["despesas"], ["dashboard-metrics"]]);
+  useRealtimeSync("comissoes", [["comissoes"]]);
+  useRealtimeSync("contas_a_pagar", [["contas_a_pagar"]]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
