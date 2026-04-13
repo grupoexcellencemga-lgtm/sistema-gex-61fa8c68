@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { MonthFilter, getBrazilNow } from "@/components/MonthFilter";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +19,11 @@ const Financeiro = () => {
   const brNow = getBrazilNow();
   const [mes, setMes] = useState(brNow.getMonth());
   const [ano, setAno] = useState(brNow.getFullYear());
+
+  useRealtimeSync("pagamentos", [["entradas"], ["dashboard-metrics"]]);
+  useRealtimeSync("despesas", [["despesas"], ["dashboard-metrics"]]);
+  useRealtimeSync("comissoes", [["comissoes"]]);
+  useRealtimeSync("contas_a_pagar", [["contas_a_pagar"]]);
 
   return (
     <div>

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -20,6 +21,8 @@ import { ProcessoFilters } from "@/components/processos/ProcessoFilters";
 
 const ProcessoIndividual = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("processos_individuais", [["processos_individuais"], ["dashboard-metrics"]]);
+  useRealtimeSync("pagamentos_processo", [["pagamentos_processo"], ["processos_individuais"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [search, setSearch] = useState("");

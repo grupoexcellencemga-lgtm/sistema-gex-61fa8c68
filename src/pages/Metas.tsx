@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -47,6 +48,7 @@ const emptyForm: MetaForm = {
 
 const Metas = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("metas", [["metas"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<MetaForm>(emptyForm);

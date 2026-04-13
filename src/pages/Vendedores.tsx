@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -45,6 +46,7 @@ const emptyForm: VendedorForm = {
 
 const Vendedores = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("comerciais", [["comerciais"], ["comissoes_vendedores"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<VendedorForm>(emptyForm);

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +35,7 @@ const prioridadeOrder = { urgente: 0, alta: 1, media: 2, baixa: 3 };
 const Tarefas = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  useRealtimeSync("tarefas", [["tarefas"]]);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarefa, setEditTarefa] = useState<any>(null);
   const [view, setView] = useState<"kanban" | "lista" | "calendario">("kanban");

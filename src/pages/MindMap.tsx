@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import {
   ReactFlow,
   MiniMap,
@@ -39,6 +40,7 @@ const NODE_COLORS = [
 const MindMap = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  useRealtimeSync("mindmaps", [["mindmaps"]]);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);

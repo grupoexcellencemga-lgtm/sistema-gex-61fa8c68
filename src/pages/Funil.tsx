@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ const defaultFilters: Filters = {
 
 const Funil = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("leads", [["leads"], ["dashboard-metrics"]]);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const debouncedSearch = useDebounce(filters.search, 300);
   const [selectedLead, setSelectedLead] = useState<LeadRow | null>(null);

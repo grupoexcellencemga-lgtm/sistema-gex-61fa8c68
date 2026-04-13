@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -14,6 +15,8 @@ import { ParticipantesSection } from "@/components/eventos/ParticipantesSection"
 const Eventos = () => {
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
+  useRealtimeSync("eventos", [["eventos"], ["dashboard-metrics"]]);
+  useRealtimeSync("participantes_eventos", [["participantes"], ["eventos"]]);
   const { filterByResponsavel } = useDataFilter();
 
   const [dialogOpen, setDialogOpen] = useState(false);
