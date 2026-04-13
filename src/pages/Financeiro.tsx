@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { MonthFilter, getBrazilNow } from "@/components/MonthFilter";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

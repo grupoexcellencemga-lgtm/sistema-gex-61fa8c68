@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { PageHeader } from "@/components/PageHeader";
 import { MonthFilter, getBrazilNow } from "@/components/MonthFilter";
 import { usePermissions } from "@/hooks/usePermissions";
