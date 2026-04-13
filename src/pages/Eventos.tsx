@@ -15,6 +15,8 @@ import { ParticipantesSection } from "@/components/eventos/ParticipantesSection"
 const Eventos = () => {
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
+  useRealtimeSync("eventos", [["eventos"], ["dashboard-metrics"]]);
+  useRealtimeSync("participantes_eventos", [["participantes"], ["eventos"]]);
   const { filterByResponsavel } = useDataFilter();
 
   const [dialogOpen, setDialogOpen] = useState(false);

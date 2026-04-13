@@ -34,6 +34,7 @@ const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio
 const Turmas = () => {
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
+  useRealtimeSync("turmas", [["turmas"], ["dashboard-metrics"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<TurmaForm>(emptyForm);

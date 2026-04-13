@@ -19,6 +19,7 @@ const TIPO_LABELS: Record<string, string> = { mei: "MEI", clt: "CLT", autonomo: 
 
 const Profissionais = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("profissionais", [["profissionais"]]);
   const { isAdmin } = usePermissions();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);

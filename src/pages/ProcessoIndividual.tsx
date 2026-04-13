@@ -21,6 +21,8 @@ import { ProcessoFilters } from "@/components/processos/ProcessoFilters";
 
 const ProcessoIndividual = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("processos_individuais", [["processos_individuais"], ["dashboard-metrics"]]);
+  useRealtimeSync("pagamentos_processo", [["pagamentos_processo"], ["processos_individuais"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [search, setSearch] = useState("");

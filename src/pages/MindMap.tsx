@@ -40,6 +40,7 @@ const NODE_COLORS = [
 const MindMap = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  useRealtimeSync("mindmaps", [["mindmaps"]]);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);

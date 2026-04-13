@@ -46,6 +46,7 @@ const emptyForm: VendedorForm = {
 
 const Vendedores = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("comerciais", [["comerciais"], ["comissoes_vendedores"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<VendedorForm>(emptyForm);

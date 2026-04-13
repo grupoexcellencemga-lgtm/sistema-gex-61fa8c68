@@ -39,6 +39,7 @@ import { formatCurrency } from "@/lib/formatters";
 const Produtos = () => {
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
+  useRealtimeSync("produtos", [["produtos"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProdutoForm>(emptyForm);

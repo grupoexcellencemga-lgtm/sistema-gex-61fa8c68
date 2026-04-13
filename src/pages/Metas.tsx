@@ -48,6 +48,7 @@ const emptyForm: MetaForm = {
 
 const Metas = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("metas", [["metas"]]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<MetaForm>(emptyForm);

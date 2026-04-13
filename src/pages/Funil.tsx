@@ -33,6 +33,7 @@ const defaultFilters: Filters = {
 
 const Funil = () => {
   const queryClient = useQueryClient();
+  useRealtimeSync("leads", [["leads"], ["dashboard-metrics"]]);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const debouncedSearch = useDebounce(filters.search, 300);
   const [selectedLead, setSelectedLead] = useState<LeadRow | null>(null);
