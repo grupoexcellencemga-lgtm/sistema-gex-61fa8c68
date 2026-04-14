@@ -1,0 +1,1 @@
+UPDATE public.profiles SET profissional_id = '9c06937e-f350-4eca-ba2a-162b7419e710' WHERE user_id = 'a381e537-0144-48b6-83f5-a1bd93dd7dd5';
