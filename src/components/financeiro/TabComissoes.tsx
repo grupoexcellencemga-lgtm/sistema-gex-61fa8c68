@@ -305,7 +305,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
                                               <TableHead>Vendedor</TableHead>
                                               <TableHead>Produto / Turma</TableHead>
                                               <TableHead className="text-right">Valor Matrícula</TableHead>
-                                              <TableHead className="text-right">Comissão ({Number(c?.percentual || 5)}%)</TableHead>
+                                              <TableHead className="text-right">Comissão</TableHead>
                                               <TableHead>Status</TableHead>
                                               <TableHead className="w-52" />
                                             </TableRow>
