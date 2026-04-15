@@ -175,12 +175,16 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   };
 
   const getVendedorTotals = (comercialId: string) => {
-    const cms = comissoes.filter((c: any) => c.comercial_id === comercialId);
+    const cms = comissoesMes.filter((c: any) => c.comercial_id === comercialId);
     const total = cms.reduce((s: number, c: any) => s + Number(c.valor_comissao), 0);
     const pago = cms.reduce((s: number, c: any) => s + Number(c.valor_pago), 0);
     const pendentes = cms.filter((c: any) => c.status === "pendente").length;
     return { total, pago, pendente: total - pago, pendentes, vendas: cms.length };
   };
+
+  const comerciaisComComissoes = comerciais.filter((com: any) =>
+    comissoesMes.some((c: any) => c.comercial_id === com.id)
+  );
 
   return (
     <div className="space-y-4">
