@@ -2394,6 +2394,10 @@ export type Database = {
         Returns: boolean
       }
       dashboard_metrics: { Args: { _ano: number; _mes: number }; Returns: Json }
+      fechar_mes_automatico: {
+        Args: { _ano?: number; _mes?: number }
+        Returns: Json
+      }
       get_user_comercial_id: { Args: { _user_id: string }; Returns: string }
       get_user_profissional_nome: {
         Args: { _user_id: string }
