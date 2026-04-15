@@ -109,11 +109,12 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
   // Fetch comissões
   const { data: comissoes = [] } = useQuery({
-    queryKey: ["comissoes-contas"],
+    queryKey: ["comissoes-contas-ativas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comissoes")
         .select("*, comerciais(nome)")
+        .is("deleted_at", null)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
