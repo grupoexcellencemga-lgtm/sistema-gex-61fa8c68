@@ -184,7 +184,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Comissões por Vendedor (5% por matrícula)</h3>
+      <h3 className="text-lg font-semibold">Comissões por Vendedor</h3>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -298,12 +298,14 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
 
                                     {isTurmaExpanded && (
                                       <CardContent className="pt-0">
-                                        <Table>
+                                         <Table>
                                           <TableHeader>
                                             <TableRow>
                                               <TableHead>Aluno</TableHead>
+                                              <TableHead>Vendedor</TableHead>
+                                              <TableHead>Produto / Turma</TableHead>
                                               <TableHead className="text-right">Valor Matrícula</TableHead>
-                                              <TableHead className="text-right">Comissão (5%)</TableHead>
+                                              <TableHead className="text-right">Comissão</TableHead>
                                               <TableHead>Status</TableHead>
                                               <TableHead className="w-52" />
                                             </TableRow>
@@ -312,8 +314,16 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
                                             {turma.comissoes.map((c: any) => (
                                               <TableRow key={c.id}>
                                                 <TableCell className="text-sm font-medium">{c.alunos?.nome || "—"}</TableCell>
+                                                <TableCell className="text-sm">{c.comerciais?.nome || "—"}</TableCell>
+                                                <TableCell className="text-sm">
+                                                  <div>{c.produtos?.nome || "—"}</div>
+                                                  <div className="text-xs text-muted-foreground">{c.turmas?.nome || "—"}</div>
+                                                </TableCell>
                                                 <TableCell className="text-sm text-right">{formatCurrency(Number(c.valor_matricula))}</TableCell>
-                                                <TableCell className="text-sm text-right font-semibold">{formatCurrency(Number(c.valor_comissao))}</TableCell>
+                                                <TableCell className="text-sm text-right font-semibold">
+                                                  {formatCurrency(Number(c.valor_comissao))}
+                                                  <span className="text-xs text-muted-foreground ml-1">({Number(c.percentual)}%)</span>
+                                                </TableCell>
                                                 <TableCell>
                                                   <Badge variant={c.status === "pago" ? "secondary" : "destructive"}>
                                                     {c.status === "pago" ? "Pago" : "Pendente"}
