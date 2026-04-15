@@ -184,7 +184,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Comissões por Vendedor (5% por matrícula)</h3>
+      <h3 className="text-lg font-semibold">Comissões por Vendedor</h3>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
