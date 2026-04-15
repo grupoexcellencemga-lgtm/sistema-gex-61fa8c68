@@ -175,12 +175,16 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   };
 
   const getVendedorTotals = (comercialId: string) => {
-    const cms = comissoes.filter((c: any) => c.comercial_id === comercialId);
+    const cms = comissoesMes.filter((c: any) => c.comercial_id === comercialId);
     const total = cms.reduce((s: number, c: any) => s + Number(c.valor_comissao), 0);
     const pago = cms.reduce((s: number, c: any) => s + Number(c.valor_pago), 0);
     const pendentes = cms.filter((c: any) => c.status === "pendente").length;
     return { total, pago, pendente: total - pago, pendentes, vendas: cms.length };
   };
+
+  const comerciaisComComissoes = comerciais.filter((com: any) =>
+    comissoesMes.some((c: any) => c.comercial_id === com.id)
+  );
 
   return (
     <div className="space-y-4">
@@ -188,10 +192,10 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      ) : comerciais.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhum vendedor ativo. Cadastre vendedores na página "Vendedores" no menu lateral.</CardContent></Card>
+      ) : comerciaisComComissoes.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma comissão neste mês. Selecione outro período ou cadastre vendedores na página "Vendedores".</CardContent></Card>
       ) : (
-        comerciais.map((com: any) => {
+        comerciaisComComissoes.map((com: any) => {
           const isVendedorExpanded = expandedVendedor === com.id;
           const totals = getVendedorTotals(com.id);
           const hierarchy = isVendedorExpanded ? buildHierarchy(com.id) : {};
