@@ -349,7 +349,8 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                           <option value="">Selecione</option>
                           <option value="pix">PIX</option>
                           <option value="boleto">Boleto</option>
-                          <option value="cartao">Cartão</option>
+                          <option value="cartao_debito">Cartão Débito</option>
+                          <option value="cartao_credito">Cartão Crédito</option>
                           <option value="transferencia">Transferência</option>
                           <option value="dinheiro">Dinheiro</option>
                           <option value="debito_automatico">Débito Automático</option>

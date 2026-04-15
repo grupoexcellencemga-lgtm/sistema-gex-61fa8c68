@@ -307,7 +307,8 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
                         <SelectItem value="pix">PIX</SelectItem>
                         <SelectItem value="dinheiro">Dinheiro</SelectItem>
                         <SelectItem value="debito">Débito</SelectItem>
-                        <SelectItem value="cartao">Cartão de Crédito</SelectItem>
+                        <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                        <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                         <SelectItem value="link">Link de Pagamento</SelectItem>
                         <SelectItem value="boleto">Boleto</SelectItem>
                       </SelectContent>

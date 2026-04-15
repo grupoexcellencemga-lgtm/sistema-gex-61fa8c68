@@ -166,7 +166,7 @@ const Alunos = () => {
       if (matErr) throw matErr;
 
       if (valorFinal > 0 && matriculaForm.data_vencimento) {
-        const isCartao = matriculaForm.forma_pagamento === "cartao";
+        const isCartao = matriculaForm.forma_pagamento === "cartao_credito" || matriculaForm.forma_pagamento === "cartao";
         const isLinkBoleto = ["link", "boleto"].includes(matriculaForm.forma_pagamento);
         const numParcelas = isCartao ? 1 : (parseInt(matriculaForm.parcelas) || 1);
         const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
@@ -260,7 +260,7 @@ const Alunos = () => {
       const valor = parseFloat(novoPagForm.valor) || 0;
       if (valor <= 0) throw new Error("Valor deve ser maior que zero");
       if (!novoPagForm.data_vencimento) throw new Error("Data de vencimento é obrigatória");
-      const isCartao = novoPagForm.forma_pagamento === "cartao";
+      const isCartao = novoPagForm.forma_pagamento === "cartao_credito" || novoPagForm.forma_pagamento === "cartao";
       const taxaCartao = isCartao ? (parseFloat(novoPagForm.taxa_cartao) || 0) : 0;
       const parcelasCartao = isCartao ? (parseInt(novoPagForm.parcelas_cartao) || 1) : null;
       const { error } = await supabase.from("pagamentos").insert({

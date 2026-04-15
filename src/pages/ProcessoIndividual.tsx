@@ -54,7 +54,7 @@ const ProcessoIndividual = () => {
     mutationFn: async (payload: any) => {
       const valorEntrada = Number(payload.valor_entrada || 0);
       const parcelas = Number(payload.parcelas || 1);
-      const isCartao = payload.forma_pagamento === "cartao";
+      const isCartao = payload.forma_pagamento === "cartao_credito" || payload.forma_pagamento === "cartao";
       const { taxa_cartao, ...processoPayload } = payload;
       const taxaCartao = isCartao ? (Number(taxa_cartao) || 0) : 0;
       const observacaoEntrada = isCartao && parcelas > 1 ? `Entrada registrada no cadastro do processo — ${parcelas}x no cartão` : "Entrada registrada no cadastro do processo";
@@ -87,7 +87,7 @@ const ProcessoIndividual = () => {
     if (!form.cliente_nome.trim() || !form.responsavel.trim()) { toast({ title: "Preencha nome do cliente e responsável", variant: "destructive" }); return; }
     const valorTotal = parseCurrencyToNumber(form.valor_total);
     const valorEntradaFinal = tipoPagamento === "total" ? valorTotal : (parseCurrencyToNumber(form.valor_entrada) || 0);
-    saveMutation.mutate({ cliente_nome: form.cliente_nome.trim(), cliente_email: form.cliente_email.trim() || null, cliente_telefone: form.cliente_telefone.trim() || null, cpf: form.cpf.replace(/\D/g, "") || null, data_nascimento: form.data_nascimento || null, aluno_id: form.aluno_id || null, responsavel: form.responsavel.trim(), percentual_empresa: form.percentual_empresa, percentual_profissional: form.percentual_profissional, valor_total: valorTotal, valor_entrada: valorEntradaFinal, parcelas: Number(form.parcelas) || 1, sessoes: Number(form.sessoes) || 1, status: form.status, conta_bancaria_id: form.conta_bancaria_id || null, forma_pagamento: form.forma_pagamento || null, observacoes: form.observacoes.trim() || null, data_inicio: form.data_inicio || null, comercial_id: form.comercial_id || null, percentual_comissao: Number(form.percentual_comissao) || 5, taxa_cartao: form.forma_pagamento === "cartao" ? (parseFloat(form.taxa_cartao) || 0) : 0 });
+    saveMutation.mutate({ cliente_nome: form.cliente_nome.trim(), cliente_email: form.cliente_email.trim() || null, cliente_telefone: form.cliente_telefone.trim() || null, cpf: form.cpf.replace(/\D/g, "") || null, data_nascimento: form.data_nascimento || null, aluno_id: form.aluno_id || null, responsavel: form.responsavel.trim(), percentual_empresa: form.percentual_empresa, percentual_profissional: form.percentual_profissional, valor_total: valorTotal, valor_entrada: valorEntradaFinal, parcelas: Number(form.parcelas) || 1, sessoes: Number(form.sessoes) || 1, status: form.status, conta_bancaria_id: form.conta_bancaria_id || null, forma_pagamento: form.forma_pagamento || null, observacoes: form.observacoes.trim() || null, data_inicio: form.data_inicio || null, comercial_id: form.comercial_id || null, percentual_comissao: Number(form.percentual_comissao) || 5, taxa_cartao: (form.forma_pagamento === "cartao_credito" || form.forma_pagamento === "cartao") ? (parseFloat(form.taxa_cartao) || 0) : 0 });
   };
 
   const openEdit = (p: any) => {

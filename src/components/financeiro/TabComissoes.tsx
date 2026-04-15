@@ -352,7 +352,8 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
                                                           <SelectItem value="pix">PIX</SelectItem>
                                                           <SelectItem value="transferencia">Transferência</SelectItem>
                                                           <SelectItem value="boleto">Boleto</SelectItem>
-                                                          <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                           <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                                                           <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                                                           <SelectItem value="cheque">Cheque</SelectItem>
                                                           <SelectItem value="permuta">Permuta</SelectItem>
                                                           <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>

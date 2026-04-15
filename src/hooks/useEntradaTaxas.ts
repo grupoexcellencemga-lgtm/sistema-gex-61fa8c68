@@ -37,8 +37,8 @@ export function useEntradaTaxas(
   });
 
   return useMemo(() => {
-    const isCartao = formaPagamento === "cartao";
-    const isDebito = formaPagamento === "debito";
+    const isCartao = formaPagamento === "cartao_credito" || formaPagamento === "cartao";
+    const isDebito = formaPagamento === "debito" || formaPagamento === "cartao_debito";
     const isLink = formaPagamento === "link";
     const isBoleto = formaPagamento === "boleto";
     const showTaxa = isCartao || isDebito || isLink || isBoleto;

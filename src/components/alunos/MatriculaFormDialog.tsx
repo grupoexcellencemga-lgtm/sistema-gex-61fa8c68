@@ -45,7 +45,7 @@ export const MatriculaFormDialog = ({
     },
   });
 
-  const isCartao = matriculaForm.forma_pagamento === "cartao";
+  const isCartao = matriculaForm.forma_pagamento === "cartao_credito" || matriculaForm.forma_pagamento === "cartao";
   const isLink = matriculaForm.forma_pagamento === "link";
   const isBoleto = matriculaForm.forma_pagamento === "boleto";
   const showTaxa = isCartao || isLink || isBoleto;
@@ -135,7 +135,8 @@ export const MatriculaFormDialog = ({
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="cartao">Cartão</SelectItem>
+                    <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                    <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                     <SelectItem value="boleto">Boleto</SelectItem>
                     <SelectItem value="dinheiro">Dinheiro</SelectItem>
                     <SelectItem value="transferencia">Transferência</SelectItem>
