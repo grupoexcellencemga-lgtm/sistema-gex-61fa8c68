@@ -45,7 +45,7 @@ export const MatriculaFormDialog = ({
     },
   });
 
-  const isCartao = matriculaForm.forma_pagamento === "cartao";
+  const isCartao = matriculaForm.forma_pagamento === "cartao_credito" || matriculaForm.forma_pagamento === "cartao";
   const isLink = matriculaForm.forma_pagamento === "link";
   const isBoleto = matriculaForm.forma_pagamento === "boleto";
   const showTaxa = isCartao || isLink || isBoleto;
