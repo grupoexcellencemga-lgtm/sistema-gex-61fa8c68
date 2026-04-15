@@ -34,16 +34,16 @@ const Financeiro = () => {
 
       <Tabs defaultValue="painel" className="space-y-6">
         <TabsList className="flex w-full max-w-5xl overflow-x-auto visible-scrollbar pb-1">
-          <TabsTrigger value="painel" className="gap-1.5"><ClipboardList className="h-4 w-4" /> Painel</TabsTrigger>
-          <TabsTrigger value="entradas" className="gap-1.5"><DollarSign className="h-4 w-4" /> Entradas</TabsTrigger>
-          <TabsTrigger value="despesas" className="gap-1.5"><Receipt className="h-4 w-4" /> Despesas</TabsTrigger>
-          <TabsTrigger value="empresarial" className="gap-1.5"><Building2 className="h-4 w-4" /> Empresarial</TabsTrigger>
-          <TabsTrigger value="turmas" className="gap-1.5"><GraduationCap className="h-4 w-4" /> Turmas</TabsTrigger>
-          <TabsTrigger value="eventos" className="gap-1.5"><CalendarDays className="h-4 w-4" /> Eventos</TabsTrigger>
-          <TabsTrigger value="comissoes" className="gap-1.5"><Award className="h-4 w-4" /> Comissões</TabsTrigger>
-          <TabsTrigger value="profissionais" className="gap-1.5"><UserCheck className="h-4 w-4" /> Profissionais</TabsTrigger>
-          <TabsTrigger value="reembolsos" className="gap-1.5"><Wallet className="h-4 w-4" /> Reembolsos</TabsTrigger>
-          <TabsTrigger value="contas" className="gap-1.5"><Building2 className="h-4 w-4" /> Contas</TabsTrigger>
+          <TabsTrigger value="painel" className="gap-1.5 shrink-0"><ClipboardList className="h-4 w-4" /> Painel</TabsTrigger>
+          <TabsTrigger value="entradas" className="gap-1.5 shrink-0"><DollarSign className="h-4 w-4" /> Entradas</TabsTrigger>
+          <TabsTrigger value="despesas" className="gap-1.5 shrink-0"><Receipt className="h-4 w-4" /> Despesas</TabsTrigger>
+          <TabsTrigger value="empresarial" className="gap-1.5 shrink-0"><Building2 className="h-4 w-4" /> Empresarial</TabsTrigger>
+          <TabsTrigger value="turmas" className="gap-1.5 shrink-0"><GraduationCap className="h-4 w-4" /> Turmas</TabsTrigger>
+          <TabsTrigger value="eventos" className="gap-1.5 shrink-0"><CalendarDays className="h-4 w-4" /> Eventos</TabsTrigger>
+          <TabsTrigger value="comissoes" className="gap-1.5 shrink-0"><Award className="h-4 w-4" /> Comissões</TabsTrigger>
+          <TabsTrigger value="profissionais" className="gap-1.5 shrink-0"><UserCheck className="h-4 w-4" /> Profissionais</TabsTrigger>
+          <TabsTrigger value="reembolsos" className="gap-1.5 shrink-0"><Wallet className="h-4 w-4" /> Reembolsos</TabsTrigger>
+          <TabsTrigger value="contas" className="gap-1.5 shrink-0"><Building2 className="h-4 w-4" /> Contas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="painel"><TabContasPagarReceber mes={mes} ano={ano} /></TabsContent>
