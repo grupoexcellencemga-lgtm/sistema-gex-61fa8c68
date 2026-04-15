@@ -33,7 +33,8 @@ const Financeiro = () => {
       </div>
 
       <Tabs defaultValue="painel" className="space-y-6">
-        <TabsList className="flex w-full max-w-5xl overflow-x-auto visible-scrollbar pb-1">
+        <div className="w-full overflow-x-auto visible-scrollbar pb-1">
+        <TabsList className="inline-flex w-max">
           <TabsTrigger value="painel" className="gap-1.5 shrink-0"><ClipboardList className="h-4 w-4" /> Painel</TabsTrigger>
           <TabsTrigger value="entradas" className="gap-1.5 shrink-0"><DollarSign className="h-4 w-4" /> Entradas</TabsTrigger>
           <TabsTrigger value="despesas" className="gap-1.5 shrink-0"><Receipt className="h-4 w-4" /> Despesas</TabsTrigger>
@@ -45,6 +46,7 @@ const Financeiro = () => {
           <TabsTrigger value="reembolsos" className="gap-1.5 shrink-0"><Wallet className="h-4 w-4" /> Reembolsos</TabsTrigger>
           <TabsTrigger value="contas" className="gap-1.5 shrink-0"><Building2 className="h-4 w-4" /> Contas</TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="painel"><TabContasPagarReceber mes={mes} ano={ano} /></TabsContent>
         <TabsContent value="entradas"><TabEntradas mes={mes} ano={ano} /></TabsContent>
