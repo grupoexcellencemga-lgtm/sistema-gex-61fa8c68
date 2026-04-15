@@ -16,7 +16,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const formasPgto = ["Pix", "Dinheiro", "Débito", "Cartão de crédito", "Link", "Boleto", "Cheque", "Cartão recorrente", "Permuta"];
+const formasPgto = ["Pix", "Dinheiro", "Débito", "Cartão Débito", "Cartão Crédito", "Link", "Boleto", "Cheque", "Cartão recorrente", "Permuta"];
 const statusOptions = ["pendente", "pago", "cancelado"];
 
 export function RelatorioComissao() {
