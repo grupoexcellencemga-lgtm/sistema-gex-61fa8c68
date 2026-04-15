@@ -46,6 +46,7 @@ const Financeiro = () => {
           <TabsTrigger value="reembolsos" className="gap-1.5 shrink-0"><Wallet className="h-4 w-4" /> Reembolsos</TabsTrigger>
           <TabsTrigger value="contas" className="gap-1.5 shrink-0"><Building2 className="h-4 w-4" /> Contas</TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="painel"><TabContasPagarReceber mes={mes} ano={ano} /></TabsContent>
         <TabsContent value="entradas"><TabEntradas mes={mes} ano={ano} /></TabsContent>
