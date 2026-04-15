@@ -56,13 +56,14 @@ export const EntradaTaxaFields = ({
       {/* Forma de pagamento */}
       <div className="space-y-1">
         <Label className="text-xs">Forma de pagamento</Label>
-        <Select value={formaPagamento} onValueChange={(v) => { onFormaPagamentoChange(v); if (!["cartao", "link", "boleto"].includes(v)) onParcelasChange(1); }}>
+        <Select value={formaPagamento} onValueChange={(v) => { onFormaPagamentoChange(v); if (!["cartao_credito", "link", "boleto"].includes(v)) onParcelasChange(1); }}>
           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="pix">PIX</SelectItem>
             <SelectItem value="dinheiro">Dinheiro</SelectItem>
             <SelectItem value="debito">Débito</SelectItem>
-            <SelectItem value="cartao">Cartão de Crédito</SelectItem>
+            <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+            <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
             <SelectItem value="link">Link de Pagamento</SelectItem>
             <SelectItem value="boleto">Boleto</SelectItem>
           </SelectContent>

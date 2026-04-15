@@ -380,7 +380,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
               <div><Label>Data Pgto</Label><Input name="data_pagamento" type="date" defaultValue={editingPagamento?.data_pagamento || ""} /></div>
               <div><Label>Forma</Label>
                 <select name="forma_pagamento" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingPagamento?.forma_pagamento || ""}>
-                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao">Cartão de Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
+                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao_debito">Cartão Débito</option><option value="cartao_credito">Cartão Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
                 </select>
               </div>
               <div><Label>Banco</Label>
@@ -404,7 +404,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
               <div><Label>Valor (R$)</Label><Input name="valor" type="number" step="0.01" required defaultValue={editingProcPag?.valor || ""} /></div>
               <div><Label>Forma</Label>
                 <select name="forma_pagamento" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingProcPag?.forma_pagamento || ""}>
-                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao">Cartão de Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
+                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao_debito">Cartão Débito</option><option value="cartao_credito">Cartão Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
                 </select>
               </div>
               <div><Label>Banco</Label>
@@ -428,7 +428,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
               <div><Label>Valor (R$)</Label><Input name="valor" type="number" step="0.01" required defaultValue={editingEvtPag?.valor || ""} /></div>
               <div><Label>Forma</Label>
                 <select name="forma_pagamento" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" defaultValue={editingEvtPag?.forma_pagamento || ""}>
-                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao">Cartão de Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
+                  <option value="">Selecione</option><option value="pix">PIX</option><option value="dinheiro">Dinheiro</option><option value="debito">Débito</option><option value="cartao_debito">Cartão Débito</option><option value="cartao_credito">Cartão Crédito</option><option value="link">Link</option><option value="boleto">Boleto</option>
                 </select>
               </div>
               <div><Label>Banco</Label>
