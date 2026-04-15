@@ -7,20 +7,24 @@ export function useAuth() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Set up listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
+    let active = true;
 
-    // Then check current session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return;
       setUser(session?.user ?? null);
       setIsReady(true);
     });
 
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setUser(session?.user ?? null);
+      setIsReady(true);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, isReady };
