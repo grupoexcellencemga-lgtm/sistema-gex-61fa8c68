@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// All navigable pages with their keys
 export const ALL_PAGES = [
   { key: "dashboard", label: "Dashboard", path: "/" },
   { key: "alunos", label: "Alunos", path: "/alunos" },
@@ -28,7 +26,6 @@ export const ALL_PAGES = [
 
 export type PageKey = (typeof ALL_PAGES)[number]["key"];
 
-// Default pages per role (baseline)
 const ROLE_DEFAULTS: Record<string, PageKey[]> = {
   admin: ALL_PAGES.map((p) => p.key) as PageKey[],
   comercial: ["dashboard", "alunos", "jornada", "produtos", "turmas", "eventos", "vendedores", "metas", "aniversarios", "tarefas", "configuracoes"],
@@ -38,21 +35,20 @@ const ROLE_DEFAULTS: Record<string, PageKey[]> = {
 };
 
 export function usePermissions() {
-  const { user } = useAuth();
+  const { user, isReady: authReady } = useAuth();
+  const canLoadUserQueries = authReady && !!user;
 
-  // Check if user is admin
-  const { data: isAdmin } = useQuery({
+  const { data: isAdmin = false, isFetched: isAdminFetched } = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: async () => {
       if (!user) return false;
       const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
       return !!data;
     },
-    enabled: !!user,
+    enabled: canLoadUserQueries,
   });
 
-  // Get user role
-  const { data: userRole } = useQuery({
+  const { data: userRole = null, isFetched: isUserRoleFetched } = useQuery({
     queryKey: ["user-role", user?.id],
     queryFn: async () => {
       if (!user) return null;
@@ -64,11 +60,10 @@ export function usePermissions() {
         .maybeSingle();
       return data?.role ?? null;
     },
-    enabled: !!user,
+    enabled: canLoadUserQueries,
   });
 
-  // Get custom permissions overrides
-  const { data: customPermissions } = useQuery({
+  const { data: customPermissions = [], isFetched: isPermissionsFetched } = useQuery({
     queryKey: ["user-permissions", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -78,19 +73,20 @@ export function usePermissions() {
         .eq("user_id", user.id);
       return data ?? [];
     },
-    enabled: !!user,
+    enabled: canLoadUserQueries,
   });
 
-  // Compute allowed pages: role defaults + custom overrides
+  const isReady = authReady && (!user || (isAdminFetched && isUserRoleFetched && isPermissionsFetched));
+
   const allowedPages: PageKey[] = (() => {
-    if (!user) return [];
-    if (isAdmin) return ALL_PAGES.map((p) => p.key); // Admin sees everything
+    if (!user || !isReady) return [];
+    if (isAdmin) return ALL_PAGES.map((p) => p.key);
 
     const roleDefaults = ROLE_DEFAULTS[userRole ?? ""] ?? ["dashboard", "configuracoes"];
-    const overrides = new Map(customPermissions?.map((p) => [p.page_key, p.allowed]) ?? []);
+    const overrides = new Map(customPermissions.map((p) => [p.page_key, p.allowed]));
 
     return ALL_PAGES.map((p) => p.key).filter((key) => {
-      if (overrides.has(key)) return overrides.get(key);
+      if (overrides.has(key)) return !!overrides.get(key);
       return roleDefaults.includes(key);
     });
   })();
@@ -98,9 +94,9 @@ export function usePermissions() {
   const canAccess = (pageKey: PageKey) => allowedPages.includes(pageKey);
   const canAccessPath = (path: string) => {
     const page = ALL_PAGES.find((p) => p.path === path);
-    if (!page) return true; // unknown paths are allowed (e.g. reset-password)
+    if (!page) return true;
     return allowedPages.includes(page.key);
   };
 
-  return { allowedPages, canAccess, canAccessPath, isAdmin: !!isAdmin, userRole, isReady: isAdmin !== undefined };
+  return { allowedPages, canAccess, canAccessPath, isAdmin, userRole, isReady };
 }
