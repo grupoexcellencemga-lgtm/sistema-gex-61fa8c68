@@ -33,7 +33,7 @@ const Financeiro = () => {
       </div>
 
       <Tabs defaultValue="painel" className="space-y-6">
-        <TabsList className="flex w-full max-w-5xl overflow-x-auto no-scrollbar">
+        <TabsList className="flex w-full max-w-5xl overflow-x-auto visible-scrollbar pb-1">
           <TabsTrigger value="painel" className="gap-1.5"><ClipboardList className="h-4 w-4" /> Painel</TabsTrigger>
           <TabsTrigger value="entradas" className="gap-1.5"><DollarSign className="h-4 w-4" /> Entradas</TabsTrigger>
           <TabsTrigger value="despesas" className="gap-1.5"><Receipt className="h-4 w-4" /> Despesas</TabsTrigger>
