@@ -1,2 +1,0 @@
-ALTER TABLE public.participantes_eventos ADD COLUMN presenca boolean NOT NULL DEFAULT false;
-ALTER TABLE public.participantes_eventos ADD COLUMN presenca_marcada_em timestamp with time zone DEFAULT NULL;

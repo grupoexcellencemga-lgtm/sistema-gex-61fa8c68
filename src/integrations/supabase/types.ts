@@ -691,6 +691,45 @@ export type Database = {
           },
         ]
       }
+      divulgacoes: {
+        Row: {
+          id: string
+          titulo: string
+          descricao: string | null
+          categoria: string
+          status: string
+          imagem_url: string | null
+          responsavel_iniciais: string | null
+          data: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          titulo: string
+          descricao?: string | null
+          categoria: string
+          status?: string
+          imagem_url?: string | null
+          responsavel_iniciais?: string | null
+          data?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          titulo?: string
+          descricao?: string | null
+          categoria?: string
+          status?: string
+          imagem_url?: string | null
+          responsavel_iniciais?: string | null
+          data?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       eventos: {
         Row: {
           comunidade: boolean

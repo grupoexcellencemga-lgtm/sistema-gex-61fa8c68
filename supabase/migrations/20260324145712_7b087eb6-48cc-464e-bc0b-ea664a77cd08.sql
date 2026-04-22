@@ -1,1 +1,0 @@
-ALTER TABLE public.reembolsos ADD COLUMN categoria_id uuid REFERENCES public.categorias_despesas(id) ON DELETE SET NULL;

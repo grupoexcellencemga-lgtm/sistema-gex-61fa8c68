@@ -1,1 +1,0 @@
-ALTER TABLE public.participantes_eventos ADD COLUMN presenca_marcada_por text DEFAULT NULL;
