@@ -22,16 +22,17 @@ export const ALL_PAGES = [
   { key: "aniversarios", label: "Aniversários", path: "/aniversarios" },
   { key: "mindmap", label: "Mind Map", path: "/mindmap" },
   { key: "tarefas", label: "Tarefas", path: "/tarefas" },
+    { key: "divulgacao", label: "Divulgação", path: "/divulgacao" },
 ] as const;
 
 export type PageKey = (typeof ALL_PAGES)[number]["key"];
 
 const ROLE_DEFAULTS: Record<string, PageKey[]> = {
   admin: ALL_PAGES.map((p) => p.key) as PageKey[],
-  comercial: ["dashboard", "alunos", "jornada", "produtos", "turmas", "eventos", "vendedores", "metas", "aniversarios", "tarefas", "configuracoes"],
-  financeiro: ["dashboard", "financeiro", "relatorios", "aniversarios", "tarefas", "configuracoes"],
-  suporte: ["dashboard", "alunos", "turmas", "eventos", "aniversarios", "tarefas", "configuracoes"],
-  profissional: ["dashboard", "processo-individual", "processo-empresarial", "turmas", "eventos", "aniversarios", "tarefas", "configuracoes"],
+  comercial: ["dashboard", "alunos", "jornada", "produtos", "turmas", "eventos", "vendedores", "metas", "aniversarios", "tarefas", "configuracoes", "divulgacao"],
+  financeiro: ["dashboard", "financeiro", "relatorios", "aniversarios", "tarefas", "configuracoes", "divulgacao"],
+  suporte: ["dashboard", "alunos", "turmas", "eventos", "aniversarios", "tarefas", "configuracoes", "divulgacao"],
+  profissional: ["dashboard", "processo-individual", "processo-empresarial", "turmas", "eventos", "aniversarios", "tarefas", "configuracoes", "divulgacao"],
 };
 
 export function usePermissions() {
