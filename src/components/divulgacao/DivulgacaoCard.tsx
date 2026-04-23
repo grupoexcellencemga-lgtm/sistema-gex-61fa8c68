@@ -1,19 +1,21 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Trash2, Edit, Video, ImageIcon, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Pencil, Trash2, User } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
 
 export interface Divulgacao {
   id: string;
   titulo: string;
   descricao?: string | null;
-  categoria: "Comunicado" | "Campanha" | "Evento" | "Treinamento";
-  status: "Em breve" | "Em andamento" | "Conclu\u00EDdo";
+  categoria: string;
+  status: string;
+  coluna_id?: string | null;
   imagem_url?: string | null;
+  arquivo_url?: string | null;
+  arquivo_tipo?: string | null;
+  arquivo_nome?: string | null;
   responsavel_iniciais?: string | null;
   data?: string | null;
-  created_at: string;
+  created_at?: string;
 }
 
 const CATEGORIA_COLORS: Record<string, string> = {
@@ -24,43 +26,116 @@ const CATEGORIA_COLORS: Record<string, string> = {
 };
 
 interface Props {
-  divulgacao: Divulgacao;
-  onEdit: (d: Divulgacao) => void;
+  item: Divulgacao;
+  onEdit: (item: Divulgacao) => void;
   onDelete: (id: string) => void;
+  onViewFile: (item: Divulgacao) => void;
+  isDragging?: boolean;
 }
 
-export function DivulgacaoCard({ divulgacao, onEdit, onDelete }: Props) {
+export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, isDragging }: Props) {
+  const arquivoUrl = item.arquivo_url;
+  const isVideo = item.arquivo_tipo === "video";
+  const isImageArquivo = item.arquivo_tipo === "image";
+  const previewUrl = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
+
   return (
-    <Card className="group transition-shadow hover:shadow-md border bg-card">
-      {divulgacao.imagem_url && (
-        <div className="w-full h-32 overflow-hidden rounded-t-lg">
-          <img src={divulgacao.imagem_url} alt={divulgacao.titulo} className="w-full h-full object-cover" />
+    <div
+      className={`bg-card border rounded-xl shadow-sm transition-all group select-none ${
+        isDragging ? "opacity-40 scale-95" : "hover:shadow-md"
+      }`}
+    >
+      {/* Preview de imagem ou arquivo de imagem no topo */}
+      {previewUrl && (
+        <div
+          className={`w-full h-32 rounded-t-xl overflow-hidden ${arquivoUrl ? "cursor-pointer" : ""}`}
+          onClick={() => arquivoUrl && onViewFile(item)}
+        >
+          <img
+            src={previewUrl}
+            alt={item.titulo}
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+          />
         </div>
       )}
-      <CardContent className="p-3 space-y-2">
-        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${CATEGORIA_COLORS[divulgacao.categoria] ?? "bg-muted text-muted-foreground"}`}>
-          {divulgacao.categoria}
-        </span>
-        <p className="font-semibold text-sm leading-tight line-clamp-2">{divulgacao.titulo}</p>
-        {divulgacao.descricao && <p className="text-xs text-muted-foreground line-clamp-2">{divulgacao.descricao}</p>}
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {divulgacao.data && (
-              <span className="flex items-center gap-0.5">
-                <CalendarDays className="h-3 w-3" />
-                {format(new Date(divulgacao.data + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })}
-              </span>
-            )}
-            {divulgacao.responsavel_iniciais && (
-              <span className="flex items-center gap-0.5"><User className="h-3 w-3" />{divulgacao.responsavel_iniciais}</span>
-            )}
-          </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(divulgacao)}><Pencil className="h-3 w-3" /></Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => onDelete(divulgacao.id)}><Trash2 className="h-3 w-3" /></Button>
+
+      {/* Preview de vídeo no topo */}
+      {!previewUrl && isVideo && arquivoUrl && (
+        <div
+          className="w-full h-32 rounded-t-xl overflow-hidden bg-black/80 flex flex-col items-center justify-center cursor-pointer hover:bg-black/60 transition-colors gap-1"
+          onClick={() => onViewFile(item)}
+        >
+          <Video className="h-8 w-8 text-white/70" />
+          <span className="text-white/60 text-[10px]">Clique para abrir</span>
+        </div>
+      )}
+
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-semibold text-card-foreground leading-tight line-clamp-2 flex-1">
+            {item.titulo}
+          </h3>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+            >
+              <Edit className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+        {item.descricao && (
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.descricao}</p>
+        )}
+
+        <div className="flex flex-wrap gap-1 mt-2">
+          <span
+            className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              CATEGORIA_COLORS[item.categoria] ?? "bg-muted text-muted-foreground"
+            }`}
+          >
+            {item.categoria}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center gap-2">
+            {item.data && (
+              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                <Calendar className="h-2.5 w-2.5" />
+                {new Date(item.data + "T12:00:00").toLocaleDateString("pt-BR")}
+              </span>
+            )}
+            {item.responsavel_iniciais && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
+                {item.responsavel_iniciais}
+              </span>
+            )}
+          </div>
+
+          {arquivoUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-primary"
+              onClick={(e) => { e.stopPropagation(); onViewFile(item); }}
+            >
+              {isVideo ? <Video className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
