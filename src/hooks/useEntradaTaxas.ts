@@ -33,7 +33,7 @@ export function useEntradaTaxas(
       if (error) throw error;
       return data;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
 
   return useMemo(() => {

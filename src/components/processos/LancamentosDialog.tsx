@@ -38,7 +38,7 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
       if (error) throw error;
       return data;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
 
   // Set default imposto from system config

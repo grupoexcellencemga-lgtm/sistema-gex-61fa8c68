@@ -39,7 +39,7 @@ export const AvulsaFormDialog = ({ editingAvulsa, contas, categoriasReceita, onS
       if (error) throw error;
       return data;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
 
   useEffect(() => {

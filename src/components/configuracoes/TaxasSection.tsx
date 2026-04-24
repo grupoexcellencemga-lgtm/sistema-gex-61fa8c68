@@ -91,7 +91,7 @@ export const TaxasSection = () => {
       const errors = results.filter(r => r.error);
       if (errors.length > 0) throw errors[0].error;
 
-      queryClient.invalidateQueries({ queryKey: ["taxas_sistema"] });
+      await queryClient.refetchQueries({ queryKey: ["taxas_sistema"] });
       setEditValues({});
       toast.success(`${updates.length} taxa(s) atualizada(s) com sucesso`);
     } catch (err: any) {
