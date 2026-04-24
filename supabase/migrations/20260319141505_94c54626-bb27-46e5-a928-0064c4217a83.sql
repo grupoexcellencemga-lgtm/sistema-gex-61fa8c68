@@ -1,0 +1,1 @@
+ALTER TABLE public.participantes_eventos ADD COLUMN IF NOT EXISTS adicionado_por_user_id uuid;

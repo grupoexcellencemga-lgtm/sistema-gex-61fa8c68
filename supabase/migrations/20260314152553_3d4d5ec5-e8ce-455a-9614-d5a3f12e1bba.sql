@@ -1,0 +1,1 @@
+ALTER TABLE public.pagamentos ADD COLUMN IF NOT EXISTS parcelas_cartao integer DEFAULT NULL;

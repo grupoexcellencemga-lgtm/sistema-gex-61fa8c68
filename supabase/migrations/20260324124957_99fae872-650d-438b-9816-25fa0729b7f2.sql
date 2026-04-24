@@ -1,0 +1,1 @@
+ALTER TABLE public.turmas ADD COLUMN status text NOT NULL DEFAULT 'ativa';
