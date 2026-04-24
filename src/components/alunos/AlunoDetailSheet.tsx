@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -76,6 +77,58 @@ export const AlunoDetailSheet = (props: Props) => {
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
   } = props;
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+
+  const { data: taxasSistema = [] } = useQuery({
+    queryKey: ["taxas_sistema"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("taxas_sistema")
+        .select("*")
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const novoValorBase = parseFloat(novoPagForm.valor) || 0;
+  const novoParcelasCalc = parseInt(novoPagForm.parcelas_cartao) || 1;
+  const novoIsCartaoCredito = ["cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+  const novoIsLink = novoPagForm.forma_pagamento === "link";
+  const novoIsBoleto = novoPagForm.forma_pagamento === "boleto";
+  const novoShowTaxa = novoIsCartaoCredito || novoIsLink || novoIsBoleto;
+
+  const novoTaxaAutoCalc = useMemo(() => {
+    if (!novoShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
+
+    if (novoIsCartaoCredito) {
+      const nome = novoParcelasCalc === 1 ? "Crédito 1x" : `Crédito ${novoParcelasCalc}x`;
+      const found = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
+    }
+
+    if (novoIsLink || novoIsBoleto) {
+      const nome = `${novoParcelasCalc}x`;
+      const found = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
+    }
+
+    return { percentual: 0, nome: "" };
+  }, [novoShowTaxa, novoIsCartaoCredito, novoIsLink, novoIsBoleto, novoParcelasCalc, taxasSistema]);
+
+  const novoTaxaPercentual = novoTaxaAutoCalc.percentual;
+  const novoValorTaxa = novoValorBase > 0 ? Math.round(novoValorBase * novoTaxaPercentual) / 100 : 0;
+  const novoValorComTaxa = novoPagForm.repassar_taxa && novoShowTaxa ? novoValorBase + novoValorTaxa : novoValorBase;
+
+  useEffect(() => {
+    if (novoShowTaxa && novoTaxaPercentual > 0) {
+      const current = parseFloat(novoPagForm.taxa_cartao);
+      if (current !== novoTaxaPercentual) {
+        setNovoPagForm((p: any) => ({ ...p, taxa_cartao: String(novoTaxaPercentual) }));
+      }
+    } else if (!novoShowTaxa && (novoPagForm.taxa_cartao || novoPagForm.repassar_taxa)) {
+      setNovoPagForm((p: any) => ({ ...p, taxa_cartao: "", repassar_taxa: false }));
+    }
+  }, [novoShowTaxa, novoTaxaPercentual, novoPagForm.taxa_cartao, novoPagForm.repassar_taxa, setNovoPagForm]);
 
   const totalPago = pagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalPendente = pagamentos.filter((p: any) => p.status === "pendente").reduce((s: number, p: any) => s + Number(p.valor), 0);
@@ -392,13 +445,15 @@ export const AlunoDetailSheet = (props: Props) => {
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao">Cartão</SelectItem>
+                  <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                  <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                   <SelectItem value="boleto">Boleto</SelectItem>
                   <SelectItem value="dinheiro">Dinheiro</SelectItem>
                   <SelectItem value="transferencia">Transferência</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
                   <SelectItem value="permuta">Permuta</SelectItem>
                   <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
+                  <SelectItem value="link">Link de Pagamento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -442,25 +497,67 @@ export const AlunoDetailSheet = (props: Props) => {
             <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" /></div>
             <div><Label>Data de vencimento</Label><Input type="date" value={novoPagForm.data_vencimento} onChange={(e) => setNovoPagForm(p => ({ ...p, data_vencimento: e.target.value }))} /></div>
             <div><Label>Forma de pagamento</Label>
-              <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm(p => ({ ...p, forma_pagamento: v }))}>
+              <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm(p => ({ ...p, forma_pagamento: v, repassar_taxa: false }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao">Cartão</SelectItem>
+                  <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                  <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                   <SelectItem value="boleto">Boleto</SelectItem>
                   <SelectItem value="dinheiro">Dinheiro</SelectItem>
                   <SelectItem value="transferencia">Transferência</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
                   <SelectItem value="permuta">Permuta</SelectItem>
                   <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
+                  <SelectItem value="link">Link de Pagamento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {novoPagForm.forma_pagamento === "cartao" && (
-              <>
-                <div><Label>Parcelas no cartão</Label><Input type="number" min="1" value={novoPagForm.parcelas_cartao} onChange={(e) => setNovoPagForm(p => ({ ...p, parcelas_cartao: e.target.value }))} placeholder="1" /></div>
-                <div><Label>Taxa do Cartão (%)</Label><Input type="number" step="0.1" value={novoPagForm.taxa_cartao} onChange={(e) => setNovoPagForm(p => ({ ...p, taxa_cartao: e.target.value }))} placeholder="0" /></div>
-              </>
+            {novoShowTaxa && (
+              <div className="rounded-md border p-3 bg-accent/30 space-y-2">
+                <div>
+                  <Label>Parcelas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={novoPagForm.parcelas_cartao || "1"}
+                    onChange={(e) => setNovoPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
+                    placeholder="1"
+                  />
+                </div>
+
+                {novoTaxaPercentual > 0 ? (
+                  <>
+                    <div>
+                      <p className="text-sm font-medium">
+                        Taxa: {novoTaxaAutoCalc.nome} — {novoTaxaPercentual.toFixed(2).replace(".", ",")}%
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Valor da taxa: {formatCurrency(novoValorTaxa)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Switch
+                        checked={novoPagForm.repassar_taxa || false}
+                        onCheckedChange={(checked) => setNovoPagForm((p: any) => ({ ...p, repassar_taxa: checked }))}
+                      />
+                      <Label className="text-sm cursor-pointer">Repassar taxa para o cliente</Label>
+                    </div>
+
+                    {novoPagForm.repassar_taxa && (
+                      <div className="text-sm bg-background rounded p-2">
+                        <span className="text-muted-foreground">Cliente pagará: </span>
+                        <span className="font-semibold">{formatCurrency(novoValorComTaxa)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhuma taxa automática encontrada para esta forma de pagamento/parcela.
+                  </p>
+                )}
+              </div>
             )}
             <div><Label>Conta Bancária</Label>
               <Select value={novoPagForm.conta_bancaria_id} onValueChange={(v) => setNovoPagForm(p => ({ ...p, conta_bancaria_id: v }))}>
