@@ -190,7 +190,7 @@ export const MatriculaFormDialog = ({
 
             {valorFinalCalc > 0 && numParcelasCalc > 0 && (
               <p className="text-xs text-muted-foreground">
-                {numParcelasCalc}x de {formatCurrency(valorFinalCalc / numParcelasCalc)}
+                {numParcelasCalc}x de {formatCurrency((matriculaForm.repassar_taxa && showTaxa ? valorFinalCalc + valorTaxa : valorFinalCalc) / numParcelasCalc)}
                 {matriculaForm.data_vencimento && ` · 1ª parcela em ${formatDate(matriculaForm.data_vencimento)}`}
                 {showTaxa && taxaPercentual > 0 && ` · Taxa: ${taxaPercentual.toFixed(2).replace(".", ",")}%`}
               </p>
