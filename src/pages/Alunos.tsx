@@ -41,7 +41,7 @@ const Alunos = () => {
   const [editingPagamento, setEditingPagamento] = useState<any>(null);
   const [editPagForm, setEditPagForm] = useState({ valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "" });
   const [novoPagamentoDialog, setNovoPagamentoDialog] = useState(false);
-  const [novoPagForm, setNovoPagForm] = useState({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "" });
+  const [novoPagForm, setNovoPagForm] = useState({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "", repassar_taxa: false });
 
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -260,12 +260,16 @@ const Alunos = () => {
       const valor = parseFloat(novoPagForm.valor) || 0;
       if (valor <= 0) throw new Error("Valor deve ser maior que zero");
       if (!novoPagForm.data_vencimento) throw new Error("Data de vencimento é obrigatória");
-      const isCartao = novoPagForm.forma_pagamento === "cartao_credito" || novoPagForm.forma_pagamento === "cartao";
-      const taxaCartao = isCartao ? (parseFloat(novoPagForm.taxa_cartao) || 0) : 0;
-      const parcelasCartao = isCartao ? (parseInt(novoPagForm.parcelas_cartao) || 1) : null;
+      const isCartao = ["cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+      const isLinkBoleto = ["link", "boleto"].includes(novoPagForm.forma_pagamento);
+      const taxaCartao = (isCartao || isLinkBoleto) ? (parseFloat(novoPagForm.taxa_cartao) || 0) : 0;
+      const parcelasCartao = (isCartao || isLinkBoleto) ? (parseInt(novoPagForm.parcelas_cartao) || 1) : null;
+      const valorCobrado = novoPagForm.repassar_taxa && taxaCartao > 0
+        ? valor + Math.round(valor * taxaCartao) / 100
+        : valor;
       const { error } = await supabase.from("pagamentos").insert({
         aluno_id: selectedAluno.id, produto_id: novoPagForm.produto_id || null,
-        matricula_id: novoPagForm.matricula_id || null, valor,
+        matricula_id: novoPagForm.matricula_id || null, valor: Math.round(valorCobrado * 100) / 100,
         forma_pagamento: novoPagForm.forma_pagamento || null,
         data_vencimento: novoPagForm.data_vencimento, status: "pendente",
         conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
@@ -282,7 +286,7 @@ const Alunos = () => {
       queryClient.invalidateQueries({ queryKey: ["atividades", selectedAluno?.id] });
       toast.success("Pagamento lançado com sucesso!");
       setNovoPagamentoDialog(false);
-      setNovoPagForm({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "" });
+      setNovoPagForm({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "", repassar_taxa: false });
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
@@ -630,7 +634,7 @@ const Alunos = () => {
         onNewMatricula={() => { setEditingMatriculaId(null); setMatriculaForm(emptyMatriculaForm); setMatriculaDialogOpen(true); }}
         onEditMatricula={openEditMatricula}
         onDeleteMatricula={(id) => deleteMatricula.mutate(id)}
-        onNewPagamento={() => { setNovoPagForm({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "" }); setNovoPagamentoDialog(true); }}
+        onNewPagamento={() => { setNovoPagForm({ matricula_id: "", produto_id: "", valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", parcelas_cartao: "", taxa_cartao: "", repassar_taxa: false }); setNovoPagamentoDialog(true); }}
         onConfirmPagamento={(p, fees) => updatePagamentoStatus.mutate({ id: p.id, status: "pago", valorPago: fees.total, valor: Number(p.valor), produtoNome: p.produtos?.nome })}
         onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}
         onEditPagamento={openEditPagamento}
