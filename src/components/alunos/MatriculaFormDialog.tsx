@@ -45,7 +45,7 @@ export const MatriculaFormDialog = ({
     },
   });
 
-  const isCartao = matriculaForm.forma_pagamento === "cartao";
+  const isCartao = ["credito", "cartao", "cartao_credito"].includes(matriculaForm.forma_pagamento);
   const isLink = matriculaForm.forma_pagamento === "link";
   const isBoleto = matriculaForm.forma_pagamento === "boleto";
   const showTaxa = isCartao || isLink || isBoleto;
@@ -135,14 +135,16 @@ export const MatriculaFormDialog = ({
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="cartao">Cartão</SelectItem>
-                    <SelectItem value="boleto">Boleto</SelectItem>
-                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                    <SelectItem value="transferencia">Transferência</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="permuta">Permuta</SelectItem>
-                    <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
-                    <SelectItem value="link">Link de Pagamento</SelectItem>
+<SelectItem value="dinheiro">Dinheiro</SelectItem>
+<SelectItem value="probono">Probono</SelectItem>
+<SelectItem value="credito">Crédito</SelectItem>
+<SelectItem value="debito">Débito</SelectItem>
+<SelectItem value="link">Link de Pagamento</SelectItem>
+<SelectItem value="boleto">Boleto</SelectItem>
+<SelectItem value="transferencia">Transferência</SelectItem>
+<SelectItem value="cheque">Cheque</SelectItem>
+<SelectItem value="permuta">Permuta</SelectItem>
+<SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

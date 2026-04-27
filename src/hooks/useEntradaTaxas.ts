@@ -30,6 +30,7 @@ export function useEntradaTaxas(
         .from("taxas_sistema")
         .select("*")
         .order("ordem", { ascending: true });
+
       if (error) throw error;
       return data;
     },
@@ -37,33 +38,47 @@ export function useEntradaTaxas(
   });
 
   return useMemo(() => {
-    const isCartao = formaPagamento === "cartao";
+    const isCredito = ["credito", "cartao", "cartao_credito"].includes(
+      formaPagamento
+    );
     const isDebito = formaPagamento === "debito";
     const isLink = formaPagamento === "link";
     const isBoleto = formaPagamento === "boleto";
-    const showTaxa = isCartao || isDebito || isLink || isBoleto;
-    const showParcelas = isCartao || isLink || isBoleto;
+
+    const showTaxa = isCredito || isDebito || isLink || isBoleto;
+    const showParcelas = isCredito || isLink || isBoleto;
 
     let taxaNome = "";
     let taxaPercentual = 0;
 
     if (showTaxa && taxas.length > 0) {
       if (isDebito) {
-        const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+        const found = taxas.find(
+          (t: any) => t.tipo === "maquininha" && t.nome === "Débito"
+        );
+
         if (found) {
           taxaNome = "Débito";
           taxaPercentual = Number(found.percentual);
         }
-      } else if (isCartao) {
+      } else if (isCredito) {
         const nome = parcelas === 1 ? "Crédito 1x" : `Crédito ${parcelas}x`;
-        const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+
+        const found = taxas.find(
+          (t: any) => t.tipo === "maquininha" && t.nome === nome
+        );
+
         if (found) {
           taxaNome = found.nome;
           taxaPercentual = Number(found.percentual);
         }
       } else if (isLink || isBoleto) {
         const nome = `${parcelas}x`;
-        const found = taxas.find((t: any) => t.tipo === "link" && t.nome === nome);
+
+        const found = taxas.find(
+          (t: any) => t.tipo === "link" && t.nome === nome
+        );
+
         if (found) {
           taxaNome = `${isBoleto ? "Boleto" : "Link"} ${found.nome}`;
           taxaPercentual = Number(found.percentual);
@@ -71,13 +86,17 @@ export function useEntradaTaxas(
       }
     }
 
-    const valorTaxa = valorBruto > 0 ? Math.round(valorBruto * taxaPercentual) / 100 : 0;
-    const impostoPercentual = impostoManual;
-    const valorImposto = valorBruto > 0 ? Math.round(valorBruto * impostoPercentual) / 100 : 0;
+    const valorTaxa =
+      valorBruto > 0 ? Math.round(valorBruto * taxaPercentual) / 100 : 0;
 
-    // If repassar: client pays valor + taxa; empresa receives valor - imposto
-    // If not repassar: empresa receives valor - taxa - imposto
-    const valorCobradoCliente = repassarTaxa && showTaxa ? valorBruto + valorTaxa : valorBruto;
+    const impostoPercentual = impostoManual;
+
+    const valorImposto =
+      valorBruto > 0 ? Math.round(valorBruto * impostoPercentual) / 100 : 0;
+
+    const valorCobradoCliente =
+      repassarTaxa && showTaxa ? valorBruto + valorTaxa : valorBruto;
+
     const valorLiquido = repassarTaxa
       ? valorBruto - valorImposto
       : valorBruto - valorTaxa - valorImposto;
