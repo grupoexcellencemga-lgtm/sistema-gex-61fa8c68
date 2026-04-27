@@ -29,7 +29,7 @@ export const TabEmpresarial = ({ mes, ano }: { mes: number; ano: number }) => {
     queryKey: ["pagamentos_processo_empresarial_fin"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("pagamentos_processo_empresarial" as any)
+        .from("pagamentos_processo_empresarial")
         .select("*, contas_bancarias(nome)")
         .is("deleted_at", null)
         .order("data", { ascending: false });

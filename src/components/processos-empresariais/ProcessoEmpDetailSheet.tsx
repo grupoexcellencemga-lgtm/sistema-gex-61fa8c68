@@ -16,7 +16,7 @@ export const DetalhesProcessoEmpDialog = ({ processo, onClose }: { processo: any
     queryKey: ["pagamentos_processo_empresarial", processo.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("pagamentos_processo_empresarial" as any)
+        .from("pagamentos_processo_empresarial")
         .select("*")
         .eq("processo_id", processo.id)
         .is("deleted_at", null)
@@ -28,7 +28,7 @@ export const DetalhesProcessoEmpDialog = ({ processo, onClose }: { processo: any
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pagamentos_processo_empresarial" as any).update({ deleted_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.from("pagamentos_processo_empresarial").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

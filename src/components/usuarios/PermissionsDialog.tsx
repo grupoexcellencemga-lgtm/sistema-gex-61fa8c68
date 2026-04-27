@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfissionais } from "@/hooks/useProfissionais";
-import { ALL_PAGES, type PageKey } from "@/hooks/usePermissions";
+import { ALL_PAGES, ROLE_DEFAULTS, type PageKey } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -13,13 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
-const ROLE_DEFAULTS: Record<string, PageKey[]> = {
-  admin: ALL_PAGES.map((p) => p.key),
-  comercial: ["dashboard", "alunos", "jornada", "produtos", "turmas", "eventos", "vendedores", "configuracoes"],
-  financeiro: ["dashboard", "financeiro", "relatorios", "configuracoes"],
-  suporte: ["dashboard", "alunos", "turmas", "eventos", "configuracoes"],
-  profissional: ["dashboard", "processo-individual", "processo-empresarial", "turmas", "eventos", "configuracoes"],
-};
 
 interface PermissionsDialogProps {
   open: boolean;

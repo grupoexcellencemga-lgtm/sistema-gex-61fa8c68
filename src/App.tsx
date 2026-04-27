@@ -38,6 +38,7 @@ const Metas = lazy(() => import("./pages/Metas"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Tarefas = lazy(() => import("./pages/Tarefas"));
 const Divulgacao = lazy(() => import("./pages/Divulgacao"));
+const Funil = lazy(() => import("./pages/Funil"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -98,6 +99,7 @@ const AppRoutes = () => {
           <Route path="/auditoria" element={<PR path="/auditoria"><Auditoria /></PR>} />
           <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
           <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
+          <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -691,6 +691,36 @@ export type Database = {
           },
         ]
       }
+      divulgacao_colunas: {
+        Row: {
+          id: string
+          nome: string
+          ordem: number
+          cor: string
+          icone: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          nome: string
+          ordem?: number
+          cor?: string
+          icone?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          ordem?: number
+          cor?: string
+          icone?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       divulgacoes: {
         Row: {
           id: string
@@ -698,9 +728,14 @@ export type Database = {
           descricao: string | null
           categoria: string
           status: string
+          coluna_id: string | null
           imagem_url: string | null
+          arquivo_url: string | null
+          arquivo_tipo: string | null
+          arquivo_nome: string | null
           responsavel_iniciais: string | null
           data: string | null
+          ativo: boolean
           created_at: string
           updated_at: string
         }
@@ -710,9 +745,14 @@ export type Database = {
           descricao?: string | null
           categoria: string
           status?: string
+          coluna_id?: string | null
           imagem_url?: string | null
+          arquivo_url?: string | null
+          arquivo_tipo?: string | null
+          arquivo_nome?: string | null
           responsavel_iniciais?: string | null
           data?: string | null
+          ativo?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -722,13 +762,26 @@ export type Database = {
           descricao?: string | null
           categoria?: string
           status?: string
+          coluna_id?: string | null
           imagem_url?: string | null
+          arquivo_url?: string | null
+          arquivo_tipo?: string | null
+          arquivo_nome?: string | null
           responsavel_iniciais?: string | null
           data?: string | null
+          ativo?: boolean
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "divulgacoes_coluna_id_fkey"
+            columns: ["coluna_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_colunas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       eventos: {
         Row: {

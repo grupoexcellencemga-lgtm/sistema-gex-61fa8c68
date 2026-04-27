@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yt-dlp --version)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(bun run *)",
+      "Bash(npx tsc *)",
+      "Bash(vercel --version)",
+      "Bash(npx vercel *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(awk '{print $2}')",
+      "Bash(python3 *)",
+      "Bash(node *)",
+      "Bash(npx playwright *)",
+      "Read(//tmp/**)",
+      "Bash(npm install *)",
+      "WebFetch(domain:www.instagram.com)"
+    ]
+  }
+}

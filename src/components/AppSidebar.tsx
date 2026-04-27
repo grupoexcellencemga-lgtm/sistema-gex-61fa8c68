@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Package, GraduationCap, Calendar,
-  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone
+  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,7 @@ const menuGroups = [
     label: "Operações",
     items: [
       { title: "Metas", url: "/metas", icon: Target, pageKey: "metas" as PageKey },
+      { title: "Funil de Vendas", url: "/funil", icon: Filter, pageKey: "funil" as PageKey },
       { title: "Tarefas", url: "/tarefas", icon: CheckSquare, pageKey: "tarefas" as PageKey },
       { title: "Divulgação", url: "/divulgacao", icon: Megaphone, pageKey: "divulgacao" as PageKey },
       { title: "Mind Map", url: "/mindmap", icon: Brain, pageKey: "mindmap" as PageKey },

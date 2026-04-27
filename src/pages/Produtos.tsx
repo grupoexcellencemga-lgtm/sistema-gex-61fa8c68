@@ -62,7 +62,7 @@ const Produtos = () => {
         valor: data.valor ? Number(data.valor) : 0,
         parcelas_cartao: data.parcelas_cartao ? Number(data.parcelas_cartao) : 12,
         valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : 0,
-      } as any);
+      });
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["produtos"] }); toast.success("Produto cadastrado"); setDialogOpen(false); },
@@ -80,7 +80,7 @@ const Produtos = () => {
         valor: data.valor ? Number(data.valor) : 0,
         parcelas_cartao: data.parcelas_cartao ? Number(data.parcelas_cartao) : 12,
         valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : 0,
-      } as any).eq("id", id);
+      }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["produtos"] }); toast.success("Produto atualizado"); setDialogOpen(false); },
@@ -98,7 +98,7 @@ const Produtos = () => {
 
   const openCreate = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (p: any) => {
-    setForm({ nome: p.nome, tipo: p.tipo, responsavel: p.responsavel || "", duracao: p.duracao || "", descricao: p.descricao || "", valor: p.valor ? String(p.valor) : "", parcelas_cartao: (p as any).parcelas_cartao ? String((p as any).parcelas_cartao) : "12", valor_parcela: (p as any).valor_parcela ? String((p as any).valor_parcela) : "" });
+    setForm({ nome: p.nome, tipo: p.tipo, responsavel: p.responsavel || "", duracao: p.duracao || "", descricao: p.descricao || "", valor: p.valor ? String(p.valor) : "", parcelas_cartao: p.parcelas_cartao ? String(p.parcelas_cartao) : "12", valor_parcela: p.valor_parcela ? String(p.valor_parcela) : "" });
     setEditingId(p.id); setDialogOpen(true);
   };
 
@@ -178,9 +178,9 @@ const Produtos = () => {
                     </TableCell>
                     <TableCell><Badge variant={tipoBadge[p.tipo] || "outline"}>{p.tipo}</Badge></TableCell>
                     <TableCell className="text-sm">
-                      <p className="font-semibold">{formatCurrency(Number((p as any).valor || 0))} à vista</p>
-                      {(p as any).valor_parcela > 0 && (
-                        <p className="text-xs text-muted-foreground">{(p as any).parcelas_cartao || 12}x de {formatCurrency(Number((p as any).valor_parcela))} no cartão</p>
+                      <p className="font-semibold">{formatCurrency(Number(p.valor || 0))} à vista</p>
+                      {p.valor_parcela > 0 && (
+                        <p className="text-xs text-muted-foreground">{p.parcelas_cartao || 12}x de {formatCurrency(Number(p.valor_parcela))} no cartão</p>
                       )}
                     </TableCell>
                     <TableCell className="text-sm">{p.responsavel}</TableCell>

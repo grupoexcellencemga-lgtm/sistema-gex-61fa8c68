@@ -54,7 +54,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
     queryKey: ["pagamentos_processo_empresarial", processo.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("pagamentos_processo_empresarial" as any)
+        .from("pagamentos_processo_empresarial")
         .select("*")
         .eq("processo_id", processo.id)
         .is("deleted_at", null)
@@ -96,7 +96,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
       const obs = parts.join(" — ") || null;
 
       const { error } = await supabase
-        .from("pagamentos_processo_empresarial" as any)
+        .from("pagamentos_processo_empresarial")
         .insert({
           processo_id: processo.id,
           valor,
@@ -127,7 +127,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pagamentos_processo_empresarial" as any).update({ deleted_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.from("pagamentos_processo_empresarial").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -139,7 +139,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
 
   const updateLancMutation = useMutation({
     mutationFn: async (lanc: any) => {
-      const { error } = await supabase.from("pagamentos_processo_empresarial" as any).update({
+      const { error } = await supabase.from("pagamentos_processo_empresarial").update({
         valor: lanc.valor,
         data: lanc.data,
         forma_pagamento: lanc.forma_pagamento || null,
