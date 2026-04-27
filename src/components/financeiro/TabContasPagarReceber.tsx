@@ -108,17 +108,19 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   // Fetch comissões
-  const { data: comissoes = [] } = useQuery({
-    queryKey: ["comissoes-contas"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("comissoes")
-        .select("*, comerciais(nome)")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-  });
+const { data: comissoes = [] } = useQuery({
+  queryKey: ["comissoes-contas"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("comissoes")
+      .select("*, comerciais(nome)")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
+});
 
   // Fetch processos individuais + pagamentos
   const { data: processosIndividuais = [] } = useQuery({
@@ -206,7 +208,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
         tipo: "pagar",
         descricao: `Comissão — ${c.comerciais?.nome || "Vendedor"}`,
         valor: Number(c.valor_comissao),
-        data_vencimento: null,
+        data_vencimento: c.created_at ? c.created_at.substring(0, 10) : null,
         data_pagamento: c.data_pagamento,
         status: c.status === "pago" ? "pago" : "pendente",
         categoria: "Comissão",
