@@ -131,6 +131,7 @@ const { data: comissoes = [] } = useQuery({
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("id, cliente_nome, valor_total, status, data_inicio, data_fim")
+        .is("deleted_at", null)
         .in("status", ["ativo", "aberto"]);
       if (error) throw error;
       return data;
@@ -153,6 +154,7 @@ const { data: comissoes = [] } = useQuery({
       const { data, error } = await supabase
         .from("processos_empresariais")
         .select("id, empresa_nome, valor_total, status, data_inicio, data_fim")
+        .is("deleted_at", null)
         .in("status", ["ativo", "aberto"]);
       if (error) throw error;
       return data;
