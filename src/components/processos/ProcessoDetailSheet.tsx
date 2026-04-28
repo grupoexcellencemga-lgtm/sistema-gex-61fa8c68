@@ -11,6 +11,7 @@ import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPag
 
 export const DetalhesProcessoDialog = ({ processo, onClose }: { processo: any; onClose: () => void }) => {
   const queryClient = useQueryClient();
+  const { data: formasPagamento = [] } = useFormasPagamento();
   const { data: lancamentos = [], refetch } = useQuery({
     queryKey: ["pagamentos_processo", processo.id],
     queryFn: async () => {
@@ -142,11 +143,9 @@ export const DetalhesProcessoDialog = ({ processo, onClose }: { processo: any; o
                       </Badge>
                       <span className="text-muted-foreground">{formatDate(l.data)}</span>
                       {l.forma_pagamento && (
-                        <span className="text-xs capitalize text-muted-foreground">
-                          • {l.forma_pagamento === "cartao"
-                            ? `${l.observacoes?.match(/(\d+)x/)?.[0] || "1x"} no cartão`
-                            : l.forma_pagamento}
-                          {l.forma_pagamento === "cartao" && l.taxa_cartao > 0 && ` (taxa ${l.taxa_cartao}%)`}
+                        <span className="text-xs text-muted-foreground">
+                          • {getFormaPagamentoLabel(l.forma_pagamento, formasPagamento)}
+                          {l.taxa_cartao > 0 && ` (taxa ${l.taxa_cartao}%)`}
                         </span>
                       )}
                     </div>
