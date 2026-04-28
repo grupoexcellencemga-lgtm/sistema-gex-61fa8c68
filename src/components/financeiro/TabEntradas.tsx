@@ -20,9 +20,11 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { toast } from "@/hooks/use-toast";
 import { PaginationControls, paginate } from "@/components/Pagination";
 import { statusVariant, formatDate, formatCurrency } from "./financeiroUtils";
+import { useFormasPagamento, getFormaPagamentoLabel, isFormaCredito } from "@/hooks/useFormasPagamento";
 
 export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { data: formasPagamento = [] } = useFormasPagamento();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({
     aluno: "",
@@ -134,6 +136,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       const { data, error } = await supabase
         .from("pagamentos_processo")
         .select("*, contas_bancarias(nome)")
+        .is("deleted_at", null)
         .order("data", { ascending: false });
 
       if (error) throw error;
@@ -326,6 +329,17 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
     saveAvulsa.mutate(form);
   };
 
+  const renderFormaPagamentoOptions = () => (
+    <>
+      <option value="">Selecione</option>
+      {formasPagamento.map((forma) => (
+        <option key={forma.id} value={forma.codigo}>
+          {forma.nome}
+        </option>
+      ))}
+    </>
+  );
+
   const inMonth = (d: string | null | undefined) => isInMonth(d, mes, ano);
 
   const filtered = pagamentos
@@ -338,7 +352,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         match(p.alunos?.nome || "", filters.aluno) &&
         match(p.produtos?.nome || "", filters.produto) &&
         match(formatCurrency(Number(p.valor)), filters.valor) &&
-        match(p.forma_pagamento || "", filters.forma) &&
+        match(getFormaPagamentoLabel(p.forma_pagamento, formasPagamento), filters.forma) &&
         match((p as any).contas_bancarias?.nome || "", filters.banco) &&
         match(formatDate(p.data_vencimento), filters.vencimento) &&
         match(formatDate(p.data_pagamento), filters.dataPgto) &&
@@ -569,18 +583,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   defaultValue={editingPagamento?.forma_pagamento || ""}
                 >
-                  <option value="">Selecione</option>
-                  <option value="pix">PIX</option>
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="probono">Probono</option>
-                  <option value="credito">Crédito</option>
-                  <option value="debito">Débito</option>
-                  <option value="link">Link de Pagamento</option>
-                  <option value="boleto">Boleto</option>
-                  <option value="transferencia">Transferência</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="permuta">Permuta</option>
-                  <option value="recorrencia_cartao">Recorrência no Cartão</option>
+                  {renderFormaPagamentoOptions()}
                 </select>
               </div>
 
@@ -650,18 +653,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   defaultValue={editingProcPag?.forma_pagamento || ""}
                 >
-                  <option value="">Selecione</option>
-                  <option value="pix">PIX</option>
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="probono">Probono</option>
-                  <option value="credito">Crédito</option>
-                  <option value="debito">Débito</option>
-                  <option value="link">Link de Pagamento</option>
-                  <option value="boleto">Boleto</option>
-                  <option value="transferencia">Transferência</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="permuta">Permuta</option>
-                  <option value="recorrencia_cartao">Recorrência no Cartão</option>
+                  {renderFormaPagamentoOptions()}
                 </select>
               </div>
 
@@ -731,18 +723,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   defaultValue={editingEvtPag?.forma_pagamento || ""}
                 >
-                  <option value="">Selecione</option>
-                  <option value="pix">PIX</option>
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="probono">Probono</option>
-                  <option value="credito">Crédito</option>
-                  <option value="debito">Débito</option>
-                  <option value="link">Link de Pagamento</option>
-                  <option value="boleto">Boleto</option>
-                  <option value="transferencia">Transferência</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="permuta">Permuta</option>
-                  <option value="recorrencia_cartao">Recorrência no Cartão</option>
+                  {renderFormaPagamentoOptions()}
                 </select>
               </div>
 
@@ -866,7 +847,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     <TableCell className="font-medium text-sm">{r.descricao}</TableCell>
                     <TableCell className="text-sm">{r.categoria ? <Badge variant="outline">{r.categoria}</Badge> : "—"}</TableCell>
                     <TableCell className="text-sm">{(r as any).contas_bancarias?.nome || "—"}</TableCell>
-                    <TableCell className="text-sm">{r.forma_pagamento || "—"}</TableCell>
+                    <TableCell className="text-sm">{getFormaPagamentoLabel(r.forma_pagamento, formasPagamento)}</TableCell>
                     <TableCell className="text-sm text-right font-semibold text-emerald-600">{formatCurrency(Number(r.valor))}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -946,7 +927,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                       <TableCell className="text-sm">
                         <Badge variant="outline">{p.tipo === "entrada" ? "Entrada" : "Pagamento"}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{p.forma_pagamento || "—"}</TableCell>
+                      <TableCell className="text-sm">{getFormaPagamentoLabel(p.forma_pagamento, formasPagamento)}</TableCell>
                       <TableCell className="text-sm">{(p as any).contas_bancarias?.nome || "—"}</TableCell>
                       <TableCell className="text-sm text-right font-semibold text-emerald-600">{formatCurrency(Number(p.valor))}</TableCell>
                       <TableCell className="text-sm text-right text-muted-foreground">{formatCurrency((Number(p.valor) * pctEmpresa) / 100)}</TableCell>
@@ -1001,7 +982,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     <TableCell className="text-sm">{formatDate(p.data_pagamento || (p as any).eventos?.data)}</TableCell>
                     <TableCell className="font-medium text-sm">{p.nome}</TableCell>
                     <TableCell className="text-sm">{(p as any).eventos?.nome || "—"}</TableCell>
-                    <TableCell className="text-sm">{p.forma_pagamento || "—"}</TableCell>
+                    <TableCell className="text-sm">{getFormaPagamentoLabel(p.forma_pagamento, formasPagamento)}</TableCell>
                     <TableCell className="text-sm">{(p as any).contas_bancarias?.nome || "—"}</TableCell>
                     <TableCell className="text-sm text-right font-semibold text-emerald-600">{formatCurrency(Number(p.valor || 0))}</TableCell>
                     <TableCell>
@@ -1041,7 +1022,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     aluno: p.alunos?.nome || "",
                     produto: p.produtos?.nome || "",
                     valor: Number(p.valor).toFixed(2),
-                    forma: p.forma_pagamento || "",
+                    forma: getFormaPagamentoLabel(p.forma_pagamento, formasPagamento),
                     vencimento: formatDate(p.data_vencimento),
                     status: p.status,
                   })),
@@ -1126,11 +1107,11 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     </TableCell>
                     <TableCell className="text-sm">{formatCurrency(Number(p.valor))}</TableCell>
                     <TableCell className="text-sm">
-                      {["credito", "cartao", "cartao_credito"].includes(p.forma_pagamento) && p.parcelas_cartao
+                      {isFormaCredito(p.forma_pagamento) && p.parcelas_cartao
                         ? `1/1 (${p.parcelas_cartao}x no crédito)`
                         : `${p.parcela_atual || 1}/${p.parcelas || 1}`}
                     </TableCell>
-                    <TableCell className="text-sm">{p.forma_pagamento || "—"}</TableCell>
+                    <TableCell className="text-sm">{getFormaPagamentoLabel(p.forma_pagamento, formasPagamento)}</TableCell>
                     <TableCell className="text-sm">{(p as any).contas_bancarias?.nome || "—"}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.data_vencimento)}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.data_pagamento)}</TableCell>
@@ -1152,7 +1133,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                                 produtoNome: p.produtos?.nome || "—",
                                 valor: Number(p.valor),
                                 dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
-                                formaPagamento: p.forma_pagamento || "—",
+                                formaPagamento: getFormaPagamentoLabel(p.forma_pagamento, formasPagamento),
                                 parcela: p.parcelas > 1 ? `${p.parcela_atual}/${p.parcelas}` : undefined,
                                 reciboId: p.id,
                               })
