@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { parseCurrencyToNumber, formatCurrencyInput, formatCurrency, formatDate } from "./processosUtils";
 import { useEntradaTaxas, getDefaultImposto } from "@/hooks/useEntradaTaxas";
 import { EntradaTaxaFields } from "@/components/financeiro/EntradaTaxaFields";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 export const LancamentosDialog = ({ processo, contas }: { processo: any; contas: any[] }) => {
   const queryClient = useQueryClient();
@@ -31,6 +32,8 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
   const [novoDataVencimento, setNovoDataVencimento] = useState("");
   const [editingLanc, setEditingLanc] = useState<any>(null);
 
+  const { data: formasPagamento = [] } = useFormasPagamento();
+
   const { data: taxas = [] } = useQuery({
     queryKey: ["taxas_sistema"],
     queryFn: async () => {
@@ -38,10 +41,9 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
       if (error) throw error;
       return data;
     },
-    staleTime: 0,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Set default imposto from system config
   useEffect(() => {
     if (taxas.length > 0) {
       setNovoImposto(getDefaultImposto(taxas));
@@ -186,7 +188,6 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
           <DialogTitle>Lançamentos — {processo.cliente_nome}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-          {/* Summary */}
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border p-3 text-center">
               <p className="text-xs text-muted-foreground">Valor Total</p>
@@ -204,7 +205,6 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
             </div>
           </div>
 
-          {/* Add new */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Novo Lançamento</CardTitle>
@@ -275,7 +275,6 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
             </CardContent>
           </Card>
 
-          {/* Edit lancamento inline */}
           {editingLanc && (
             <Card className="border-primary">
               <CardHeader className="pb-2">
@@ -304,12 +303,17 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
                     <Select value={editingLanc.forma_pagamento || ""} onValueChange={(v) => setEditingLanc((prev: any) => ({ ...prev, forma_pagamento: v }))}>
                       <SelectTrigger><SelectValue placeholder="..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pix">PIX</SelectItem>
-                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                        <SelectItem value="debito">Débito</SelectItem>
-                        <SelectItem value="cartao">Cartão de Crédito</SelectItem>
-                        <SelectItem value="link">Link de Pagamento</SelectItem>
-                        <SelectItem value="boleto">Boleto</SelectItem>
+                        {formasPagamento.length === 0 ? (
+                          <SelectItem value="nenhuma_forma_pagamento" disabled>
+                            Nenhuma forma cadastrada
+                          </SelectItem>
+                        ) : (
+                          formasPagamento.map((forma) => (
+                            <SelectItem key={forma.id} value={forma.codigo}>
+                              {forma.nome}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -346,7 +350,6 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
             </Card>
           )}
 
-          {/* List */}
           {isLoading ? (
             <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : lancamentos.length === 0 ? (
@@ -372,7 +375,9 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
                         {l.tipo === "entrada" ? "Entrada" : l.tipo === "parcela" ? "Parcela" : "Pagamento"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{l.forma_pagamento || "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {getFormaPagamentoLabel(l.forma_pagamento, formasPagamento)}
+                    </TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(Number(l.valor))}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">{l.observacoes || "—"}</TableCell>
                     <TableCell>
