@@ -14,9 +14,9 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import autoTable from "jspdf-autotable";
 
-const formasPgto = ["Pix", "Dinheiro", "Débito", "Cartão de crédito", "Link", "Boleto", "Cheque", "Cartão recorrente", "Permuta"];
 const statusOptions = ["pendente", "pago", "cancelado"];
 
 export function RelatorioComissao() {
@@ -36,6 +36,7 @@ export function RelatorioComissao() {
   const [formaPgto, setFormaPgto] = useState("todos");
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [viewMode, setViewMode] = useState("vendedor");
+  const { data: formasPagamento = [] } = useFormasPagamento();
 
   // Fetch reference data
   const { data: comerciais } = useQuery({
@@ -178,6 +179,7 @@ export function RelatorioComissao() {
           turma_id: c.turma_id,
           status: c.status,
           forma_pagamento: forma,
+          forma_pagamento_label: getFormaPagamentoLabel(forma, formasPagamento),
           vendedor: vendedorNome,
           aluno: alunoNome,
           produto: produtoNome,
@@ -201,7 +203,7 @@ export function RelatorioComissao() {
         if (formaPgto !== "todos" && r.forma_pagamento !== formaPgto) return false;
         return true;
       });
-  }, [comissoes, pagamentos, vendedorId, produtoId, turmaId, statusFilter, formaPgto, impostoDefault]);
+  }, [comissoes, pagamentos, vendedorId, produtoId, turmaId, statusFilter, formaPgto, impostoDefault, formasPagamento]);
 
   // Aggregations
   const byVendedor = useMemo(() => {
@@ -259,7 +261,7 @@ export function RelatorioComissao() {
     if (viewMode === "vendedor") return { title: "por Vendedor", data: byVendedor, cols: ["Vendedor", "Qtd Vendas", "Ticket Médio", "Valor Bruto", "Taxa", "Imposto", "Valor Líquido", "Comissão Total", "Comissão Paga"], mapFn: (r: any) => [r.vendedor, r.qtdVendas, formatCurrency(r.ticketMedio), formatCurrency(r.valorBruto), formatCurrency(r.taxa), formatCurrency(r.imposto), formatCurrency(r.valorLiquido), formatCurrency(r.comissaoTotal), formatCurrency(r.comissaoPaga)] };
     if (viewMode === "produto") return { title: "por Produto", data: byProduto, cols: ["Produto", "Qtd Vendas", "Valor Bruto", "Taxa", "Imposto", "Valor Líquido", "Comissão Total"], mapFn: (r: any) => [r.produto, r.qtdVendas, formatCurrency(r.valorBruto), formatCurrency(r.taxa), formatCurrency(r.imposto), formatCurrency(r.valorLiquido), formatCurrency(r.comissaoTotal)] };
     // venda or consolidada
-    return { title: viewMode === "venda" ? "por Venda" : "Consolidado", data: rows, cols: ["Vendedor", "Aluno", "Produto", "Turma", "Forma Pgto", "Status", "Valor Bruto", "Taxa", "Imposto", "Líquido", "% Comissão", "Comissão", "Data"], mapFn: (r: any) => [r.vendedor, r.aluno, r.produto, r.turma, r.forma_pagamento, r.status, formatCurrency(r.valor_bruto), formatCurrency(r.taxa), formatCurrency(r.imposto), formatCurrency(r.valor_liquido), `${r.percentual}%`, formatCurrency(r.valor_comissao), formatDate(r.created_at)] };
+    return { title: viewMode === "venda" ? "por Venda" : "Consolidado", data: rows, cols: ["Vendedor", "Aluno", "Produto", "Turma", "Forma Pgto", "Status", "Valor Bruto", "Taxa", "Imposto", "Líquido", "% Comissão", "Comissão", "Data"], mapFn: (r: any) => [r.vendedor, r.aluno, r.produto, r.turma, r.forma_pagamento_label || r.forma_pagamento, r.status, formatCurrency(r.valor_bruto), formatCurrency(r.taxa), formatCurrency(r.imposto), formatCurrency(r.valor_liquido), `${r.percentual}%`, formatCurrency(r.valor_comissao), formatDate(r.created_at)] };
   };
 
   const handleExportPDF = () => {
@@ -316,7 +318,7 @@ export function RelatorioComissao() {
     // Detail
     const detailData = rows.map(r => ({
       Vendedor: r.vendedor, Aluno: r.aluno, Produto: r.produto, Turma: r.turma,
-      "Forma Pgto": r.forma_pagamento, Status: r.status, "Valor Bruto": r.valor_bruto,
+      "Forma Pgto": r.forma_pagamento_label || r.forma_pagamento, Status: r.status, "Valor Bruto": r.valor_bruto,
       Taxa: r.taxa, Imposto: r.imposto, "Valor Líquido": r.valor_liquido,
       "% Comissão": r.percentual, "Valor Comissão": r.valor_comissao, "Valor Pago": r.valor_pago,
       Data: formatDate(r.created_at),
@@ -428,7 +430,7 @@ export function RelatorioComissao() {
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todas</SelectItem>
-                      {formasPgto.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      {formasPagamento.map((forma) => <SelectItem key={forma.id} value={forma.codigo}>{forma.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -592,7 +594,7 @@ export function RelatorioComissao() {
                       <TableCell className="text-xs py-2">{r.vendedor}</TableCell>
                       <TableCell className="text-xs py-2">{r.aluno}</TableCell>
                       <TableCell className="text-xs py-2">{r.produto}</TableCell>
-                      <TableCell className="text-xs py-2">{r.forma_pagamento}</TableCell>
+                      <TableCell className="text-xs py-2">{r.forma_pagamento_label || r.forma_pagamento}</TableCell>
                       <TableCell className="text-xs py-2">
                         <Badge variant={r.status === "pago" ? "default" : r.status === "pendente" ? "secondary" : "destructive"} className="text-[10px]">
                           {r.status}
