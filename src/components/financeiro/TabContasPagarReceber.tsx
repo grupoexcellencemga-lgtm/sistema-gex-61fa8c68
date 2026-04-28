@@ -26,6 +26,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   pago: "default",
@@ -78,6 +79,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   const [page, setPage] = useState(1);
   const [confirmAction, setConfirmAction] = useState<{ type: "delete" | "pagar"; id: string; descricao: string } | null>(null);
   const [metricDialog, setMetricDialog] = useState<{ title: string; items: MetricDetailItem[] } | null>(null);
+  const { data: formasPagamento = [] } = useFormasPagamento();
 
   // Fetch contas_a_pagar (manuais)
   const { data: contasManuais = [] } = useQuery({
@@ -208,7 +210,7 @@ const { data: comissoes = [] } = useQuery({
         tipo: "pagar",
         descricao: `Comissão — ${c.comerciais?.nome || "Vendedor"}`,
         valor: Number(c.valor_comissao),
-        data_vencimento: c.created_at ? c.created_at.substring(0, 10) : null,
+        data_vencimento: c.created_at ? c.created_at.substring(0, 10) : null, 
         data_pagamento: c.data_pagamento,
         status: c.status === "pago" ? "pago" : "pendente",
         categoria: "Comissão",
@@ -797,15 +799,17 @@ const { data: comissoes = [] } = useQuery({
                 <Select value={form.forma_pagamento} onValueChange={v => setForm(f => ({ ...f, forma_pagamento: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="boleto">Boleto</SelectItem>
-                    <SelectItem value="transferencia">Transferência</SelectItem>
-                    <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                    <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="permuta">Permuta</SelectItem>
-                    <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
+                    {formasPagamento.length === 0 ? (
+                      <SelectItem value="nenhuma_forma_pagamento" disabled>
+                        Nenhuma forma cadastrada
+                      </SelectItem>
+                    ) : (
+                      formasPagamento.map((forma) => (
+                        <SelectItem key={forma.id} value={forma.codigo}>
+                          {forma.nome}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
