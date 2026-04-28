@@ -37,16 +37,45 @@ export function useEntradaTaxas(
     staleTime: 0,
   });
 
-  return useMemo(() => {
-    const isCredito = ["credito", "cartao", "cartao_credito"].includes(
-      formaPagamento
-    );
-    const isDebito = formaPagamento === "debito";
-    const isLink = formaPagamento === "link";
-    const isBoleto = formaPagamento === "boleto";
+  const { data: formasPagamento = [] } = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("formas_pagamento")
+        .select("*")
+        .eq("ativo", true)
+        .is("deleted_at", null)
+        .order("ordem", { ascending: true })
+        .order("nome", { ascending: true });
 
-    const showTaxa = isCredito || isDebito || isLink || isBoleto;
-    const showParcelas = isCredito || isLink || isBoleto;
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 0,
+  });
+
+  return useMemo(() => {
+    const formaAtual = formasPagamento.find(
+      (f: any) => f.codigo === formaPagamento
+    );
+
+    const isCredito =
+      ["credito", "cartao", "cartao_credito"].includes(formaPagamento) ||
+      formaAtual?.tipo === "credito";
+
+    const isDebito =
+      formaPagamento === "debito" || formaAtual?.tipo === "debito";
+
+    const isLink = formaPagamento === "link" || formaAtual?.tipo === "link";
+
+    const isBoleto =
+      formaPagamento === "boleto" || formaAtual?.tipo === "boleto";
+
+    const showTaxa =
+      !!formaAtual?.abre_taxa || isCredito || isDebito || isLink || isBoleto;
+
+    const showParcelas =
+      !!formaAtual?.abre_parcelas || isCredito || isLink || isBoleto;
 
     let taxaNome = "";
     let taxaPercentual = 0;
@@ -114,7 +143,15 @@ export function useEntradaTaxas(
       showTaxa,
       showParcelas,
     };
-  }, [formaPagamento, valorBruto, parcelas, impostoManual, repassarTaxa, taxas]);
+  }, [
+    formaPagamento,
+    valorBruto,
+    parcelas,
+    impostoManual,
+    repassarTaxa,
+    taxas,
+    formasPagamento,
+  ]);
 }
 
 export function getDefaultImposto(taxas: any[]): number {
