@@ -9,9 +9,11 @@ import { Trash2, Mail, Phone, Calendar, CreditCard, FileText } from "lucide-reac
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, formatPhone, formatCNPJ } from "./processosEmpresariaisUtils";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 export const DetalhesProcessoEmpDialog = ({ processo, onClose }: { processo: any; onClose: () => void }) => {
   const queryClient = useQueryClient();
+  const { data: formasPagamento = [] } = useFormasPagamento();
   const { data: lancamentos = [], refetch } = useQuery({
     queryKey: ["pagamentos_processo_empresarial", processo.id],
     queryFn: async () => {
@@ -143,11 +145,10 @@ export const DetalhesProcessoEmpDialog = ({ processo, onClose }: { processo: any
                       </Badge>
                       <span className="text-muted-foreground">{formatDate(l.data)}</span>
                       {l.forma_pagamento && (
-                        <span className="text-xs capitalize text-muted-foreground">
-                          • {l.forma_pagamento === "cartao"
-                            ? `${l.observacoes?.match(/(\d+)x/)?.[0] || "1x"} no cartão`
-                            : l.forma_pagamento}
-                          {l.forma_pagamento === "cartao" && l.taxa_cartao > 0 && ` (taxa ${l.taxa_cartao}%)`}
+                        <span className="text-xs text-muted-foreground">
+                          • {getFormaPagamentoLabel(l.forma_pagamento, formasPagamento)}
+                          {l.observacoes?.match(/(\d+)x/)?.[0] && ` ${l.observacoes.match(/(\d+)x/)?.[0]}`}
+                          {Number(l.taxa_cartao || 0) > 0 && ` (taxa ${l.taxa_cartao}%)`}
                         </span>
                       )}
                     </div>
