@@ -12,6 +12,7 @@ import { DollarSign, Loader2, Pencil, Trash2, UserCheck, X } from "lucide-react"
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
@@ -20,6 +21,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
   const [pgForm, setPgForm] = useState({ valor: "", data: new Date().toISOString().split("T")[0], forma: "", conta_id: "", obs: "" });
   const [showPgForm, setShowPgForm] = useState<string | null>(null); // processo_id
   const [editingPgProf, setEditingPgProf] = useState<any | null>(null); // pagamento being edited
+  const { data: formasPagamento = [] } = useFormasPagamento();
 
   const { data: profissionais = [], isLoading } = useQuery({
     queryKey: ["profissionais-financeiro"],
@@ -382,14 +384,17 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
                                               <Select value={pgForm.forma} onValueChange={(v) => setPgForm(f => ({ ...f, forma: v }))}>
                                                 <SelectTrigger><SelectValue placeholder="..." /></SelectTrigger>
                                                 <SelectContent>
-                                                  <SelectItem value="pix">PIX</SelectItem>
-                                                  <SelectItem value="transferencia">Transferência</SelectItem>
-                                                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                                  <SelectItem value="cartao">Cartão</SelectItem>
-                                                  <SelectItem value="boleto">Boleto</SelectItem>
-                                                  <SelectItem value="cheque">Cheque</SelectItem>
-                                                  <SelectItem value="permuta">Permuta</SelectItem>
-                                                  <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
+                                                  {formasPagamento.length === 0 ? (
+                                                    <SelectItem value="nenhuma_forma_pagamento" disabled>
+                                                      Nenhuma forma cadastrada
+                                                    </SelectItem>
+                                                  ) : (
+                                                    formasPagamento.map((forma) => (
+                                                      <SelectItem key={forma.id} value={forma.codigo}>
+                                                        {forma.nome}
+                                                      </SelectItem>
+                                                    ))
+                                                  )}
                                                 </SelectContent>
                                               </Select>
                                             </div>
@@ -473,7 +478,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
                                         {clienteData.pgsProfCliente.map((pg: any) => (
                                           <TableRow key={pg.id}>
                                             <TableCell className="text-sm">{formatDate(pg.data)}</TableCell>
-                                            <TableCell className="text-sm">{pg.forma_pagamento || "—"}</TableCell>
+                                            <TableCell className="text-sm">{getFormaPagamentoLabel(pg.forma_pagamento, formasPagamento)}</TableCell>
                                             <TableCell className="text-sm">{(pg as any).contas_bancarias?.nome || "—"}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{pg.observacoes || "—"}</TableCell>
                                             <TableCell className="text-sm text-right font-semibold text-destructive">{formatCurrency(Number(pg.valor))}</TableCell>
@@ -530,7 +535,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
                                               <TableCell className="text-sm">
                                                 <Badge variant="outline">{pg.tipo === "entrada" ? "Entrada" : "Pagamento"}</Badge>
                                               </TableCell>
-                                              <TableCell className="text-sm">{pg.forma_pagamento || "—"}</TableCell>
+                                              <TableCell className="text-sm">{getFormaPagamentoLabel(pg.forma_pagamento, formasPagamento)}</TableCell>
                                               <TableCell className="text-sm">{(pg as any).contas_bancarias?.nome || "—"}</TableCell>
                                               <TableCell className="text-sm text-right">{formatCurrency(Number(pg.valor))}</TableCell>
                                               <TableCell className="text-sm text-right text-orange-600 font-medium">{formatCurrency(Number(pg.valor) * pctProf / 100)}</TableCell>
