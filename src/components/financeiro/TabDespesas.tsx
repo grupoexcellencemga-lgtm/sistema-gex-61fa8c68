@@ -47,9 +47,16 @@ import {
 } from "recharts";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
+import {
+  useFormasPagamento,
+  getFormaPagamentoLabel,
+} from "@/hooks/useFormasPagamento";
 
 export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+
+  const { data: formasPagamento = [], isLoading: formasPagamentoLoading } =
+    useFormasPagamento();
 
   const [filters, setFilters] = useState<Record<string, string>>({
     data: "",
@@ -98,6 +105,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
         .from("categorias_despesas")
         .select("*")
         .eq("tipo", "despesa")
+        .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
@@ -276,6 +284,11 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
     const matchField = (val: string, filter: string) =>
       !filter.trim() || val.toLowerCase().includes(filter.toLowerCase());
 
+    const formaLabel = getFormaPagamentoLabel(
+      d.forma_pagamento,
+      formasPagamento
+    );
+
     return (
       matchField(formatDate(d.data), filters.data) &&
       matchField(d.descricao || "", filters.descricao) &&
@@ -286,7 +299,8 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       matchField((d as any).turmas?.nome || "Empresa", filters.turma) &&
       matchField(d.fornecedor || "", filters.fornecedor) &&
       matchField((d as any).contas_bancarias?.nome || "", filters.banco) &&
-      matchField(d.forma_pagamento || "", filters.forma) &&
+      (matchField(d.forma_pagamento || "", filters.forma) ||
+        matchField(formaLabel, filters.forma)) &&
       matchField(formatCurrency(Number(d.valor)), filters.valor) &&
       matchField((d as any).produtos?.nome || "", filters.produto) &&
       matchField(d.observacoes || "", filters.observacoes)
@@ -379,6 +393,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
           variant="destructive"
           onClick={() => setActiveDialog("total")}
         />
+
         <MetricCard
           title="Categorias"
           value={String(Object.keys(despesasPorCategoria).length)}
@@ -386,6 +401,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
           variant="warning"
           onClick={() => setActiveDialog("categorias")}
         />
+
         <MetricCard
           title="Lançamentos"
           value={String(despesasMes.length)}
@@ -444,254 +460,250 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
               Todas as Despesas
             </CardTitle>
 
-            <div className="flex items-center gap-2">
-              <Dialog
-                open={dialogOpen}
-                onOpenChange={(o) => {
-                  setDialogOpen(o);
-                  if (!o) {
-                    setEditingDespesa(null);
-                    setArquivoNota(null);
-                    setRemoverNota(false);
-                  }
-                }}
-              >
-                <DialogTrigger asChild>
-                  <Button size="sm" onClick={openNew}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Nova Despesa
-                  </Button>
-                </DialogTrigger>
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(o) => {
+                setDialogOpen(o);
 
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingDespesa ? "Editar Despesa" : "Nova Despesa"}
-                    </DialogTitle>
-                  </DialogHeader>
+                if (!o) {
+                  setEditingDespesa(null);
+                  setArquivoNota(null);
+                  setRemoverNota(false);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button size="sm" onClick={openNew}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nova Despesa
+                </Button>
+              </DialogTrigger>
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <Label>Descrição *</Label>
-                        <Input
-                          name="descricao"
-                          required
-                          defaultValue={editingDespesa?.descricao || ""}
-                        />
-                      </div>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingDespesa ? "Editar Despesa" : "Nova Despesa"}
+                  </DialogTitle>
+                </DialogHeader>
 
-                      <div>
-                        <Label>Valor (R$) *</Label>
-                        <Input
-                          name="valor"
-                          type="number"
-                          step="0.01"
-                          required
-                          defaultValue={editingDespesa?.valor || ""}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Data *</Label>
-                        <Input
-                          name="data"
-                          type="date"
-                          required
-                          defaultValue={
-                            editingDespesa?.data ||
-                            new Date().toISOString().split("T")[0]
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Categoria</Label>
-                        <select
-                          name="categoria_id"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue={editingDespesa?.categoria_id || ""}
-                        >
-                          <option value="">Selecione</option>
-                          {categorias.map((c: any) => (
-                            <option key={c.id} value={c.id}>
-                              {c.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Conta Bancária</Label>
-                        <select
-                          name="conta_bancaria_id"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue={editingDespesa?.conta_bancaria_id || ""}
-                          disabled={contasFetching}
-                        >
-                          <option value="">
-                            {contasFetching ? "Carregando contas..." : "Selecione"}
-                          </option>
-                          {contas.map((c: any) => (
-                            <option key={c.id} value={c.id}>
-                              {c.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Produto</Label>
-                        <select
-                          name="produto_id"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={formProdutoId}
-                          onChange={(e) => setFormProdutoId(e.target.value)}
-                        >
-                          <option value="">Nenhum</option>
-                          {produtos.map((p: any) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Turma</Label>
-                        <select
-                          name="turma_id"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue={editingDespesa?.turma_id || ""}
-                          disabled={!formProdutoId}
-                        >
-                          <option value="">
-                            {formProdutoId
-                              ? "Selecione a turma"
-                              : "Selecione um produto primeiro"}
-                          </option>
-                          {turmasFiltradas.map((t: any) => (
-                            <option key={t.id} value={t.id}>
-                              {t.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Fornecedor</Label>
-                        <Input
-                          name="fornecedor"
-                          defaultValue={editingDespesa?.fornecedor || ""}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Forma de Pagamento</Label>
-                        <select
-                          name="forma_pagamento"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue={editingDespesa?.forma_pagamento || ""}
-                        >
-                          <option value="">Selecione</option>
-                          <option value="pix">PIX</option>
-                          <option value="dinheiro">Dinheiro</option>
-                          <option value="probono">Probono</option>
-                          <option value="credito">Crédito</option>
-                          <option value="debito">Débito</option>
-                          <option value="link">Link de Pagamento</option>
-                          <option value="boleto">Boleto</option>
-                          <option value="transferencia">Transferência</option>
-                          <option value="cheque">Cheque</option>
-                          <option value="permuta">Permuta</option>
-                          <option value="recorrencia_cartao">
-                            Recorrência no Cartão
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Recorrente?</Label>
-                        <select
-                          name="recorrente"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue={editingDespesa?.recorrente ? "true" : "false"}
-                        >
-                          <option value="false">Não</option>
-                          <option value="true">Sim</option>
-                        </select>
-                      </div>
-
-                      <div className="col-span-2">
-                        <Label>Foto / Nota da Despesa</Label>
-
-                        {editingDespesa?.nota_url && !arquivoNota && !removerNota && (
-                          <div className="flex items-center gap-2 mb-2 p-2 rounded-lg border bg-muted/50">
-                            <Paperclip className="h-4 w-4 text-muted-foreground" />
-                            <a
-                              href={editingDespesa.nota_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-primary underline truncate flex-1"
-                            >
-                              {editingDespesa.nota_nome || "Nota anexada"}
-                            </a>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => setRemoverNota(true)}
-                              title="Remover nota"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-
-                        {removerNota && (
-                          <div className="mb-2 p-2 rounded-lg border border-destructive/30 bg-destructive/5 text-xs text-destructive">
-                            A nota atual será removida ao salvar.
-                          </div>
-                        )}
-
-                        <Input
-                          type="file"
-                          accept=".pdf,.png,.jpg,.jpeg,.webp"
-                          onChange={(e) =>
-                            setArquivoNota(e.target.files?.[0] || null)
-                          }
-                          className="cursor-pointer"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          PDF, PNG, JPG ou WEBP. Opcional.
-                        </p>
-                      </div>
-
-                      <div className="col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea
-                          name="observacoes"
-                          rows={2}
-                          defaultValue={editingDespesa?.observacoes || ""}
-                        />
-                      </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <Label>Descrição *</Label>
+                      <Input
+                        name="descricao"
+                        required
+                        defaultValue={editingDespesa?.descricao || ""}
+                      />
                     </div>
 
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={saveDespesa.isPending || uploadingNota}
-                    >
-                      {saveDespesa.isPending || uploadingNota ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : null}
-                      {editingDespesa ? "Salvar Alterações" : "Registrar Despesa"}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
+                    <div>
+                      <Label>Valor (R$) *</Label>
+                      <Input
+                        name="valor"
+                        type="number"
+                        step="0.01"
+                        required
+                        defaultValue={editingDespesa?.valor || ""}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Data *</Label>
+                      <Input
+                        name="data"
+                        type="date"
+                        required
+                        defaultValue={
+                          editingDespesa?.data ||
+                          new Date().toISOString().split("T")[0]
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Categoria</Label>
+                      <select
+                        name="categoria_id"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        defaultValue={editingDespesa?.categoria_id || ""}
+                      >
+                        <option value="">Selecione</option>
+                        {categorias.map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label>Conta Bancária</Label>
+                      <select
+                        name="conta_bancaria_id"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        defaultValue={editingDespesa?.conta_bancaria_id || ""}
+                        disabled={contasFetching}
+                      >
+                        <option value="">
+                          {contasFetching ? "Carregando contas..." : "Selecione"}
+                        </option>
+                        {contas.map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label>Produto</Label>
+                      <select
+                        name="produto_id"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={formProdutoId}
+                        onChange={(e) => setFormProdutoId(e.target.value)}
+                      >
+                        <option value="">Nenhum</option>
+                        {produtos.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label>Turma</Label>
+                      <select
+                        name="turma_id"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        defaultValue={editingDespesa?.turma_id || ""}
+                        disabled={!formProdutoId}
+                      >
+                        <option value="">
+                          {formProdutoId
+                            ? "Selecione a turma"
+                            : "Selecione um produto primeiro"}
+                        </option>
+                        {turmasFiltradas.map((t: any) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label>Fornecedor</Label>
+                      <Input
+                        name="fornecedor"
+                        defaultValue={editingDespesa?.fornecedor || ""}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Forma de Pagamento</Label>
+                      <select
+                        name="forma_pagamento"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        defaultValue={editingDespesa?.forma_pagamento || ""}
+                        disabled={formasPagamentoLoading}
+                      >
+                        <option value="">
+                          {formasPagamentoLoading ? "Carregando..." : "Selecione"}
+                        </option>
+
+                        {formasPagamento.map((forma) => (
+                          <option key={forma.id} value={forma.codigo}>
+                            {forma.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label>Recorrente?</Label>
+                      <select
+                        name="recorrente"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        defaultValue={editingDespesa?.recorrente ? "true" : "false"}
+                      >
+                        <option value="false">Não</option>
+                        <option value="true">Sim</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label>Foto / Nota da Despesa</Label>
+
+                      {editingDespesa?.nota_url && !arquivoNota && !removerNota && (
+                        <div className="flex items-center gap-2 mb-2 p-2 rounded-lg border bg-muted/50">
+                          <Paperclip className="h-4 w-4 text-muted-foreground" />
+                          <a
+                            href={editingDespesa.nota_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary underline truncate flex-1"
+                          >
+                            {editingDespesa.nota_nome || "Nota anexada"}
+                          </a>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            onClick={() => setRemoverNota(true)}
+                            title="Remover nota"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {removerNota && (
+                        <div className="mb-2 p-2 rounded-lg border border-destructive/30 bg-destructive/5 text-xs text-destructive">
+                          A nota atual será removida ao salvar.
+                        </div>
+                      )}
+
+                      <Input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        onChange={(e) =>
+                          setArquivoNota(e.target.files?.[0] || null)
+                        }
+                        className="cursor-pointer"
+                      />
+
+                      <p className="text-xs text-muted-foreground mt-1">
+                        PDF, PNG, JPG ou WEBP. Opcional.
+                      </p>
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label>Observações</Label>
+                      <Textarea
+                        name="observacoes"
+                        rows={2}
+                        defaultValue={editingDespesa?.observacoes || ""}
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={saveDespesa.isPending || uploadingNota}
+                  >
+                    {saveDespesa.isPending || uploadingNota ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    {editingDespesa ? "Salvar Alterações" : "Registrar Despesa"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
 
@@ -808,7 +820,11 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                 {filtered.map((d: any) => (
                   <TableRow key={d.id}>
                     <TableCell className="text-sm">{formatDate(d.data)}</TableCell>
-                    <TableCell className="font-medium text-sm">{d.descricao}</TableCell>
+
+                    <TableCell className="font-medium text-sm">
+                      {d.descricao}
+                    </TableCell>
+
                     <TableCell className="text-sm">
                       {(d as any).categorias_despesas?.nome ? (
                         <Badge variant="outline">
@@ -818,19 +834,25 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                         "—"
                       )}
                     </TableCell>
+
                     <TableCell className="text-sm">
                       {(d as any).produtos?.nome || "—"}
                     </TableCell>
+
                     <TableCell className="text-sm">
                       {(d as any).turmas?.nome || "Empresa"}
                     </TableCell>
+
                     <TableCell className="text-sm">{d.fornecedor || "—"}</TableCell>
+
                     <TableCell className="text-sm">
                       {(d as any).contas_bancarias?.nome || "—"}
                     </TableCell>
+
                     <TableCell className="text-sm">
-                      {d.forma_pagamento || "—"}
+                      {getFormaPagamentoLabel(d.forma_pagamento, formasPagamento)}
                     </TableCell>
+
                     <TableCell className="text-sm">
                       {d.nota_url ? (
                         <a
@@ -846,15 +868,18 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                         "—"
                       )}
                     </TableCell>
+
                     <TableCell className="text-sm text-right font-semibold text-destructive">
                       {formatCurrency(Number(d.valor))}
                     </TableCell>
+
                     <TableCell
                       className="text-sm text-muted-foreground max-w-[200px] truncate"
                       title={d.observacoes || ""}
                     >
                       {d.observacoes || "—"}
                     </TableCell>
+
                     <TableCell>
                       <div className="flex gap-1">
                         <Button
@@ -865,6 +890,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
+
                         <Button
                           variant="ghost"
                           size="icon"

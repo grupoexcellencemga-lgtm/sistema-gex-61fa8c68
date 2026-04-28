@@ -16,6 +16,7 @@ import { PaginationControls, paginate } from "@/components/Pagination";
 
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { isInMonth } from "@/components/MonthFilter";
+import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
   pago: "default",
@@ -93,6 +94,8 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       return data;
     },
   });
+
+  const { data: formasPagamento = [], isLoading: loadingFormasPagamento } = useFormasPagamento();
 
   const pessoas = [
     ...profissionais.map(p => ({ ...p, tipo: "profissional" })),
@@ -520,12 +523,21 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
                   <Select value={payForm.forma_pagamento} onValueChange={v => setPayForm(f => ({ ...f, forma_pagamento: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pix">PIX</SelectItem>
-                      <SelectItem value="transferencia">Transferência</SelectItem>
-                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                      <SelectItem value="permuta">Permuta</SelectItem>
-                      <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
+                      {loadingFormasPagamento ? (
+                        <SelectItem value="carregando_formas_pagamento" disabled>
+                          Carregando formas...
+                        </SelectItem>
+                      ) : formasPagamento.length === 0 ? (
+                        <SelectItem value="nenhuma_forma_pagamento" disabled>
+                          Nenhuma forma cadastrada
+                        </SelectItem>
+                      ) : (
+                        formasPagamento.map((forma) => (
+                          <SelectItem key={forma.id} value={forma.codigo}>
+                            {forma.nome}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
