@@ -17,6 +17,7 @@ import { parseCurrencyToNumber, formatCurrencyInput, formatCurrency, formatDate,
 import { ProcessoEmpFormDialog, emptyProcessoEmpForm, type ProcessoEmpForm } from "@/components/processos-empresariais/ProcessoEmpFormDialog";
 import { ProcessoEmpTable } from "@/components/processos-empresariais/ProcessoEmpTable";
 import { ProcessoEmpFilters } from "@/components/processos-empresariais/ProcessoEmpFilters";
+import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 const ProcessoEmpresarial = () => {
   const queryClient = useQueryClient();
@@ -45,6 +46,27 @@ const ProcessoEmpresarial = () => {
   const { data: profissionais = [] } = useQuery({ queryKey: ["profissionais-select"], queryFn: async () => { const { data } = await supabase.from("profissionais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
   const { data: comerciais = [] } = useQuery({ queryKey: ["comerciais-select"], queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
   const { data: contas = [] } = useQuery({ queryKey: ["contas-select"], queryFn: async () => { const { data } = await supabase.from("contas_bancarias").select("id, nome, banco").is("deleted_at", null).eq("ativo", true).order("nome"); return data || []; } });
+  const { data: formasPagamento = [] } = useFormasPagamento();
+
+  const getFormaPagamento = (codigo: string | null | undefined) => {
+    if (!codigo) return null;
+    return formasPagamento.find((forma) => forma.codigo === codigo) || null;
+  };
+
+  const formaAbreTaxa = (codigo: string | null | undefined) => {
+    const forma = getFormaPagamento(codigo);
+    return Boolean(forma?.abre_taxa) || ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(codigo || "");
+  };
+
+  const formaAbreParcelas = (codigo: string | null | undefined) => {
+    const forma = getFormaPagamento(codigo);
+    return Boolean(forma?.abre_parcelas) || ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(codigo || "");
+  };
+
+  const getNomeFormaPagamento = (codigo: string | null | undefined) => {
+    if (!codigo) return "forma de pagamento";
+    return getFormaPagamento(codigo)?.nome || codigo;
+  };
   const { data: todosPagamentos = [] } = useQuery({ queryKey: ["pagamentos_processo_empresarial_all"], queryFn: async () => { const { data, error } = await supabase.from("pagamentos_processo_empresarial").select("processo_id, valor, data, tipo, observacoes, taxa_cartao").is("deleted_at", null); if (error) throw error; return data || []; } });
 
   // ── Mutations ──
@@ -52,10 +74,14 @@ const ProcessoEmpresarial = () => {
     mutationFn: async (payload: any) => {
       const valorEntrada = Number(payload.valor_entrada || 0);
       const parcelas = Number(payload.parcelas || 1);
-      const isCartao = payload.forma_pagamento === "cartao";
+      const usaTaxa = formaAbreTaxa(payload.forma_pagamento);
+      const usaParcelas = formaAbreParcelas(payload.forma_pagamento);
+      const nomeFormaPagamento = getNomeFormaPagamento(payload.forma_pagamento);
       const { taxa_cartao, ...processoPayload } = payload;
-      const taxaCartao = isCartao ? (Number(taxa_cartao) || 0) : 0;
-      const observacaoEntrada = isCartao && parcelas > 1 ? `Entrada registrada no cadastro do processo — ${parcelas}x no cartão` : "Entrada registrada no cadastro do processo";
+      const taxaCartao = usaTaxa ? (Number(taxa_cartao) || 0) : 0;
+      const observacaoEntrada = usaParcelas && parcelas > 1
+        ? `Entrada registrada no cadastro do processo — ${parcelas}x em ${nomeFormaPagamento}`
+        : "Entrada registrada no cadastro do processo";
       if (editing) {
         const { error } = await supabase.from("processos_empresariais").update(processoPayload).eq("id", editing.id);
         if (error) throw error;
@@ -86,7 +112,7 @@ const ProcessoEmpresarial = () => {
     if (!form.empresa_nome.trim() || !form.responsavel.trim()) { toast({ title: "Preencha nome da empresa e especialista", variant: "destructive" }); return; }
     const valorTotal = parseCurrencyToNumber(form.valor_total);
     const valorEntradaFinal = tipoPagamento === "total" ? valorTotal : (parseCurrencyToNumber(form.valor_entrada) || 0);
-    const payload: any = { empresa_nome: form.empresa_nome.trim(), cnpj: form.cnpj.replace(/\D/g, "") || null, empresa_email: form.empresa_email.trim() || null, empresa_telefone: form.empresa_telefone.trim() || null, contato_nome: form.contato_nome.trim() || null, aluno_id: form.aluno_id || null, responsavel: form.responsavel.trim(), percentual_empresa: form.percentual_empresa, percentual_profissional: form.percentual_profissional, valor_total: valorTotal, valor_entrada: valorEntradaFinal, parcelas: Number(form.parcelas) || 1, sessoes: Number(form.sessoes) || 1, status: form.status, conta_bancaria_id: form.conta_bancaria_id || null, forma_pagamento: form.forma_pagamento || null, observacoes: form.observacoes.trim() || null, data_inicio: form.data_inicio || null, comercial_id: form.comercial_id || null, percentual_comissao: Number(form.percentual_comissao) || 5, taxa_cartao: form.forma_pagamento === "cartao" ? (parseFloat(form.taxa_cartao) || 0) : 0 };
+    const payload: any = { empresa_nome: form.empresa_nome.trim(), cnpj: form.cnpj.replace(/\D/g, "") || null, empresa_email: form.empresa_email.trim() || null, empresa_telefone: form.empresa_telefone.trim() || null, contato_nome: form.contato_nome.trim() || null, aluno_id: form.aluno_id || null, responsavel: form.responsavel.trim(), percentual_empresa: form.percentual_empresa, percentual_profissional: form.percentual_profissional, valor_total: valorTotal, valor_entrada: valorEntradaFinal, parcelas: Number(form.parcelas) || 1, sessoes: Number(form.sessoes) || 1, status: form.status, conta_bancaria_id: form.conta_bancaria_id || null, forma_pagamento: form.forma_pagamento || null, observacoes: form.observacoes.trim() || null, data_inicio: form.data_inicio || null, comercial_id: form.comercial_id || null, percentual_comissao: Number(form.percentual_comissao) || 5, taxa_cartao: formaAbreTaxa(form.forma_pagamento) ? (parseFloat(form.taxa_cartao) || 0) : 0 };
     if (propostaUrl) payload.proposta_url = propostaUrl;
     saveMutation.mutate(payload);
   };
