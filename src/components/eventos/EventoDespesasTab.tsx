@@ -11,19 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
-
-const FORMAS_PAGAMENTO = [
-  { value: "pix", label: "PIX" },
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "cartao_credito", label: "Cartão de Crédito" },
-  { value: "cartao_debito", label: "Cartão de Débito" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "boleto", label: "Boleto" },
-  { value: "cheque", label: "Cheque" },
-  { value: "permuta", label: "Permuta" },
-  { value: "recorrencia_cartao", label: "Recorrência no Cartão" },
-];
-
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import { formatCurrencyNullable as formatCurrency, formatDate } from "@/lib/formatters";
 
 interface DespesaForm {
@@ -55,6 +43,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<DespesaForm>(emptyForm);
+  const { data: formasPagamento = [], isLoading: loadingFormasPagamento } = useFormasPagamento();
 
   const { data: despesas = [], isLoading } = useQuery({
     queryKey: ["despesas_evento", eventoId],
@@ -63,6 +52,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
         .from("despesas")
         .select("*")
         .eq("evento_id", eventoId)
+        .is("deleted_at", null)
         .order("data", { ascending: false });
       if (error) throw error;
       return data;
@@ -229,7 +219,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
                     <TableCell className="text-sm">{formatDate(d.data)}</TableCell>
                     <TableCell className="text-sm">{d.fornecedor || "—"}</TableCell>
                     <TableCell className="text-sm">
-                      {FORMAS_PAGAMENTO.find(f => f.value === d.forma_pagamento)?.label || d.forma_pagamento || "—"}
+                      {getFormaPagamentoLabel(d.forma_pagamento, formasPagamento)}
                     </TableCell>
                     <TableCell className="text-right font-semibold text-sm text-destructive">
                       {formatCurrency(d.valor)}
@@ -301,9 +291,21 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
                 <Select value={form.forma_pagamento} onValueChange={v => setForm(f => ({ ...f, forma_pagamento: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
-                    {FORMAS_PAGAMENTO.map(fp => (
-                      <SelectItem key={fp.value} value={fp.value}>{fp.label}</SelectItem>
-                    ))}
+                    {loadingFormasPagamento ? (
+                      <SelectItem value="carregando_formas_pagamento" disabled>
+                        Carregando formas...
+                      </SelectItem>
+                    ) : formasPagamento.length === 0 ? (
+                      <SelectItem value="nenhuma_forma_pagamento" disabled>
+                        Nenhuma forma cadastrada
+                      </SelectItem>
+                    ) : (
+                      formasPagamento.map((forma) => (
+                        <SelectItem key={forma.id} value={forma.codigo}>
+                          {forma.nome}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
