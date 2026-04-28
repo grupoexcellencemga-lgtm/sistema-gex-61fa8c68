@@ -354,7 +354,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
                         {l.tipo === "entrada" ? "Entrada" : l.tipo === "parcela" ? "Parcela" : "Pagamento"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{l.forma_pagamento || "—"}</TableCell>
+                    <TableCell className="text-sm">{getFormaPagamentoLabel(l.forma_pagamento, formasPagamento)}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(Number(l.valor))}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">{l.observacoes || "—"}</TableCell>
                     <TableCell>
