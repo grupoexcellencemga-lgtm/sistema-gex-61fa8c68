@@ -7,6 +7,7 @@ import { Trash2, Mail, Phone, Calendar, CreditCard } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, formatCPF, formatPhone } from "./processosUtils";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 export const DetalhesProcessoDialog = ({ processo, onClose }: { processo: any; onClose: () => void }) => {
   const queryClient = useQueryClient();
