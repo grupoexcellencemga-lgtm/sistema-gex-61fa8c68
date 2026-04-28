@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { EmailTemplatesSection } from "@/components/configuracoes/EmailTemplatesSection";
 import { TaxasSection } from "@/components/configuracoes/TaxasSection";
+import { FormasPagamentoSection } from "@/components/configuracoes/FormasPagamentoSection";
 import { CategoriasSection } from "@/components/configuracoes/CategoriasSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +65,7 @@ const Configuracoes = () => {
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
 
+  // Profile query
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: async () => {
@@ -76,11 +78,13 @@ const Configuracoes = () => {
         .maybeSingle();
 
       if (error) throw error;
+
       return data ?? null;
     },
     enabled: !!user,
   });
 
+  // Config query
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["configuracoes_usuario", user?.id],
     queryFn: async () => {
@@ -527,6 +531,10 @@ const Configuracoes = () => {
         {/* Categorias Financeiras */}
         <Separator className="my-8" />
         <CategoriasSection />
+
+        {/* Formas de Pagamento */}
+        <Separator className="my-8" />
+        <FormasPagamentoSection />
 
         {/* Taxas e Impostos */}
         <Separator className="my-8" />
