@@ -24,6 +24,7 @@ import { formatPhone, formatCPF } from "@/lib/utils";
 import { formatDate, formatCurrency, calcMultaJuros } from "./alunosUtils";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 interface Props {
   open: boolean;
@@ -77,6 +78,10 @@ export const AlunoDetailSheet = (props: Props) => {
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
   } = props;
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const { data: formasPagamento = [] } = useFormasPagamento();
+
+  const getFormaLabel = (codigo: string | null | undefined) => getFormaPagamentoLabel(codigo, formasPagamento);
+  const getFormaConfig = (codigo: string | null | undefined) => formasPagamento.find((f) => f.codigo === codigo);
 
   const { data: taxasSistema = [] } = useQuery({
     queryKey: ["taxas_sistema"],
@@ -92,10 +97,14 @@ export const AlunoDetailSheet = (props: Props) => {
 
   const novoValorBase = parseFloat(novoPagForm.valor) || 0;
   const novoParcelasCalc = parseInt(novoPagForm.parcelas_cartao) || 1;
-  const novoIsCartaoCredito = ["cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
-  const novoIsLink = novoPagForm.forma_pagamento === "link";
-  const novoIsBoleto = novoPagForm.forma_pagamento === "boleto";
-  const novoShowTaxa = novoIsCartaoCredito || novoIsLink || novoIsBoleto;
+  const novoFormaConfig = getFormaConfig(novoPagForm.forma_pagamento);
+  const novoTipoForma = novoFormaConfig?.tipo || "";
+  const novoIsCartaoCredito =
+    novoTipoForma === "credito" ||
+    ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+  const novoIsLink = novoTipoForma === "link" || novoPagForm.forma_pagamento === "link";
+  const novoIsBoleto = novoTipoForma === "boleto" || novoPagForm.forma_pagamento === "boleto";
+  const novoShowTaxa = Boolean(novoFormaConfig?.abre_taxa) || novoIsCartaoCredito || novoIsLink || novoIsBoleto;
 
   const novoTaxaAutoCalc = useMemo(() => {
     if (!novoShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
@@ -263,7 +272,7 @@ export const AlunoDetailSheet = (props: Props) => {
                         const cartaoGroups: Record<string, any[]> = {};
 
                         pagamentos.forEach((p: any) => {
-                          if (p.forma_pagamento === "cartao" && p.parcelas > 1) {
+                          if (["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas > 1) {
                             const key = `${p.produto_id || "none"}-${p.parcelas}-${p.matricula_id || "none"}`;
                             if (!cartaoGroups[key]) cartaoGroups[key] = [];
                             cartaoGroups[key].push(p);
@@ -294,7 +303,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="font-medium">{formatCurrency(totalGrupo)} · {items.length}x de {formatCurrency(Number(items[0].valor))}</p>
-                                    <p className="text-xs text-muted-foreground">{items[0]?.produtos?.nome || "—"} · {items[0]?.forma_pagamento || "—"} · {pagas}/{items.length} pagas</p>
+                                    <p className="text-xs text-muted-foreground">{items[0]?.produtos?.nome || "—"} · {getFormaLabel(items[0]?.forma_pagamento)} · {pagas}/{items.length} pagas</p>
                                   </div>
                                   <Badge variant={pagas === items.length ? "default" : "secondary"}>
                                     {pagas === items.length ? "Quitado" : `${pagas}/${items.length}`}
@@ -310,11 +319,11 @@ export const AlunoDetailSheet = (props: Props) => {
                               <div>
                                 <p className="font-medium">
                                   {formatCurrency(Number(p.valor))}
-                                  {p.forma_pagamento === "cartao" && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
-                                  {p.forma_pagamento === "cartao" && !p.parcelas_cartao && " · 1x no cartão"}
-                                  {p.forma_pagamento === "cartao" && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
+                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
+                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
+                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
                                 </p>
-                                <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {p.forma_pagamento || "—"}</p>
+                                <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
                                 <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}</p>
                                 {fees.multa > 0 && (
                                   <p className="text-xs text-destructive">+{formatCurrency(fees.multa + fees.juros)} multa/juros</p>
@@ -334,7 +343,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                       produtoNome: p.produtos?.nome || "—",
                                       valor: Number(p.valor),
                                       dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
-                                      formaPagamento: p.forma_pagamento || "—",
+                                      formaPagamento: getFormaLabel(p.forma_pagamento),
                                       reciboId: p.id,
                                     })}><Receipt className="h-3.5 w-3.5 text-primary" /></Button>
                                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDesfazerPagamento(p)}>
@@ -444,16 +453,17 @@ export const AlunoDetailSheet = (props: Props) => {
               <Select value={editPagForm.forma_pagamento} onValueChange={(v) => setEditPagForm(p => ({ ...p, forma_pagamento: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
-                  <SelectItem value="boleto">Boleto</SelectItem>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="transferencia">Transferência</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="permuta">Permuta</SelectItem>
-                  <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
-                  <SelectItem value="link">Link de Pagamento</SelectItem>
+                  {formasPagamento.length === 0 ? (
+                    <SelectItem value="nenhuma_forma_pagamento" disabled>
+                      Nenhuma forma cadastrada
+                    </SelectItem>
+                  ) : (
+                    formasPagamento.map((forma) => (
+                      <SelectItem key={forma.id} value={forma.codigo}>
+                        {forma.nome}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -500,16 +510,17 @@ export const AlunoDetailSheet = (props: Props) => {
               <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm(p => ({ ...p, forma_pagamento: v, repassar_taxa: false }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
-                  <SelectItem value="boleto">Boleto</SelectItem>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="transferencia">Transferência</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="permuta">Permuta</SelectItem>
-                  <SelectItem value="recorrencia_cartao">Recorrência no Cartão</SelectItem>
-                  <SelectItem value="link">Link de Pagamento</SelectItem>
+                  {formasPagamento.length === 0 ? (
+                    <SelectItem value="nenhuma_forma_pagamento" disabled>
+                      Nenhuma forma cadastrada
+                    </SelectItem>
+                  ) : (
+                    formasPagamento.map((forma) => (
+                      <SelectItem key={forma.id} value={forma.codigo}>
+                        {forma.nome}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
