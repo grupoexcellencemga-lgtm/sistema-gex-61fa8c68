@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Building2, UserCheck, FileUp, FileText, X } from "lucide-react";
 import { formatCurrency, formatCurrencyInput, formatCNPJ, formatPhone } from "@/lib/formatters";
+import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 export interface ProcessoEmpForm {
   empresa_nome: string; cnpj: string; empresa_email: string; empresa_telefone: string;
@@ -48,17 +49,6 @@ interface Props {
   uploadingProposta: boolean;
 }
 
-const FORMAS_PAGAMENTO = [
-  { value: "pix", label: "PIX" },
-  { value: "cartao", label: "Cartão" },
-  { value: "boleto", label: "Boleto" },
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "cheque", label: "Cheque" },
-  { value: "permuta", label: "Permuta" },
-  { value: "recorrencia_cartao", label: "Recorrência no Cartão" },
-];
-
 export function ProcessoEmpFormDialog({
   open, onOpenChange, form, setForm, onSubmit, isPending, isEditing, editing,
   tipoPagamento, setTipoPagamento, profissionais, comerciais, contas, valorNumerico,
@@ -66,13 +56,40 @@ export function ProcessoEmpFormDialog({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { data: formasPagamento = [], isLoading: loadingFormasPagamento } = useFormasPagamento();
+
+  const selectedFormaPagamento = formasPagamento.find((fp) => fp.codigo === form.forma_pagamento);
+
+  const formaAbreParcelas =
+    selectedFormaPagamento?.abre_parcelas ||
+    ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(form.forma_pagamento);
+
+  const formaAbreTaxa =
+    selectedFormaPagamento?.abre_taxa ||
+    ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(form.forma_pagamento);
+
   const handlePercentChange = (val: number[]) => {
     const emp = val[0];
     setForm(f => ({ ...f, percentual_empresa: emp, percentual_profissional: 100 - emp }));
   };
 
-  const handleFormaPagamentoChange = (v: string) => {
-    setForm(f => ({ ...f, forma_pagamento: v, parcelas: v === "cartao" ? f.parcelas || "1" : "1", taxa_cartao: v === "cartao" ? f.taxa_cartao : "" }));
+  const handleFormaPagamentoChange = (codigo: string) => {
+    const formaSelecionada = formasPagamento.find((fp) => fp.codigo === codigo);
+
+    const deveAbrirParcelas =
+      formaSelecionada?.abre_parcelas ||
+      ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(codigo);
+
+    const deveAbrirTaxa =
+      formaSelecionada?.abre_taxa ||
+      ["cartao", "credito", "cartao_credito", "recorrencia_cartao"].includes(codigo);
+
+    setForm(f => ({
+      ...f,
+      forma_pagamento: codigo,
+      parcelas: deveAbrirParcelas ? f.parcelas || "1" : "1",
+      taxa_cartao: deveAbrirTaxa ? f.taxa_cartao : "",
+    }));
   };
 
   const renderPaymentFields = () => (
@@ -80,23 +97,54 @@ export function ProcessoEmpFormDialog({
       <div className="space-y-2">
         <Label>Forma de Pagamento{tipoPagamento === "entrada" ? " (Entrada)" : ""}</Label>
         <Select value={form.forma_pagamento} onValueChange={handleFormaPagamentoChange}>
-          <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecionar" />
+          </SelectTrigger>
           <SelectContent>
-            {FORMAS_PAGAMENTO.map(fp => <SelectItem key={fp.value} value={fp.value}>{fp.label}</SelectItem>)}
+            {loadingFormasPagamento ? (
+              <SelectItem value="carregando_formas_pagamento" disabled>
+                Carregando formas...
+              </SelectItem>
+            ) : formasPagamento.length === 0 ? (
+              <SelectItem value="nenhuma_forma_pagamento" disabled>
+                Nenhuma forma cadastrada
+              </SelectItem>
+            ) : (
+              formasPagamento.map((fp) => (
+                <SelectItem key={fp.id} value={fp.codigo}>
+                  {fp.nome}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
       </div>
-      {form.forma_pagamento === "cartao" && (
-        <>
-          <div className="space-y-2">
-            <Label>Quantidade de Vezes</Label>
-            <Input type="number" min="1" value={form.parcelas} onChange={(e) => setForm(f => ({ ...f, parcelas: e.target.value }))} />
-          </div>
-          <div className="space-y-2">
-            <Label>Taxa do Cartão (%)</Label>
-            <Input type="number" min="0" max="100" step="0.1" value={form.taxa_cartao} onChange={(e) => setForm(f => ({ ...f, taxa_cartao: e.target.value }))} placeholder="Ex: 3.5" />
-          </div>
-        </>
+
+      {formaAbreParcelas && (
+        <div className="space-y-2">
+          <Label>Quantidade de Vezes</Label>
+          <Input
+            type="number"
+            min="1"
+            value={form.parcelas}
+            onChange={(e) => setForm(f => ({ ...f, parcelas: e.target.value }))}
+          />
+        </div>
+      )}
+
+      {formaAbreTaxa && (
+        <div className="space-y-2">
+          <Label>Taxa da Forma de Pagamento (%)</Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={form.taxa_cartao}
+            onChange={(e) => setForm(f => ({ ...f, taxa_cartao: e.target.value }))}
+            placeholder="Ex: 3.5"
+          />
+        </div>
       )}
     </>
   );
@@ -107,13 +155,14 @@ export function ProcessoEmpFormDialog({
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Processo" : "Novo Processo Empresarial"}</DialogTitle>
         </DialogHeader>
+
         <div className="grid gap-4 max-h-[65vh] overflow-y-auto pr-2">
-          {/* Company info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Nome da Empresa *</Label>
               <Input value={form.empresa_nome} onChange={(e) => setForm(f => ({ ...f, empresa_nome: e.target.value }))} />
             </div>
+
             <div className="space-y-2">
               <Label>Especialista *</Label>
               <Select value={form.responsavel} onValueChange={(v) => setForm(f => ({ ...f, responsavel: v }))}>
@@ -131,57 +180,75 @@ export function ProcessoEmpFormDialog({
               <Label>CNPJ</Label>
               <Input value={form.cnpj} onChange={(e) => setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) }))} placeholder="00.000.000/0000-00" maxLength={18} />
             </div>
+
             <div className="space-y-2">
               <Label>Nome do Contato</Label>
               <Input value={form.contato_nome} onChange={(e) => setForm(f => ({ ...f, contato_nome: e.target.value }))} placeholder="Pessoa de contato na empresa" />
             </div>
+
             <div className="space-y-2">
               <Label>E-mail da Empresa</Label>
               <Input type="email" value={form.empresa_email} onChange={(e) => setForm(f => ({ ...f, empresa_email: e.target.value }))} />
             </div>
+
             <div className="space-y-2">
               <Label>Telefone da Empresa</Label>
               <Input value={form.empresa_telefone} onChange={(e) => setForm(f => ({ ...f, empresa_telefone: formatPhone(e.target.value) }))} placeholder="(00) 00000-0000" maxLength={15} />
             </div>
           </div>
 
-          {/* Revenue split */}
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Divisão de Receita</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Divisão de Receita</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" />Grupo Excellence: <strong>{form.percentual_empresa}%</strong></span>
-                <span className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-accent-foreground" />Profissional: <strong>{form.percentual_profissional}%</strong></span>
+                <span className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Grupo Excellence: <strong>{form.percentual_empresa}%</strong>
+                </span>
+                <span className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-accent-foreground" />
+                  Profissional: <strong>{form.percentual_profissional}%</strong>
+                </span>
               </div>
               <Slider value={[form.percentual_empresa]} onValueChange={handlePercentChange} min={0} max={100} step={5} className="w-full" />
-              <div className="flex justify-between text-xs text-muted-foreground"><span>0% Empresa</span><span>100% Empresa</span></div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0% Empresa</span>
+                <span>100% Empresa</span>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Financial */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Valor Total do Processo (R$) *</Label>
               <Input value={form.valor_total} onChange={(e) => setForm(f => ({ ...f, valor_total: formatCurrencyInput(e.target.value) }))} placeholder="0,00" />
             </div>
+
             <div className="space-y-2">
               <Label>Qtd. Sessões</Label>
               <Input type="number" min="1" value={form.sessoes} onChange={(e) => setForm(f => ({ ...f, sessoes: e.target.value }))} />
             </div>
           </div>
 
-          {/* Payment mode toggle */}
           <div className="space-y-3">
             <Label>Como será o pagamento?</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant={tipoPagamento === "entrada" ? "default" : "outline"} className="w-full" onClick={() => setTipoPagamento("entrada")}>Entrada + Restante</Button>
-              <Button type="button" variant={tipoPagamento === "total" ? "default" : "outline"} className="w-full" onClick={() => setTipoPagamento("total")}>Valor Total Completo</Button>
+              <Button type="button" variant={tipoPagamento === "entrada" ? "default" : "outline"} className="w-full" onClick={() => setTipoPagamento("entrada")}>
+                Entrada + Restante
+              </Button>
+              <Button type="button" variant={tipoPagamento === "total" ? "default" : "outline"} className="w-full" onClick={() => setTipoPagamento("total")}>
+                Valor Total Completo
+              </Button>
             </div>
 
             {tipoPagamento === "entrada" ? (
               <Card>
                 <CardContent className="pt-4 space-y-4">
-                  <p className="text-sm font-medium text-muted-foreground">A empresa dará uma entrada agora. O restante será lançado depois conforme o acordo.</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    A empresa dará uma entrada agora. O restante será lançado depois conforme o acordo.
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Valor da Entrada (R$)</Label>
@@ -202,7 +269,6 @@ export function ProcessoEmpFormDialog({
             )}
           </div>
 
-          {/* Preview split */}
           {valorNumerico > 0 && (
             <div className="rounded-lg border bg-muted/30 p-4">
               <p className="text-sm font-medium mb-2">Previsão de Divisão</p>
@@ -219,12 +285,12 @@ export function ProcessoEmpFormDialog({
             </div>
           )}
 
-          {/* Date, account, status */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Data Início</Label>
               <Input type="date" value={form.data_inicio} onChange={(e) => setForm(f => ({ ...f, data_inicio: e.target.value }))} />
             </div>
+
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={form.status} onValueChange={(v) => setForm(f => ({ ...f, status: v }))}>
@@ -237,6 +303,7 @@ export function ProcessoEmpFormDialog({
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Conta Bancária</Label>
               <Select value={form.conta_bancaria_id} onValueChange={(v) => setForm(f => ({ ...f, conta_bancaria_id: v }))}>
@@ -248,7 +315,6 @@ export function ProcessoEmpFormDialog({
             </div>
           </div>
 
-          {/* Vendedor / Comissão */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Vendedor (Comercial)</Label>
@@ -260,6 +326,7 @@ export function ProcessoEmpFormDialog({
                 </SelectContent>
               </Select>
             </div>
+
             {form.comercial_id && (
               <div className="space-y-2">
                 <Label>% Comissão</Label>
@@ -273,24 +340,39 @@ export function ProcessoEmpFormDialog({
             <Textarea value={form.observacoes} onChange={(e) => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
           </div>
 
-          {/* Proposta upload */}
           <div className="space-y-2">
             <Label>Proposta (PDF, Word, etc.)</Label>
-            <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.odt,.odp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) setPropostaFile(file); }} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.odt,.odp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setPropostaFile(file);
+              }}
+            />
+
             <div className="flex items-center gap-3">
               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <FileUp className="h-4 w-4 mr-1" /> Selecionar Arquivo
+                <FileUp className="h-4 w-4 mr-1" />
+                Selecionar Arquivo
               </Button>
+
               {propostaFile && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <FileText className="h-4 w-4" />
                   <span className="truncate max-w-[200px]">{propostaFile.name}</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPropostaFile(null)}><X className="h-3.5 w-3.5" /></Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPropostaFile(null)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               )}
+
               {editing?.proposta_url && !propostaFile && (
                 <a href={editing.proposta_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-primary hover:underline">
-                  <FileText className="h-4 w-4" /> Ver proposta atual
+                  <FileText className="h-4 w-4" />
+                  Ver proposta atual
                 </a>
               )}
             </div>
