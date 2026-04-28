@@ -15,6 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 // ─── Column definitions ───
 
@@ -56,7 +57,6 @@ const ALL_COLUMNS: ColDef[] = [
   { key: "descricao", label: "Descrição", group: "Geral", format: "text" },
 ];
 
-const formasPgto = ["Pix", "Dinheiro", "Débito", "Cartão de crédito", "Link", "Boleto", "Cheque", "Cartão recorrente"];
 const statusPgto = ["pago", "pendente", "vencido", "cancelado"];
 
 export function RelatorioPersonalizado() {
@@ -80,6 +80,8 @@ export function RelatorioPersonalizado() {
   const [tipoLanc, setTipoLanc] = useState("todos"); // entrada / saida
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [columnsOpen, setColumnsOpen] = useState(false);
+
+  const { data: formasPagamento = [] } = useFormasPagamento();
 
   // Selected columns
   const [selectedCols, setSelectedCols] = useState<string[]>(
@@ -221,6 +223,7 @@ export function RelatorioPersonalizado() {
         if (produtoId !== "todos") qd = qd.eq("produto_id", produtoId);
         if (turmaId !== "todos") qd = qd.eq("turma_id", turmaId);
         if (eventoId !== "todos") qd = qd.eq("evento_id", eventoId);
+        if (formaPgto !== "todos") qd = qd.eq("forma_pagamento", formaPgto);
 
         const { data: desp } = await qd.limit(1000);
         (desp || []).forEach((d: any) => {
@@ -271,6 +274,7 @@ export function RelatorioPersonalizado() {
   const formatCell = (row: any, col: ColDef) => {
     const v = row[col.key];
     if (v === null || v === undefined) return "—";
+    if (col.key === "forma_pagamento") return getFormaPagamentoLabel(v, formasPagamento);
     if (col.format === "currency") return formatCurrency(Number(v));
     if (col.format === "date") return formatDate(v);
     return String(v);
@@ -288,7 +292,7 @@ export function RelatorioPersonalizado() {
   const handleExportExcel = () => {
     const data = rows.map(r => {
       const obj: any = {};
-      visibleCols.forEach(c => { obj[c.label] = c.format === "currency" ? Number(r[c.key] || 0) : (c.format === "date" ? formatDate(r[c.key]) : (r[c.key] || "")); });
+      visibleCols.forEach(c => { obj[c.label] = formatCell(r, c); });
       return obj;
     });
     const wb = XLSX.utils.book_new();
@@ -432,7 +436,7 @@ export function RelatorioPersonalizado() {
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todas</SelectItem>
-                      {formasPgto.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      {formasPagamento.map((f) => <SelectItem key={f.id} value={f.codigo}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
