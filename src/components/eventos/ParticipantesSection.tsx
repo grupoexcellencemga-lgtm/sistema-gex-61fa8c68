@@ -19,18 +19,7 @@ import { EventoMetricsDialog } from "./EventoMetricsDialog";
 import { EventoDespesasTab } from "./EventoDespesasTab";
 import { EventoImport } from "./EventoImport";
 import { toast } from "sonner";
-
-const FORMAS_PAGAMENTO = [
-  { value: "pix", label: "PIX" },
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "cartao_credito", label: "Cartão de Crédito" },
-  { value: "cartao_debito", label: "Cartão de Débito" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "boleto", label: "Boleto" },
-  { value: "cheque", label: "Cheque" },
-  { value: "permuta", label: "Permuta" },
-  { value: "recorrencia_cartao", label: "Recorrência no Cartão" },
-];
+import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 
 // ---- Inline filter components ----
 const MultiSelectFilter = ({ selected, onChange, options, label, searchable = false }: { selected: string[]; onChange: (v: string[]) => void; options: string[]; label: string; searchable?: boolean }) => {
@@ -78,6 +67,7 @@ interface Props {
 export function ParticipantesSection({ evento, onBack, onEditEvento, currentUserName, produtos, turmas }: Props) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: formasPagamento = [] } = useFormasPagamento();
   const comprovanteInputRef = useRef<HTMLInputElement>(null);
 
   const [addParticipanteOpen, setAddParticipanteOpen] = useState(false);
@@ -268,7 +258,7 @@ export function ParticipantesSection({ evento, onBack, onEditEvento, currentUser
       const statusLabel = (s: string) => s === "pago" ? "Pago" : s === "gratuito" ? "Gratuito" : s === "permuta" ? "Permuta" : "Pendente";
       const wsData = [
         ["Nome", "Email", "Telefone", "Tipo", "Presença", "Status Pagamento", "Forma Pagamento", "Valor", "Convidado por", "Adicionado por", "Observações"],
-        ...participantes.map((p: any) => [p.nome || "", p.email || "", p.telefone || "", p.tipo_participante || "", p.presenca ? "Presente" : "Ausente", statusLabel(p.status_pagamento), p.forma_pagamento || "", p.valor ?? 0, p.convidado_por || "", p.adicionado_por_nome || "", p.observacoes || ""]),
+        ...participantes.map((p: any) => [p.nome || "", p.email || "", p.telefone || "", p.tipo_participante || "", p.presenca ? "Presente" : "Ausente", statusLabel(p.status_pagamento), getFormaPagamentoLabel(p.forma_pagamento, formasPagamento), p.valor ?? 0, p.convidado_por || "", p.adicionado_por_nome || "", p.observacoes || ""]),
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       const wb = XLSX.utils.book_new();
@@ -527,7 +517,19 @@ export function ParticipantesSection({ evento, onBack, onEditEvento, currentUser
                       <Label>Forma de pagamento</Label>
                       <Select value={payForm.forma_pagamento} onValueChange={(v) => setPayForm(f => ({ ...f, forma_pagamento: v }))}>
                         <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                        <SelectContent>{FORMAS_PAGAMENTO.map(fp => <SelectItem key={fp.value} value={fp.value}>{fp.label}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          {formasPagamento.length === 0 ? (
+                            <SelectItem value="nenhuma_forma_pagamento" disabled>
+                              Nenhuma forma cadastrada
+                            </SelectItem>
+                          ) : (
+                            formasPagamento.map((forma) => (
+                              <SelectItem key={forma.id} value={forma.codigo}>
+                                {forma.nome}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2"><Label>Data do pagamento</Label><Input type="date" value={payForm.data_pagamento} onChange={(e) => setPayForm(f => ({ ...f, data_pagamento: e.target.value }))} /></div>
