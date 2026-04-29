@@ -139,7 +139,19 @@ export const MatriculaFormDialog = ({
 
   const taxaPercentual = taxaAutoCalc.percentual;
   const valorTaxa =
-    valorFinalCalc > 0 ? Math.round(valorFinalCalc * taxaPercentual) / 100 : 0;
+    valorFinalCalc > 0
+      ? Math.round(valorFinalCalc * (taxaPercentual / 100) * 100) / 100
+      : 0;
+
+  const valorCobradoCalc =
+    matriculaForm.repassar_taxa && showTaxa && taxaPercentual > 0
+      ? valorFinalCalc + valorTaxa
+      : valorFinalCalc;
+
+  const valorParcelaCalc =
+    numParcelasCalc > 0
+      ? Math.round((valorCobradoCalc / numParcelasCalc) * 100) / 100
+      : 0;
 
   useMemo(() => {
     if (showTaxa && taxaPercentual > 0) {
@@ -466,7 +478,7 @@ export const MatriculaFormDialog = ({
             {valorFinalCalc > 0 && numParcelasCalc > 0 && (
               <p className="text-xs text-muted-foreground">
                 {numParcelasCalc}x de{" "}
-                {formatCurrency(valorFinalCalc / numParcelasCalc)}
+                {formatCurrency(valorParcelaCalc)}
                 {matriculaForm.data_vencimento &&
                   ` · 1ª parcela em ${formatDate(
                     matriculaForm.data_vencimento

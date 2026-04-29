@@ -258,15 +258,24 @@ const Alunos = () => {
       if (matErr) throw matErr;
 
       if (valorFinal > 0 && matriculaForm.data_vencimento) {
-        const isCartao = matriculaForm.forma_pagamento === "cartao_credito" || matriculaForm.forma_pagamento === "cartao";
-        const isLinkBoleto = ["link", "boleto"].includes(matriculaForm.forma_pagamento);
+        const isCartao = ["credito", "cartao_credito", "cartao"].includes(
+          matriculaForm.forma_pagamento
+        );
+        const isLinkBoleto = ["link", "boleto"].includes(
+          matriculaForm.forma_pagamento
+        );
         const numParcelas = isCartao ? 1 : parseInt(matriculaForm.parcelas) || 1;
         const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
-        const taxaCartao = isCartao || isLinkBoleto ? parseFloat(matriculaForm.taxa_cartao) || 0 : 0;
+        const taxaCartao =
+          isCartao || isLinkBoleto
+            ? parseFloat(matriculaForm.taxa_cartao) || 0
+            : 0;
 
         const valorBase =
-          matriculaForm.repassar_taxa && (isCartao || isLinkBoleto) && taxaCartao > 0
-            ? valorFinal + Math.round(valorFinal * taxaCartao) / 100
+          matriculaForm.repassar_taxa &&
+          (isCartao || isLinkBoleto) &&
+          taxaCartao > 0
+            ? valorFinal + Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
             : valorFinal;
 
         const valorParcela = valorBase / numParcelas;
