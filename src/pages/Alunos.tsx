@@ -91,7 +91,7 @@ const Alunos = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("turmas")
-        .select("id, nome, produto_id")
+        .select("id, nome, produto_id, data_inicio, data_fim")
         .is("deleted_at", null)
         .order("nome");
 

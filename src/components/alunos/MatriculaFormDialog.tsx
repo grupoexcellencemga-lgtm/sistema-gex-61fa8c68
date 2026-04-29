@@ -215,12 +215,28 @@ export const MatriculaFormDialog = ({
             <Label>Turma</Label>
             <Select
               value={matriculaForm.turma_id}
-              onValueChange={(v) =>
+              onValueChange={(v) => {
+                const turmaSelecionada = turmasFiltradas.find(
+                  (t: any) => t.id === v
+                );
+
                 setMatriculaForm((p) => ({
                   ...p,
                   turma_id: v,
-                }))
-              }
+                  data_inicio:
+                    turmaSelecionada?.data_inicio ||
+                    turmaSelecionada?.dataInicio ||
+                    turmaSelecionada?.inicio ||
+                    turmaSelecionada?.start_date ||
+                    "",
+                  data_fim:
+                    turmaSelecionada?.data_fim ||
+                    turmaSelecionada?.dataFim ||
+                    turmaSelecionada?.fim ||
+                    turmaSelecionada?.end_date ||
+                    "",
+                }));
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione a turma" />
@@ -247,13 +263,9 @@ export const MatriculaFormDialog = ({
               <Label>Data início</Label>
               <Input
                 type="date"
-                value={matriculaForm.data_inicio}
-                onChange={(e) =>
-                  setMatriculaForm((p) => ({
-                    ...p,
-                    data_inicio: e.target.value,
-                  }))
-                }
+                value={matriculaForm.data_inicio || ""}
+                readOnly
+                className="bg-muted"
               />
             </div>
 
@@ -261,13 +273,9 @@ export const MatriculaFormDialog = ({
               <Label>Data fim</Label>
               <Input
                 type="date"
-                value={matriculaForm.data_fim}
-                onChange={(e) =>
-                  setMatriculaForm((p) => ({
-                    ...p,
-                    data_fim: e.target.value,
-                  }))
-                }
+                value={matriculaForm.data_fim || ""}
+                readOnly
+                className="bg-muted"
               />
             </div>
           </div>
