@@ -710,29 +710,48 @@ const Alunos = () => {
   };
 
   const openEditMatricula = (m: any) => {
-    setEditingMatriculaId(m.id);
+  setEditingMatriculaId(m.id);
 
-    setMatriculaForm({
-      produto_id: m.produto_id || "",
-      turma_id: m.turma_id || "",
-      data_inicio: m.data_inicio || "",
-      data_fim: m.data_fim || "",
-      status: m.status || "ativo",
-      observacoes: m.observacoes || "",
-      valor_total: String(m.valor_total || ""),
-      desconto: String(m.desconto || ""),
-      parcelas: "1",
-      forma_pagamento: "",
-      data_vencimento: "",
-      conta_bancaria_id: "",
-      comercial_id: "",
-      percentual_comissao: "5",
-      taxa_cartao: "",
-      repassar_taxa: false,
-    });
+  const pagamentosDaMatricula = pagamentos.filter(
+    (p: any) => p.matricula_id === m.id && !p.deleted_at
+  );
 
-    setMatriculaDialogOpen(true);
-  };
+  const primeiroPagamento = pagamentosDaMatricula[0];
+
+  const quantidadeParcelas =
+    primeiroPagamento?.parcelas_cartao ||
+    primeiroPagamento?.parcelas ||
+    pagamentosDaMatricula.length ||
+    1;
+
+  setMatriculaForm({
+    produto_id: m.produto_id || "",
+    turma_id: m.turma_id || "",
+    data_inicio: m.data_inicio || "",
+    data_fim: m.data_fim || "",
+    status: m.status || "ativo",
+    observacoes: m.observacoes || "",
+
+    valor_total: String(m.valor_total ?? ""),
+    desconto: String(m.desconto ?? ""),
+
+    parcelas: String(quantidadeParcelas),
+    forma_pagamento: primeiroPagamento?.forma_pagamento || "",
+    data_vencimento: primeiroPagamento?.data_vencimento || "",
+    conta_bancaria_id: primeiroPagamento?.conta_bancaria_id || "",
+
+    comercial_id: m.comercial_id || "",
+    percentual_comissao: String(m.percentual_comissao ?? "5"),
+
+    taxa_cartao: primeiroPagamento?.taxa_cartao
+      ? String(primeiroPagamento.taxa_cartao)
+      : "",
+
+    repassar_taxa: false,
+  });
+
+  setMatriculaDialogOpen(true);
+};
 
   const openEditPagamento = (p: any) => {
     setEditingPagamento(p);
