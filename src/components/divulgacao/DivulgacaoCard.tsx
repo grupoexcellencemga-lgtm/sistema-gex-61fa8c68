@@ -34,52 +34,59 @@ interface Props {
   isDragging?: boolean;
 }
 
-export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, onToggleAtivo, isDragging }: Props) {
+export function DivulgacaoCard({
+  item,
+  onEdit,
+  onDelete,
+  onViewFile,
+  onToggleAtivo,
+  isDragging,
+}: Props) {
   const arquivoUrl = item.arquivo_url;
   const isVideo = item.arquivo_tipo === "video";
   const isImageArquivo = item.arquivo_tipo === "image";
   const previewUrl = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
-  const ativo = item.ativo !== false; // default true se undefined
+  const ativo = item.ativo !== false;
 
   return (
     <div
-      className={`relative bg-card border rounded-xl shadow-sm transition-all group select-none ${
+      onClick={() => onViewFile(item)}
+      className={`relative bg-card border rounded-xl shadow-sm transition-all group select-none cursor-pointer ${
         isDragging
           ? "opacity-40 scale-95"
           : ativo
-          ? "hover:shadow-md"
+          ? "hover:shadow-md hover:border-primary/40"
           : "opacity-50 grayscale hover:opacity-70"
       }`}
+      title="Clique para abrir o card"
     >
-      {/* Badge "Inativo" */}
       {!ativo && (
         <div className="absolute top-1 left-1 z-10 bg-muted/90 text-muted-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full border">
           Inativo
         </div>
       )}
 
-      {/* Preview de imagem ou arquivo de imagem no topo */}
       {previewUrl && (
-        <div
-          className={`w-full h-32 rounded-t-xl overflow-hidden ${arquivoUrl ? "cursor-pointer" : ""}`}
-          onClick={() => arquivoUrl && onViewFile(item)}
-        >
+        <div className="w-full h-32 rounded-t-xl overflow-hidden">
           <img
             src={previewUrl}
             alt={item.titulo}
-            className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
           />
         </div>
       )}
 
-      {/* Preview de vídeo no topo */}
       {!previewUrl && isVideo && arquivoUrl && (
-        <div
-          className="w-full h-32 rounded-t-xl overflow-hidden bg-black/80 flex flex-col items-center justify-center cursor-pointer hover:bg-black/60 transition-colors gap-1"
-          onClick={() => onViewFile(item)}
-        >
+        <div className="w-full h-32 rounded-t-xl overflow-hidden bg-black/80 flex flex-col items-center justify-center hover:bg-black/60 transition-colors gap-1">
           <Video className="h-8 w-8 text-white/70" />
           <span className="text-white/60 text-[10px]">Clique para abrir</span>
+        </div>
+      )}
+
+      {!previewUrl && !isVideo && (
+        <div className="w-full h-24 rounded-t-xl overflow-hidden bg-muted/60 flex flex-col items-center justify-center gap-1">
+          <ImageIcon className="h-7 w-7 text-muted-foreground/60" />
+          <span className="text-muted-foreground text-[10px]">Clique para visualizar</span>
         </div>
       )}
 
@@ -88,30 +95,47 @@ export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, onToggleAti
           <h3 className="text-sm font-semibold text-card-foreground leading-tight line-clamp-2 flex-1">
             {item.titulo}
           </h3>
+
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            {/* Toggle ativo/inativo */}
             <Button
               variant="ghost"
               size="icon"
-              className={`h-6 w-6 ${ativo ? "text-muted-foreground hover:text-amber-500" : "text-amber-500 hover:text-green-500"}`}
-              onClick={(e) => { e.stopPropagation(); onToggleAtivo(item.id, !ativo); }}
+              className={`h-6 w-6 ${
+                ativo
+                  ? "text-muted-foreground hover:text-amber-500"
+                  : "text-amber-500 hover:text-green-500"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleAtivo(item.id, !ativo);
+              }}
               title={ativo ? "Desativar card" : "Ativar card"}
             >
               {ativo ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
             </Button>
+
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(item);
+              }}
+              title="Editar card"
             >
               <Edit className="h-3 w-3" />
             </Button>
+
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item.id);
+              }}
+              title="Excluir card"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -119,7 +143,9 @@ export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, onToggleAti
         </div>
 
         {item.descricao && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.descricao}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+            {item.descricao}
+          </p>
         )}
 
         <div className="flex flex-wrap gap-1 mt-2">
@@ -140,6 +166,7 @@ export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, onToggleAti
                 {new Date(item.data + "T12:00:00").toLocaleDateString("pt-BR")}
               </span>
             )}
+
             {item.responsavel_iniciais && (
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
                 {item.responsavel_iniciais}
@@ -147,14 +174,22 @@ export function DivulgacaoCard({ item, onEdit, onDelete, onViewFile, onToggleAti
             )}
           </div>
 
-          {arquivoUrl && (
+          {(arquivoUrl || item.imagem_url) && (
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-primary"
-              onClick={(e) => { e.stopPropagation(); onViewFile(item); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewFile(item);
+              }}
+              title="Abrir card"
             >
-              {isVideo ? <Video className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              {isVideo ? (
+                <Video className="h-3.5 w-3.5" />
+              ) : (
+                <ImageIcon className="h-3.5 w-3.5" />
+              )}
             </Button>
           )}
         </div>
