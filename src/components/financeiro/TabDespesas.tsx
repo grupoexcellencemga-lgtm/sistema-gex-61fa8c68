@@ -479,7 +479,10 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogContent
+  key={editingDespesa?.id || "nova-despesa"}
+  className="max-w-lg max-h-[90vh] overflow-y-auto"
+>
                 <DialogHeader>
                   <DialogTitle>
                     {editingDespesa ? "Editar Despesa" : "Nova Despesa"}

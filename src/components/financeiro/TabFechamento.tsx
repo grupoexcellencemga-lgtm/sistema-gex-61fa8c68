@@ -518,7 +518,10 @@ export const TabFechamento = () => {
                 <DialogTrigger asChild>
                   <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Conta</Button>
                 </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent
+  key={editingConta?.id || "nova-conta"}
+  className="max-w-md"
+>
                 <DialogHeader>
                   <DialogTitle>{editingConta ? "Editar Conta" : "Nova Conta Bancária"}</DialogTitle>
                 </DialogHeader>
