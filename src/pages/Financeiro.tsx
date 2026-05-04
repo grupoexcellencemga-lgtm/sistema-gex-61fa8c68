@@ -50,8 +50,8 @@ const Financeiro = () => {
         <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-2">
           <TabsList className="inline-flex w-max min-w-max whitespace-nowrap">
             <TabsTrigger value="painel" className="gap-1.5 shrink-0">
-              <ClipboardList className="h-4 w-4" /> Painel
-            </TabsTrigger>
+  <ClipboardList className="h-4 w-4" /> Contas a Pagar e Receber
+</TabsTrigger>
 
             <TabsTrigger value="entradas" className="gap-1.5 shrink-0">
               <DollarSign className="h-4 w-4" /> Entradas
