@@ -232,6 +232,49 @@ const Alunos = () => {
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+
+  const deleteAlunoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const now = new Date().toISOString();
+
+      const { error: pagamentosError } = await supabase
+        .from("pagamentos")
+        .update({ deleted_at: now })
+        .eq("aluno_id", id);
+
+      if (pagamentosError) throw pagamentosError;
+
+      const { error: matriculasError } = await supabase
+        .from("matriculas")
+        .update({ deleted_at: now })
+        .eq("aluno_id", id);
+
+      if (matriculasError) throw matriculasError;
+
+      const { error: alunoError } = await supabase
+        .from("alunos")
+        .update({ deleted_at: now })
+        .eq("id", id);
+
+      if (alunoError) throw alunoError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alunos"] });
+      queryClient.invalidateQueries({ queryKey: ["matriculas", selectedAluno?.id] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno?.id] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+
+      toast.success("Aluno excluído com sucesso");
+      setDeleteAlunoDialogOpen(false);
+      setSheetOpen(false);
+      setSelectedAluno(null);
+    },
+    onError: (err: any) => toast.error("Erro ao excluir aluno: " + err.message),
+  });
+
+
   const insertMatricula = useMutation({
     mutationFn: async () => {
       const valorTotal = parseFloat(matriculaForm.valor_total) || 0;
@@ -356,18 +399,35 @@ const Alunos = () => {
       valorPago,
       valor,
       produtoNome,
+      dataPagamento,
+      formaPagamento,
+      contaBancariaId,
     }: {
       id: string;
       status: string;
       valorPago?: number;
       valor?: number;
       produtoNome?: string;
+      dataPagamento?: string;
+      formaPagamento?: string;
+      contaBancariaId?: string;
     }) => {
       const update: any = { status };
 
       if (status === "pago") {
-        update.data_pagamento = new Date().toISOString().split("T")[0];
-        if (valorPago !== undefined) update.valor_pago = valorPago;
+        update.data_pagamento = dataPagamento || new Date().toISOString().split("T")[0];
+
+        if (valorPago !== undefined) {
+          update.valor_pago = valorPago;
+        }
+
+        if (formaPagamento) {
+          update.forma_pagamento = formaPagamento;
+        }
+
+        if (contaBancariaId) {
+          update.conta_bancaria_id = contaBancariaId;
+        }
       }
 
       if (status === "pendente") {
@@ -394,6 +454,8 @@ const Alunos = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
       queryClient.invalidateQueries({ queryKey: ["atividades", selectedAluno?.id] });
+      queryClient.invalidateQueries({ queryKey: ["contas_bancarias"] });
+      queryClient.invalidateQueries({ queryKey: ["contas_bancarias_all"] });
 
       setSelectedParcelas((prev) =>
         prev.map((p) =>
@@ -401,8 +463,10 @@ const Alunos = () => {
             ? {
                 ...p,
                 status: variables.status,
-                data_pagamento: variables.status === "pago" ? new Date().toISOString().split("T")[0] : null,
+                data_pagamento: variables.status === "pago" ? variables.dataPagamento || new Date().toISOString().split("T")[0] : null,
                 valor_pago: variables.status === "pago" ? variables.valorPago || 0 : 0,
+                forma_pagamento: variables.formaPagamento || p.forma_pagamento,
+                conta_bancaria_id: variables.contaBancariaId || p.conta_bancaria_id,
               }
             : p
         )
@@ -429,6 +493,63 @@ const Alunos = () => {
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
+
+
+  const updatePagamento = useMutation({
+    mutationFn: async () => {
+      if (!editingPagamento) return;
+
+      const valor = parseFloat(editPagForm.valor) || 0;
+
+      if (valor <= 0) {
+        throw new Error("Valor deve ser maior que zero");
+      }
+
+      if (!editPagForm.data_vencimento) {
+        throw new Error("Data de vencimento é obrigatória");
+      }
+
+      const { error } = await supabase
+        .from("pagamentos")
+        .update({
+          valor,
+          data_vencimento: editPagForm.data_vencimento,
+          forma_pagamento: editPagForm.forma_pagamento || null,
+          conta_bancaria_id: editPagForm.conta_bancaria_id || null,
+        })
+        .eq("id", editingPagamento.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno?.id] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-financeiro-turmas"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
+
+      setSelectedParcelas((prev) =>
+        prev.map((p) =>
+          p.id === editingPagamento?.id
+            ? {
+                ...p,
+                valor: parseFloat(editPagForm.valor) || 0,
+                data_vencimento: editPagForm.data_vencimento,
+                forma_pagamento: editPagForm.forma_pagamento || null,
+                conta_bancaria_id: editPagForm.conta_bancaria_id || null,
+              }
+            : p
+        )
+      );
+
+      toast.success("Pagamento atualizado");
+      setEditPagamentoDialog(false);
+      setEditingPagamento(null);
+    },
+    onError: (err: any) => toast.error("Erro ao atualizar pagamento: " + err.message),
+  });
+
 
   const insertPagamento = useMutation({
     mutationFn: async () => {
@@ -531,125 +652,133 @@ const Alunos = () => {
   });
 
   const updateMatricula = useMutation({
-    mutationFn: async () => {
-      if (!editingMatriculaId) return;
+  mutationFn: async () => {
+    if (!editingMatriculaId) return;
 
-      const valorTotal = parseFloat(matriculaForm.valor_total) || 0;
-      const desconto = parseFloat(matriculaForm.desconto) || 0;
+    const valorTotal = parseFloat(matriculaForm.valor_total) || 0;
+    const desconto = parseFloat(matriculaForm.desconto) || 0;
+    const valorFinal = valorTotal - desconto;
 
-      const { error } = await supabase
-        .from("matriculas")
-        .update({
+    const formaPagamento = matriculaForm.forma_pagamento || null;
+    const parcelasInformadas = parseInt(matriculaForm.parcelas) || 1;
+
+    const isCartao = ["credito", "cartao_credito", "cartao"].includes(
+      matriculaForm.forma_pagamento
+    );
+
+    const isLinkBoleto = ["link", "boleto"].includes(
+      matriculaForm.forma_pagamento
+    );
+
+    const taxaCartao =
+      isCartao || isLinkBoleto
+        ? parseFloat(matriculaForm.taxa_cartao) || 0
+        : 0;
+
+    const dataPagamentoOuVencimento = matriculaForm.data_vencimento || null;
+
+    const { error: matError } = await supabase
+      .from("matriculas")
+      .update({
+        produto_id: matriculaForm.produto_id || null,
+        turma_id: matriculaForm.turma_id || null,
+        data_inicio: matriculaForm.data_inicio || null,
+        data_fim: matriculaForm.data_fim || null,
+        status: matriculaForm.status,
+        observacoes: matriculaForm.observacoes || null,
+        valor_total: valorTotal,
+        desconto,
+        valor_final: valorFinal,
+        comercial_id: matriculaForm.comercial_id || null,
+        percentual_comissao:
+          parseFloat(matriculaForm.percentual_comissao) || 5,
+      } as any)
+      .eq("id", editingMatriculaId);
+
+    if (matError) throw matError;
+
+    const { data: pagamentosExistentes, error: pagamentosError } =
+      await supabase
+        .from("pagamentos")
+        .select("*")
+        .eq("matricula_id", editingMatriculaId)
+        .is("deleted_at", null)
+        .order("data_vencimento", { ascending: true });
+
+    if (pagamentosError) throw pagamentosError;
+
+    const pagamentosDaMatricula = pagamentosExistentes || [];
+
+    if (pagamentosDaMatricula.length > 0) {
+      const quantidadePagamentos = pagamentosDaMatricula.length;
+
+      const valorBase =
+        matriculaForm.repassar_taxa &&
+        (isCartao || isLinkBoleto) &&
+        taxaCartao > 0
+          ? valorFinal + Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
+          : valorFinal;
+
+      const valorPorRegistro =
+        isCartao || quantidadePagamentos === 1
+          ? valorBase
+          : Math.round((valorBase / quantidadePagamentos) * 100) / 100;
+
+      for (let index = 0; index < pagamentosDaMatricula.length; index++) {
+        const pagamento = pagamentosDaMatricula[index];
+
+        let dataVencimento = dataPagamentoOuVencimento;
+
+        if (!isCartao && dataPagamentoOuVencimento) {
+          const data = new Date(dataPagamentoOuVencimento + "T12:00:00");
+          data.setMonth(data.getMonth() + index);
+          dataVencimento = data.toISOString().split("T")[0];
+        }
+
+        const updatePagamentoPayload: any = {
           produto_id: matriculaForm.produto_id || null,
-          turma_id: matriculaForm.turma_id || null,
-          data_inicio: matriculaForm.data_inicio || null,
-          data_fim: matriculaForm.data_fim || null,
-          status: matriculaForm.status,
-          observacoes: matriculaForm.observacoes || null,
-          valor_total: valorTotal,
-          desconto,
-          valor_final: valorTotal - desconto,
-        })
-        .eq("id", editingMatriculaId);
+          valor: valorPorRegistro,
+          forma_pagamento: formaPagamento,
+          conta_bancaria_id: matriculaForm.conta_bancaria_id || null,
+          data_vencimento: dataVencimento,
+          parcelas: isCartao ? 1 : quantidadePagamentos,
+          parcela_atual: isCartao ? 1 : index + 1,
+          parcelas_cartao: isCartao ? parcelasInformadas : null,
+          taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
+        };
 
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["matriculas", selectedAluno?.id] });
-      toast.success("Matrícula atualizada");
-      setMatriculaDialogOpen(false);
-      setEditingMatriculaId(null);
-      setMatriculaForm(emptyMatriculaForm);
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
+        if (pagamento.status === "pago") {
+          updatePagamentoPayload.data_pagamento = dataPagamentoOuVencimento;
+          updatePagamentoPayload.valor_pago = valorPorRegistro;
+        }
 
-  const updatePagamento = useMutation({
-    mutationFn: async () => {
-      if (!editingPagamento) return;
-
-      const { error } = await supabase
-        .from("pagamentos")
-        .update({
-          valor: parseFloat(editPagForm.valor) || 0,
-          data_vencimento: editPagForm.data_vencimento || null,
-          forma_pagamento: editPagForm.forma_pagamento || null,
-          conta_bancaria_id: editPagForm.conta_bancaria_id || null,
-        })
-        .eq("id", editingPagamento.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno?.id] });
-      queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
-      toast.success("Pagamento atualizado");
-      setEditPagamentoDialog(false);
-      setEditingPagamento(null);
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const deleteAlunoMutation = useMutation({
-    mutationFn: async (alunoId: string) => {
-      const { data: mats } = await supabase
-        .from("matriculas")
-        .select("id")
-        .eq("aluno_id", alunoId)
-        .is("deleted_at", null);
-
-      const matIds = (mats || []).map((m: any) => m.id);
-
-      if (matIds.length > 0) {
-        await supabase
-          .from("comissoes")
-          .update({ deleted_at: new Date().toISOString() })
-          .in("matricula_id", matIds);
-
-        await supabase
+        const { error: updatePagError } = await supabase
           .from("pagamentos")
-          .update({ deleted_at: new Date().toISOString() })
-          .in("matricula_id", matIds);
+          .update(updatePagamentoPayload)
+          .eq("id", pagamento.id);
+
+        if (updatePagError) throw updatePagError;
       }
+    }
+  },
 
-      await supabase
-        .from("pagamentos")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("aluno_id", alunoId);
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["matriculas", selectedAluno?.id] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno?.id] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos-financeiro-turmas"] });
+    queryClient.invalidateQueries({ queryKey: ["matriculas-financeiro"] });
+    queryClient.invalidateQueries({ queryKey: ["comissoes"] });
 
-      await supabase
-        .from("matriculas")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("aluno_id", alunoId);
+    toast.success("Matrícula atualizada");
+    setMatriculaDialogOpen(false);
+    setEditingMatriculaId(null);
+    setMatriculaForm(emptyMatriculaForm);
+  },
 
-      await supabase.from("inscricoes_eventos").delete().eq("aluno_id", alunoId);
-      await supabase.from("presencas").delete().eq("aluno_id", alunoId);
-      await supabase.from("atividades").delete().eq("aluno_id", alunoId);
-
-      const { error } = await supabase
-        .from("alunos")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", alunoId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["alunos"] });
-      queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
-      queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
-      queryClient.invalidateQueries({ queryKey: ["comissoes"] });
-      queryClient.invalidateQueries({ queryKey: ["comissoes-contas"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
-      queryClient.invalidateQueries({ queryKey: ["matriculas-financeiro"] });
-      queryClient.invalidateQueries({ queryKey: ["pagamentos-financeiro-turmas"] });
-      toast.success("Aluno e todos os dados relacionados foram excluídos");
-      setSheetOpen(false);
-      setSelectedAluno(null);
-      setDeleteAlunoDialogOpen(false);
-    },
-    onError: (err: any) => toast.error("Erro ao excluir: " + err.message),
-  });
+  onError: (err: any) => toast.error("Erro: " + err.message),
+});
 
   // ── Helpers ──
   const filtered = alunos.filter((a) => {
@@ -712,9 +841,13 @@ const Alunos = () => {
   const openEditMatricula = (m: any) => {
   setEditingMatriculaId(m.id);
 
-  const pagamentosDaMatricula = pagamentos.filter(
-    (p: any) => p.matricula_id === m.id && !p.deleted_at
-  );
+  const pagamentosDaMatricula = pagamentos
+    .filter((p: any) => p.matricula_id === m.id && !p.deleted_at)
+    .sort((a: any, b: any) => {
+      const dataA = a.data_vencimento || a.data_pagamento || "";
+      const dataB = b.data_vencimento || b.data_pagamento || "";
+      return dataA.localeCompare(dataB);
+    });
 
   const primeiroPagamento = pagamentosDaMatricula[0];
 
@@ -730,6 +863,7 @@ const Alunos = () => {
     data_inicio: m.data_inicio || "",
     data_fim: m.data_fim || "",
     status: m.status || "ativo",
+
     observacoes: m.observacoes || "",
 
     valor_total: String(m.valor_total ?? ""),
@@ -737,15 +871,21 @@ const Alunos = () => {
 
     parcelas: String(quantidadeParcelas),
     forma_pagamento: primeiroPagamento?.forma_pagamento || "",
-    data_vencimento: primeiroPagamento?.data_vencimento || "",
+    data_vencimento:
+      primeiroPagamento?.data_pagamento ||
+      primeiroPagamento?.data_vencimento ||
+      "",
+
     conta_bancaria_id: primeiroPagamento?.conta_bancaria_id || "",
 
     comercial_id: m.comercial_id || "",
     percentual_comissao: String(m.percentual_comissao ?? "5"),
 
-    taxa_cartao: primeiroPagamento?.taxa_cartao
-      ? String(primeiroPagamento.taxa_cartao)
-      : "",
+    taxa_cartao:
+      primeiroPagamento?.taxa_cartao !== null &&
+      primeiroPagamento?.taxa_cartao !== undefined
+        ? String(primeiroPagamento.taxa_cartao)
+        : "",
 
     repassar_taxa: false,
   });
@@ -753,18 +893,18 @@ const Alunos = () => {
   setMatriculaDialogOpen(true);
 };
 
+
   const openEditPagamento = (p: any) => {
     setEditingPagamento(p);
-
     setEditPagForm({
-      valor: String(p.valor || ""),
+      valor: String(p.valor ?? ""),
       data_vencimento: p.data_vencimento || "",
       forma_pagamento: p.forma_pagamento || "",
       conta_bancaria_id: p.conta_bancaria_id || "",
     });
-
     setEditPagamentoDialog(true);
   };
+
 
   const handleProdutoChange = (produtoId: string) => {
     const produto = produtos.find((p: any) => p.id === produtoId);
@@ -1179,13 +1319,16 @@ const Alunos = () => {
           });
           setNovoPagamentoDialog(true);
         }}
-        onConfirmPagamento={(p, fees) =>
+        onConfirmPagamento={(p, fees, extras) =>
           updatePagamentoStatus.mutate({
             id: p.id,
             status: "pago",
             valorPago: fees.total,
             valor: Number(p.valor),
             produtoNome: p.produtos?.nome,
+            dataPagamento: extras?.data_pagamento,
+            formaPagamento: extras?.forma_pagamento,
+            contaBancariaId: extras?.conta_bancaria_id,
           })
         }
         onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}

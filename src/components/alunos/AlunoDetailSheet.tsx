@@ -42,7 +42,15 @@ interface Props {
   onEditMatricula: (m: any) => void;
   onDeleteMatricula: (id: string) => void;
   onNewPagamento: () => void;
-  onConfirmPagamento: (p: any, fees: any) => void;
+  onConfirmPagamento: (
+    p: any,
+    fees: any,
+    extras?: {
+      data_pagamento?: string;
+      forma_pagamento?: string;
+      conta_bancaria_id?: string;
+    }
+  ) => void;
   onDesfazerPagamento: (p: any) => void;
   onEditPagamento: (p: any) => void;
   onDeletePagamento: (id: string) => void;
@@ -77,11 +85,36 @@ export const AlunoDetailSheet = (props: Props) => {
     editPagamentoDialog, setEditPagamentoDialog, editPagForm, setEditPagForm, onSavePagamento, updatePagamentoIsPending,
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
   } = props;
+
+  const hoje = new Date().toISOString().split("T")[0];
+
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [confirmPagamentoDialog, setConfirmPagamentoDialog] = useState(false);
+  const [confirmingPagamento, setConfirmingPagamento] = useState<any>(null);
+  const [confirmingFees, setConfirmingFees] = useState<any>(null);
+  const [confirmPagamentoForm, setConfirmPagamentoForm] = useState({
+    data_pagamento: hoje,
+    forma_pagamento: "",
+    conta_bancaria_id: "",
+  });
+
   const { data: formasPagamento = [] } = useFormasPagamento();
 
   const getFormaLabel = (codigo: string | null | undefined) => getFormaPagamentoLabel(codigo, formasPagamento);
   const getFormaConfig = (codigo: string | null | undefined) => formasPagamento.find((f) => f.codigo === codigo);
+
+  const openConfirmPagamentoDialog = (p: any, fees: any) => {
+    setConfirmingPagamento(p);
+    setConfirmingFees(fees);
+
+    setConfirmPagamentoForm({
+      data_pagamento: p.data_pagamento || hoje,
+      forma_pagamento: p.forma_pagamento || "",
+      conta_bancaria_id: p.conta_bancaria_id || "",
+    });
+
+    setConfirmPagamentoDialog(true);
+  };
 
   const { data: taxasSistema = [] } = useQuery({
     queryKey: ["taxas_sistema"],
@@ -152,8 +185,14 @@ export const AlunoDetailSheet = (props: Props) => {
                 <SheetHeader className="p-0">
                   <SheetTitle>{selectedAluno.nome}</SheetTitle>
                   <div className="flex items-center gap-2 pt-1">
-                    <Button variant="outline" size="sm" onClick={() => onEdit(selectedAluno)}><Pencil className="h-3.5 w-3.5 mr-1.5" />Editar</Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteAlunoDialogOpen(true)}><Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir</Button>
+                    <Button variant="outline" size="sm" onClick={() => onEdit(selectedAluno)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                      Editar
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteAlunoDialogOpen(true)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Excluir
+                    </Button>
                   </div>
                 </SheetHeader>
               </div>
@@ -164,210 +203,440 @@ export const AlunoDetailSheet = (props: Props) => {
                     <TabsTrigger value="dados">Dados</TabsTrigger>
                     <TabsTrigger value="matriculas">Matrículas</TabsTrigger>
                     <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-                    <TabsTrigger value="atividades"><Clock className="h-3.5 w-3.5 mr-1" />Histórico</TabsTrigger>
-                    <TabsTrigger value="auditoria"><FileText className="h-3.5 w-3.5 mr-1" />Auditoria</TabsTrigger>
-                    <TabsTrigger value="tarefas"><CheckSquare className="h-3.5 w-3.5 mr-1" />Tarefas</TabsTrigger>
-                    <TabsTrigger value="whatsapp"><MessageSquare className="h-3.5 w-3.5 mr-1" />WhatsApp</TabsTrigger>
+                    <TabsTrigger value="atividades">
+                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      Histórico
+                    </TabsTrigger>
+                    <TabsTrigger value="auditoria">
+                      <FileText className="h-3.5 w-3.5 mr-1" />
+                      Auditoria
+                    </TabsTrigger>
+                    <TabsTrigger value="tarefas">
+                      <CheckSquare className="h-3.5 w-3.5 mr-1" />
+                      Tarefas
+                    </TabsTrigger>
+                    <TabsTrigger value="whatsapp">
+                      <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                      WhatsApp
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                <TabsContent value="dados" className="mt-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div><span className="text-muted-foreground">Email:</span><p>{selectedAluno.email || "—"}</p></div>
-                    <div>
-                      <span className="text-muted-foreground">Telefone:</span>
-                      <div className="flex items-center gap-1">
-                        <p>{formatPhone(selectedAluno.telefone) || "—"}</p>
-                        {selectedAluno.telefone && (
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setWhatsappOpen(true)} title="Enviar WhatsApp">
-                            <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                          </Button>
-                        )}
+                  <TabsContent value="dados" className="mt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Email:</span>
+                        <p>{selectedAluno.email || "—"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Telefone:</span>
+                        <div className="flex items-center gap-1">
+                          <p>{formatPhone(selectedAluno.telefone) || "—"}</p>
+                          {selectedAluno.telefone && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => setWhatsappOpen(true)}
+                              title="Enviar WhatsApp"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Nascimento:</span>
+                        <p>{formatDate(selectedAluno.data_nascimento)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Sexo:</span>
+                        <p>{selectedAluno.sexo || "—"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">CPF:</span>
+                        <p>{formatCPF(selectedAluno.cpf) || "—"}</p>
                       </div>
                     </div>
-                    <div><span className="text-muted-foreground">Nascimento:</span><p>{formatDate(selectedAluno.data_nascimento)}</p></div>
-                    <div><span className="text-muted-foreground">Sexo:</span><p>{selectedAluno.sexo || "—"}</p></div>
-                    <div><span className="text-muted-foreground">CPF:</span><p>{formatCPF(selectedAluno.cpf) || "—"}</p></div>
-                  </div>
-                </TabsContent>
+                  </TabsContent>
 
-                <TabsContent value="matriculas" className="mt-4 space-y-4">
-                  <Button size="sm" onClick={onNewMatricula}>
-                    <GraduationCap className="h-4 w-4 mr-2" />Nova Matrícula
-                  </Button>
-                  {matriculas.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">Nenhuma matrícula registrada</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {matriculas.map((m: any) => (
-                        <div key={m.id} className="rounded-lg border p-3 text-sm">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium">{m.produtos?.nome || "Produto"}</span>
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditMatricula(m)}>
-                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (confirm("Excluir matrícula e todos os pagamentos vinculados?")) onDeleteMatricula(m.id); }}>
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
-                              <Badge variant={m.status === "ativo" ? "default" : m.status === "cancelado" ? "destructive" : "secondary"}>{m.status}</Badge>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Turma: {m.turmas?.nome || "—"}</p>
-                          <p className="text-xs text-muted-foreground">{formatDate(m.data_inicio)} → {formatDate(m.data_fim)}</p>
-                          <div className="flex gap-3 mt-1 text-xs">
-                            <span>Total: {formatCurrency(Number(m.valor_total || 0))}</span>
-                            {Number(m.desconto) > 0 && <span className="text-emerald-600">Desc: -{formatCurrency(Number(m.desconto))}</span>}
-                            <span className="font-semibold">Final: {formatCurrency(Number(m.valor_final || 0))}</span>
-                          </div>
-                          {m.observacoes && <p className="text-xs text-muted-foreground mt-1">{m.observacoes}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="atividades" className="mt-4">
-                  <ActivityTimeline alunoId={selectedAluno.id} />
-                </TabsContent>
-
-                <TabsContent value="auditoria" className="mt-4">
-                  <AuditLogTab registroId={selectedAluno.id} tabela="alunos" />
-                </TabsContent>
-
-                <TabsContent value="tarefas" className="mt-4">
-                  <TarefasContextSection alunoId={selectedAluno.id} />
-                </TabsContent>
-
-                <TabsContent value="whatsapp" className="mt-4">
-                  <WhatsAppHistory entidadeTipo="aluno" entidadeId={selectedAluno.id} />
-                </TabsContent>
-
-                <TabsContent value="financeiro" className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">Parcelas são geradas automaticamente ao criar uma matrícula.</p>
-                    <Button size="sm" onClick={onNewPagamento}>
-                      <Plus className="h-4 w-4 mr-1.5" />Novo Pagamento
+                  <TabsContent value="matriculas" className="mt-4 space-y-4">
+                    <Button size="sm" onClick={onNewMatricula}>
+                      <GraduationCap className="h-4 w-4 mr-2" />
+                      Nova Matrícula
                     </Button>
-                  </div>
+                    {matriculas.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">Nenhuma matrícula registrada</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {matriculas.map((m: any) => (
+                          <div key={m.id} className="rounded-lg border p-3 text-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium">{m.produtos?.nome || "Produto"}</span>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditMatricula(m)}>
+                                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => {
+                                    if (confirm("Excluir matrícula e todos os pagamentos vinculados?")) onDeleteMatricula(m.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                                <Badge variant={m.status === "ativo" ? "default" : m.status === "cancelado" ? "destructive" : "secondary"}>
+                                  {m.status}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Turma: {m.turmas?.nome || "—"}</p>
+                            <p className="text-xs text-muted-foreground">{formatDate(m.data_inicio)} → {formatDate(m.data_fim)}</p>
+                            <div className="flex gap-3 mt-1 text-xs">
+                              <span>Total: {formatCurrency(Number(m.valor_total || 0))}</span>
+                              {Number(m.desconto) > 0 && <span className="text-emerald-600">Desc: -{formatCurrency(Number(m.desconto))}</span>}
+                              <span className="font-semibold">Final: {formatCurrency(Number(m.valor_final || 0))}</span>
+                            </div>
+                            {m.observacoes && <p className="text-xs text-muted-foreground mt-1">{m.observacoes}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground">Total pago</p>
-                      <p className="text-lg font-semibold text-primary">{formatCurrency(totalPago)}</p>
+                  <TabsContent value="atividades" className="mt-4">
+                    <ActivityTimeline alunoId={selectedAluno.id} />
+                  </TabsContent>
+
+                  <TabsContent value="auditoria" className="mt-4">
+                    <AuditLogTab registroId={selectedAluno.id} tabela="alunos" />
+                  </TabsContent>
+
+                  <TabsContent value="tarefas" className="mt-4">
+                    <TarefasContextSection alunoId={selectedAluno.id} />
+                  </TabsContent>
+
+                  <TabsContent value="whatsapp" className="mt-4">
+                    <WhatsAppHistory entidadeTipo="aluno" entidadeId={selectedAluno.id} />
+                  </TabsContent>
+
+                  <TabsContent value="financeiro" className="mt-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Parcelas são geradas automaticamente ao criar uma matrícula.</p>
+                      <Button size="sm" onClick={onNewPagamento}>
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Novo Pagamento
+                      </Button>
                     </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground">Pendente</p>
-                      <p className="text-lg font-semibold text-warning">{formatCurrency(totalPendente)}</p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Total pago</p>
+                        <p className="text-lg font-semibold text-primary">{formatCurrency(totalPago)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Pendente</p>
+                        <p className="text-lg font-semibold text-warning">{formatCurrency(totalPendente)}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  {pagamentos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">Nenhum pagamento registrado</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(() => {
-                        const grouped: any[] = [];
-                        const cartaoGroups: Record<string, any[]> = {};
+                    {pagamentos.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">Nenhum pagamento registrado</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(() => {
+                          const grouped: any[] = [];
+                          const cartaoGroups: Record<string, any[]> = {};
 
-                        pagamentos.forEach((p: any) => {
-                          if (["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas > 1) {
-                            const key = `${p.produto_id || "none"}-${p.parcelas}-${p.matricula_id || "none"}`;
-                            if (!cartaoGroups[key]) cartaoGroups[key] = [];
-                            cartaoGroups[key].push(p);
-                          } else if (p.parcelas > 1) {
-                            const key = `${p.matricula_id || p.produto_id || "none"}-${p.parcelas}`;
-                            if (!cartaoGroups[key]) cartaoGroups[key] = [];
-                            cartaoGroups[key].push(p);
-                          } else {
-                            grouped.push({ type: "single", data: p });
-                          }
-                        });
+                          pagamentos.forEach((p: any) => {
+                            if (["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas > 1) {
+                              const key = `${p.produto_id || "none"}-${p.parcelas}-${p.matricula_id || "none"}`;
+                              if (!cartaoGroups[key]) cartaoGroups[key] = [];
+                              cartaoGroups[key].push(p);
+                            } else if (p.parcelas > 1) {
+                              const key = `${p.matricula_id || p.produto_id || "none"}-${p.parcelas}`;
+                              if (!cartaoGroups[key]) cartaoGroups[key] = [];
+                              cartaoGroups[key].push(p);
+                            } else {
+                              grouped.push({ type: "single", data: p });
+                            }
+                          });
 
-                        Object.values(cartaoGroups).forEach((items) => {
-                          grouped.push({ type: "group", data: items });
-                        });
+                          Object.values(cartaoGroups).forEach((items) => {
+                            grouped.push({ type: "group", data: items });
+                          });
 
-                        return grouped.map((item, idx) => {
-                          if (item.type === "group") {
-                            const items = item.data as any[];
-                            const totalGrupo = items.reduce((s: number, p: any) => s + Number(p.valor), 0);
-                            const pagas = items.filter((p: any) => p.status === "pago").length;
-                            return (
-                              <div
-                                key={`group-${idx}`}
-                                className="rounded-lg border p-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors"
-                                onClick={() => { setSelectedParcelas(items.sort((a: any, b: any) => a.parcela_atual - b.parcela_atual)); setParcelasDetailOpen(true); }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="font-medium">{formatCurrency(totalGrupo)} · {items.length}x de {formatCurrency(Number(items[0].valor))}</p>
-                                    <p className="text-xs text-muted-foreground">{items[0]?.produtos?.nome || "—"} · {getFormaLabel(items[0]?.forma_pagamento)} · {pagas}/{items.length} pagas</p>
+                          return grouped.map((item, idx) => {
+                            if (item.type === "group") {
+                              const items = item.data as any[];
+                              const totalGrupo = items.reduce((s: number, p: any) => s + Number(p.valor), 0);
+                              const pagas = items.filter((p: any) => p.status === "pago").length;
+                              return (
+                                <div
+                                  key={`group-${idx}`}
+                                  className="rounded-lg border p-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors"
+                                  onClick={() => {
+                                    setSelectedParcelas(items.sort((a: any, b: any) => a.parcela_atual - b.parcela_atual));
+                                    setParcelasDetailOpen(true);
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="font-medium">
+                                        {formatCurrency(totalGrupo)} · {items.length}x de {formatCurrency(Number(items[0].valor))}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {items[0]?.produtos?.nome || "—"} · {getFormaLabel(items[0]?.forma_pagamento)} · {pagas}/{items.length} pagas
+                                      </p>
+                                    </div>
+                                    <Badge variant={pagas === items.length ? "default" : "secondary"}>
+                                      {pagas === items.length ? "Quitado" : `${pagas}/${items.length}`}
+                                    </Badge>
                                   </div>
-                                  <Badge variant={pagas === items.length ? "default" : "secondary"}>
-                                    {pagas === items.length ? "Quitado" : `${pagas}/${items.length}`}
+                                </div>
+                              );
+                            }
+
+                            const p = item.data;
+                            const fees = calcMultaJuros(p);
+
+                            return (
+                              <div key={p.id} className="rounded-lg border p-3 text-sm flex items-center justify-between">
+                                <div>
+                                  <p className="font-medium">
+                                    {formatCurrency(Number(p.valor))}
+                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
+                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
+                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
+                                  <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}</p>
+                                  {fees.multa > 0 && (
+                                    <p className="text-xs text-destructive">+{formatCurrency(fees.multa + fees.juros)} multa/juros</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {p.status === "pendente" && (
+                                    <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, fees)}>
+                                      Confirmar
+                                    </Button>
+                                  )}
+                                  {p.status === "pago" && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        title="Gerar Recibo"
+                                        onClick={() =>
+                                          gerarReciboPagamento({
+                                            alunoNome: selectedAluno?.nome || "—",
+                                            alunoCpf: selectedAluno?.cpf || undefined,
+                                            produtoNome: p.produtos?.nome || "—",
+                                            valor: Number(p.valor),
+                                            dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
+                                            formaPagamento: getFormaLabel(p.forma_pagamento),
+                                            reciboId: p.id,
+                                          })
+                                        }
+                                      >
+                                        <Receipt className="h-3.5 w-3.5 text-primary" />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDesfazerPagamento(p)}>
+                                        Desfazer
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}>
+                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive"
+                                    onClick={() => {
+                                      if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>
+                                    {p.status}
                                   </Badge>
                                 </div>
                               </div>
                             );
-                          }
-                          const p = item.data;
-                          const fees = calcMultaJuros(p);
-                          return (
-                            <div key={p.id} className="rounded-lg border p-3 text-sm flex items-center justify-between">
-                              <div>
-                                <p className="font-medium">
-                                  {formatCurrency(Number(p.valor))}
-                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
-                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
-                                  {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
-                                </p>
-                                <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
-                                <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}</p>
-                                {fees.multa > 0 && (
-                                  <p className="text-xs text-destructive">+{formatCurrency(fees.multa + fees.juros)} multa/juros</p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {p.status === "pendente" && (
-                                  <Button variant="outline" size="sm" onClick={() => onConfirmPagamento(p, fees)}>
-                                    Confirmar
-                                  </Button>
-                                )}
-                                {p.status === "pago" && (
-                                  <>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Gerar Recibo" onClick={() => gerarReciboPagamento({
-                                      alunoNome: selectedAluno?.nome || "—",
-                                      alunoCpf: selectedAluno?.cpf || undefined,
-                                      produtoNome: p.produtos?.nome || "—",
-                                      valor: Number(p.valor),
-                                      dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
-                                      formaPagamento: getFormaLabel(p.forma_pagamento),
-                                      reciboId: p.id,
-                                    })}><Receipt className="h-3.5 w-3.5 text-primary" /></Button>
-                                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDesfazerPagamento(p)}>
-                                      Desfazer
-                                    </Button>
-                                  </>
-                                )}
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                                <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>{p.status}</Badge>
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  )}
-                </TabsContent>
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </TabsContent>
                 </div>
               </Tabs>
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Dialog - Confirmar pagamento */}
+      <Dialog open={confirmPagamentoDialog} onOpenChange={setConfirmPagamentoDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmar pagamento</DialogTitle>
+            <DialogDescription>
+              Confira os dados e informe a data real em que o pagamento foi recebido.
+            </DialogDescription>
+          </DialogHeader>
+
+          {confirmingPagamento && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Aluno</p>
+                  <p className="font-semibold">{selectedAluno?.nome || "—"}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Produto</p>
+                  <p className="font-semibold">{confirmingPagamento.produtos?.nome || "—"}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Valor original</p>
+                    <p className="font-semibold">{formatCurrency(Number(confirmingPagamento.valor))}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-muted-foreground">Valor a confirmar</p>
+                    <p className="font-semibold">
+                      {formatCurrency(Number(confirmingFees?.total || confirmingPagamento.valor))}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Vencimento</p>
+                    <p className="font-semibold">{formatDate(confirmingPagamento.data_vencimento)}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-muted-foreground">Forma atual</p>
+                    <p className="font-semibold">{getFormaLabel(confirmingPagamento.forma_pagamento)}</p>
+                  </div>
+                </div>
+
+                {confirmingFees?.multa > 0 && (
+                  <p className="text-xs text-destructive">
+                    Multa/Juros: {formatCurrency(confirmingFees.multa + confirmingFees.juros)}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label>Data real do pagamento *</Label>
+                <Input
+                  type="date"
+                  value={confirmPagamentoForm.data_pagamento}
+                  onChange={(e) =>
+                    setConfirmPagamentoForm((prev) => ({
+                      ...prev,
+                      data_pagamento: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Forma de pagamento</Label>
+                  <Select
+                    value={confirmPagamentoForm.forma_pagamento}
+                    onValueChange={(value) =>
+                      setConfirmPagamentoForm((prev) => ({
+                        ...prev,
+                        forma_pagamento: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {formasPagamento.length === 0 ? (
+                        <SelectItem value="nenhuma_forma_pagamento" disabled>
+                          Nenhuma forma cadastrada
+                        </SelectItem>
+                      ) : (
+                        formasPagamento.map((forma) => (
+                          <SelectItem key={forma.id} value={forma.codigo}>
+                            {forma.nome}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Conta bancária</Label>
+                  <Select
+                    value={confirmPagamentoForm.conta_bancaria_id}
+                    onValueChange={(value) =>
+                      setConfirmPagamentoForm((prev) => ({
+                        ...prev,
+                        conta_bancaria_id: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {contasBancarias.length === 0 ? (
+                        <SelectItem value="nenhuma_conta_bancaria" disabled>
+                          Nenhuma conta cadastrada
+                        </SelectItem>
+                      ) : (
+                        contasBancarias.map((conta: any) => (
+                          <SelectItem key={conta.id} value={conta.id}>
+                            {conta.nome} {conta.banco ? `(${conta.banco})` : ""}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!confirmingPagamento) return;
+
+                  onConfirmPagamento(confirmingPagamento, confirmingFees, {
+                    data_pagamento: confirmPagamentoForm.data_pagamento,
+                    forma_pagamento: confirmPagamentoForm.forma_pagamento,
+                    conta_bancaria_id: confirmPagamentoForm.conta_bancaria_id,
+                  });
+
+                  setConfirmPagamentoDialog(false);
+                  setConfirmingPagamento(null);
+                  setConfirmingFees(null);
+                }}
+              >
+                Confirmar pagamento
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog - Confirmar exclusão do aluno */}
       <AlertDialog open={deleteAlunoDialogOpen} onOpenChange={setDeleteAlunoDialogOpen}>
@@ -409,7 +678,10 @@ export const AlunoDetailSheet = (props: Props) => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Parcela {p.parcela_atual}/{p.parcelas} — {formatCurrency(Number(p.valor))}</p>
-                      <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}{p.data_pagamento ? ` · Pago: ${formatDate(p.data_pagamento)}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Venc: {formatDate(p.data_vencimento)}
+                        {p.data_pagamento ? ` · Pago: ${formatDate(p.data_pagamento)}` : ""}
+                      </p>
                       {fees.multa > 0 && (
                         <p className="text-xs text-destructive mt-0.5">
                           Multa: {formatCurrency(fees.multa)} + Juros: {formatCurrency(fees.juros)} = Total: {formatCurrency(fees.total)}
@@ -419,7 +691,7 @@ export const AlunoDetailSheet = (props: Props) => {
                     </div>
                     <div className="flex items-center gap-2">
                       {p.status === "pendente" && (
-                        <Button variant="outline" size="sm" onClick={() => onConfirmPagamento(p, fees)}>
+                        <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, fees)}>
                           Confirmar
                         </Button>
                       )}
@@ -428,9 +700,22 @@ export const AlunoDetailSheet = (props: Props) => {
                           Desfazer
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>{p.status}</Badge>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}>
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => {
+                          if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>
+                        {p.status}
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -447,11 +732,20 @@ export const AlunoDetailSheet = (props: Props) => {
             <DialogTitle>Editar Pagamento</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 mt-2">
-            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={editPagForm.valor} onChange={(e) => setEditPagForm(p => ({ ...p, valor: e.target.value }))} /></div>
-            <div><Label>Data de vencimento</Label><Input type="date" value={editPagForm.data_vencimento} onChange={(e) => setEditPagForm(p => ({ ...p, data_vencimento: e.target.value }))} /></div>
-            <div><Label>Forma de pagamento</Label>
+            <div>
+              <Label>Valor (R$)</Label>
+              <Input type="number" step="0.01" value={editPagForm.valor} onChange={(e) => setEditPagForm(p => ({ ...p, valor: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Data de vencimento</Label>
+              <Input type="date" value={editPagForm.data_vencimento} onChange={(e) => setEditPagForm(p => ({ ...p, data_vencimento: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
               <Select value={editPagForm.forma_pagamento} onValueChange={(v) => setEditPagForm(p => ({ ...p, forma_pagamento: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
                 <SelectContent>
                   {formasPagamento.length === 0 ? (
                     <SelectItem value="nenhuma_forma_pagamento" disabled>
@@ -467,9 +761,12 @@ export const AlunoDetailSheet = (props: Props) => {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Conta Bancária</Label>
+            <div>
+              <Label>Conta Bancária</Label>
               <Select value={editPagForm.conta_bancaria_id} onValueChange={(v) => setEditPagForm(p => ({ ...p, conta_bancaria_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
                 <SelectContent>
                   {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
                 </SelectContent>
@@ -491,24 +788,38 @@ export const AlunoDetailSheet = (props: Props) => {
             <DialogDescription>Lançar pagamento adicional para {selectedAluno?.nome}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 mt-2">
-            <div><Label>Matrícula (opcional)</Label>
+            <div>
+              <Label>Matrícula (opcional)</Label>
               <Select value={novoPagForm.matricula_id} onValueChange={(v) => {
                 const mat = (matriculas || []).find((m: any) => m.id === v);
                 setNovoPagForm(p => ({ ...p, matricula_id: v, produto_id: mat?.produto_id || "" }));
               }}>
-                <SelectTrigger><SelectValue placeholder="Vincular a uma matrícula" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Vincular a uma matrícula" />
+                </SelectTrigger>
                 <SelectContent>
                   {(matriculas || []).map((m: any) => (
-                    <SelectItem key={m.id} value={m.id}>{m.produtos?.nome || "Produto"} — {m.turmas?.nome || "Sem turma"}</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.produtos?.nome || "Produto"} — {m.turmas?.nome || "Sem turma"}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" /></div>
-            <div><Label>Data de vencimento</Label><Input type="date" value={novoPagForm.data_vencimento} onChange={(e) => setNovoPagForm(p => ({ ...p, data_vencimento: e.target.value }))} /></div>
-            <div><Label>Forma de pagamento</Label>
+            <div>
+              <Label>Valor (R$)</Label>
+              <Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
+            </div>
+            <div>
+              <Label>Data de vencimento</Label>
+              <Input type="date" value={novoPagForm.data_vencimento} onChange={(e) => setNovoPagForm(p => ({ ...p, data_vencimento: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
               <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm(p => ({ ...p, forma_pagamento: v, repassar_taxa: false }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
                 <SelectContent>
                   {formasPagamento.length === 0 ? (
                     <SelectItem value="nenhuma_forma_pagamento" disabled>
@@ -570,9 +881,12 @@ export const AlunoDetailSheet = (props: Props) => {
                 )}
               </div>
             )}
-            <div><Label>Conta Bancária</Label>
+            <div>
+              <Label>Conta Bancária</Label>
               <Select value={novoPagForm.conta_bancaria_id} onValueChange={(v) => setNovoPagForm(p => ({ ...p, conta_bancaria_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
                 <SelectContent>
                   {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
                 </SelectContent>
@@ -585,7 +899,15 @@ export const AlunoDetailSheet = (props: Props) => {
           </div>
         </DialogContent>
       </Dialog>
-      <WhatsAppDialog open={whatsappOpen} onOpenChange={setWhatsappOpen} telefone={selectedAluno?.telefone || ""} nome={selectedAluno?.nome || ""} entidadeTipo="aluno" entidadeId={selectedAluno?.id} />
+
+      <WhatsAppDialog
+        open={whatsappOpen}
+        onOpenChange={setWhatsappOpen}
+        telefone={selectedAluno?.telefone || ""}
+        nome={selectedAluno?.nome || ""}
+        entidadeTipo="aluno"
+        entidadeId={selectedAluno?.id}
+      />
     </>
   );
 };
@@ -622,13 +944,19 @@ function AuditLogTab({ registroId, tabela }: { registroId: string; tabela: strin
             <details className="text-xs mt-1">
               <summary className="cursor-pointer text-primary">Ver alterações</summary>
               <div className="mt-2 space-y-1">
-                {Object.keys(log.dados_novos).filter((k) => JSON.stringify(log.dados_anteriores[k]) !== JSON.stringify(log.dados_novos[k])).map((k) => (
-                  <div key={k} className="grid grid-cols-3 gap-1">
-                    <span className="font-medium">{k}</span>
-                    <span className="text-destructive line-through">{log.dados_anteriores[k] === null ? "null" : String(log.dados_anteriores[k])}</span>
-                    <span className="text-primary">{log.dados_novos[k] === null ? "null" : String(log.dados_novos[k])}</span>
-                  </div>
-                ))}
+                {Object.keys(log.dados_novos)
+                  .filter((k) => JSON.stringify(log.dados_anteriores[k]) !== JSON.stringify(log.dados_novos[k]))
+                  .map((k) => (
+                    <div key={k} className="grid grid-cols-3 gap-1">
+                      <span className="font-medium">{k}</span>
+                      <span className="text-destructive line-through">
+                        {log.dados_anteriores[k] === null ? "null" : String(log.dados_anteriores[k])}
+                      </span>
+                      <span className="text-primary">
+                        {log.dados_novos[k] === null ? "null" : String(log.dados_novos[k])}
+                      </span>
+                    </div>
+                  ))}
               </div>
             </details>
           )}
