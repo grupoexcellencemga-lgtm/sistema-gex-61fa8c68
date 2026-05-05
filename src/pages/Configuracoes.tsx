@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sun, Moon, Monitor, MessageSquare } from "lucide-react";
+import {
+  Loader2,
+  Sun,
+  Moon,
+  Monitor,
+  MessageSquare,
+  User,
+  Building2,
+  Palette,
+  Bell,
+  Mail,
+  Tags,
+  CreditCard,
+  Percent,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface DadosEmpresa {
@@ -65,7 +80,6 @@ const Configuracoes = () => {
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  // Profile query
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: async () => {
@@ -84,7 +98,6 @@ const Configuracoes = () => {
     enabled: !!user,
   });
 
-  // Config query
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["configuracoes_usuario", user?.id],
     queryFn: async () => {
@@ -113,7 +126,6 @@ const Configuracoes = () => {
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [profileInit, setProfileInit] = useState(false);
 
   const [notifConfig, setNotifConfig] = useState(defaultConfig);
   const [empresa, setEmpresa] = useState<DadosEmpresa>({
@@ -124,45 +136,44 @@ const Configuracoes = () => {
     whatsapp_token: "",
     whatsapp_instancia: "",
   });
-  const [configInit, setConfigInit] = useState(false);
-
-  if (profile && !profileInit) {
-    setNome(profile.nome || "");
-    setTelefone(profile.telefone ? maskPhone(profile.telefone) : "");
-    setProfileInit(true);
-  }
 
   useEffect(() => {
-    if (config && !configInit) {
-      setNotifConfig({
-        notif_pagamento_vencido: config.notif_pagamento_vencido,
-        notif_novo_cadastro: config.notif_novo_cadastro,
-        notif_aniversarios: config.notif_aniversarios,
-        notif_sessoes: config.notif_sessoes,
-        notif_leads_inativos: config.notif_leads_inativos,
-        tema: config.tema || "system",
-        dados_empresa: (config.dados_empresa as any) || {
-          nome: "",
-          email: "",
-          telefone: "",
-        },
-      });
+    if (!profile) return;
 
-      const de = (config.dados_empresa as any) || {};
+    setNome(profile.nome || "");
+    setTelefone(profile.telefone ? maskPhone(profile.telefone) : "");
+  }, [profile]);
 
-      setEmpresa({
-        nome: de.nome || "",
-        email: de.email || "",
-        telefone: de.telefone || "",
-        whatsapp_url: de.whatsapp_url || "",
-        whatsapp_token: de.whatsapp_token || "",
-        whatsapp_instancia: de.whatsapp_instancia || "",
-      });
+  useEffect(() => {
+    if (!config) return;
 
-      setTheme(config.tema || "system");
-      setConfigInit(true);
-    }
-  }, [config, configInit, setTheme]);
+    setNotifConfig({
+      notif_pagamento_vencido: config.notif_pagamento_vencido,
+      notif_novo_cadastro: config.notif_novo_cadastro,
+      notif_aniversarios: config.notif_aniversarios,
+      notif_sessoes: config.notif_sessoes,
+      notif_leads_inativos: config.notif_leads_inativos,
+      tema: config.tema || "system",
+      dados_empresa: (config.dados_empresa as any) || {
+        nome: "",
+        email: "",
+        telefone: "",
+      },
+    });
+
+    const de = (config.dados_empresa as any) || {};
+
+    setEmpresa({
+      nome: de.nome || "",
+      email: de.email || "",
+      telefone: de.telefone || "",
+      whatsapp_url: de.whatsapp_url || "",
+      whatsapp_token: de.whatsapp_token || "",
+      whatsapp_instancia: de.whatsapp_instancia || "",
+    });
+
+    setTheme(config.tema || "system");
+  }, [config, setTheme]);
 
   const updateProfile = useMutation({
     mutationFn: async () => {
@@ -243,11 +254,14 @@ const Configuracoes = () => {
   };
 
   const saveEmpresa = () => {
-    upsertConfig.mutate({
-      dados_empresa: empresa as any,
-    });
-
-    toast.success("Dados da empresa atualizados");
+    upsertConfig.mutate(
+      {
+        dados_empresa: empresa as any,
+      },
+      {
+        onSuccess: () => toast.success("Dados da empresa atualizados"),
+      }
+    );
   };
 
   const isLoading = profileLoading || configLoading;
@@ -281,265 +295,320 @@ const Configuracoes = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Configurações"
-        description="Configurações gerais do sistema"
+        description="Organize preferências, empresa, integrações e regras do sistema"
       />
 
-      <div className="max-w-2xl space-y-6">
-        {/* Profile */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Meu Perfil</CardTitle>
-          </CardHeader>
+      <Tabs defaultValue="perfil" className="space-y-6">
+        <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-2">
+          <TabsList className="inline-flex w-max min-w-max whitespace-nowrap">
+            <TabsTrigger value="perfil" className="gap-1.5 shrink-0">
+              <User className="h-4 w-4" />
+              Perfil
+            </TabsTrigger>
 
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <>
-                <div>
-                  <Label>Nome</Label>
-                  <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+            <TabsTrigger value="empresa" className="gap-1.5 shrink-0">
+              <Building2 className="h-4 w-4" />
+              Empresa
+            </TabsTrigger>
+
+            <TabsTrigger value="whatsapp" className="gap-1.5 shrink-0">
+              <MessageSquare className="h-4 w-4" />
+              WhatsApp
+            </TabsTrigger>
+
+            <TabsTrigger value="aparencia" className="gap-1.5 shrink-0">
+              <Palette className="h-4 w-4" />
+              Aparência
+            </TabsTrigger>
+
+            <TabsTrigger value="notificacoes" className="gap-1.5 shrink-0">
+              <Bell className="h-4 w-4" />
+              Notificações
+            </TabsTrigger>
+
+            <TabsTrigger value="emails" className="gap-1.5 shrink-0">
+              <Mail className="h-4 w-4" />
+              Emails
+            </TabsTrigger>
+
+            <TabsTrigger value="categorias" className="gap-1.5 shrink-0">
+              <Tags className="h-4 w-4" />
+              Categorias
+            </TabsTrigger>
+
+            <TabsTrigger value="formas-pagamento" className="gap-1.5 shrink-0">
+              <CreditCard className="h-4 w-4" />
+              Formas de Pagamento
+            </TabsTrigger>
+
+            <TabsTrigger value="taxas" className="gap-1.5 shrink-0">
+              <Percent className="h-4 w-4" />
+              Taxas
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="perfil" className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Meu Perfil</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {isLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-
-                <div>
-                  <Label>Email</Label>
-                  <Input value={profile?.email || ""} disabled className="opacity-60" />
-                </div>
-
-                <div>
-                  <Label>Telefone</Label>
-                  <Input
-                    value={telefone}
-                    onChange={(e) => setTelefone(maskPhone(e.target.value))}
-                    placeholder="(44) 99999-0000"
-                  />
-                </div>
-
-                <Button
-                  onClick={() => updateProfile.mutate()}
-                  disabled={updateProfile.isPending}
-                >
-                  {updateProfile.isPending && (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  )}
-                  Salvar Alterações
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Empresa */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Informações da Empresa</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Nome da empresa</Label>
-              <Input
-                value={empresa.nome}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    nome: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Email principal</Label>
-              <Input
-                value={empresa.email}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    email: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Telefone</Label>
-              <Input
-                value={empresa.telefone}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    telefone: maskPhone(e.target.value),
-                  }))
-                }
-              />
-            </div>
-
-            <Button onClick={saveEmpresa} disabled={upsertConfig.isPending}>
-              {upsertConfig.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Salvar Dados
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Aparência */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Aparência</CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Tema</p>
-                <p className="text-xs text-muted-foreground">
-                  Escolha o tema do sistema
-                </p>
-              </div>
-
-              <Select value={notifConfig.tema} onValueChange={handleThemeChange}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="light">
-                    <span className="flex items-center gap-2">
-                      <Sun className="h-3.5 w-3.5" />
-                      Claro
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="dark">
-                    <span className="flex items-center gap-2">
-                      <Moon className="h-3.5 w-3.5" />
-                      Escuro
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="system">
-                    <span className="flex items-center gap-2">
-                      <Monitor className="h-3.5 w-3.5" />
-                      Sistema
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notifications */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Notificações</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {notifItems.map((item, i) => (
-              <div key={item.key}>
-                {i > 0 && <Separator className="mb-4" />}
-
-                <div className="flex items-center justify-between">
+              ) : (
+                <>
                   <div>
-                    <p className="text-sm font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    <Label>Nome</Label>
+                    <Input value={nome} onChange={(e) => setNome(e.target.value)} />
                   </div>
 
-                  <Switch
-                    checked={(notifConfig as any)[item.key]}
-                    onCheckedChange={(v) => toggleNotif(item.key, v)}
-                  />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                  <div>
+                    <Label>Email</Label>
+                    <Input value={profile?.email || ""} disabled className="opacity-60" />
+                  </div>
 
-        {/* WhatsApp Integration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Integração WhatsApp
-            </CardTitle>
-          </CardHeader>
+                  <div>
+                    <Label>Telefone</Label>
+                    <Input
+                      value={telefone}
+                      onChange={(e) => setTelefone(maskPhone(e.target.value))}
+                      placeholder="(44) 99999-0000"
+                    />
+                  </div>
 
-          <CardContent className="space-y-4">
-            <div>
-              <Label>URL da API (Evolution API ou Z-API)</Label>
-              <Input
-                value={empresa.whatsapp_url || ""}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    whatsapp_url: e.target.value,
-                  }))
-                }
-                placeholder="https://api.evolution.exemplo.com"
-              />
-            </div>
-
-            <div>
-              <Label>API Key / Token</Label>
-              <Input
-                type="password"
-                value={empresa.whatsapp_token || ""}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    whatsapp_token: e.target.value,
-                  }))
-                }
-                placeholder="Seu token de autenticação"
-              />
-            </div>
-
-            <div>
-              <Label>Instância / ID da Sessão</Label>
-              <Input
-                value={empresa.whatsapp_instancia || ""}
-                onChange={(e) =>
-                  setEmpresa((p) => ({
-                    ...p,
-                    whatsapp_instancia: e.target.value,
-                  }))
-                }
-                placeholder="nome-da-instancia"
-              />
-            </div>
-
-            <Button onClick={saveEmpresa} disabled={upsertConfig.isPending}>
-              {upsertConfig.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Button
+                    onClick={() => updateProfile.mutate()}
+                    disabled={updateProfile.isPending}
+                  >
+                    {updateProfile.isPending && (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    )}
+                    Salvar Alterações
+                  </Button>
+                </>
               )}
-              Salvar Configuração WhatsApp
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Email Templates */}
-        <EmailTemplatesSection />
+        <TabsContent value="empresa" className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Informações da Empresa</CardTitle>
+            </CardHeader>
 
-        {/* Categorias Financeiras */}
-        <Separator className="my-8" />
-        <CategoriasSection />
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Nome da empresa</Label>
+                <Input
+                  value={empresa.nome}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      nome: e.target.value,
+                    }))
+                  }
+                />
+              </div>
 
-        {/* Formas de Pagamento */}
-        <Separator className="my-8" />
-        <FormasPagamentoSection />
+              <div>
+                <Label>Email principal</Label>
+                <Input
+                  value={empresa.email}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      email: e.target.value,
+                    }))
+                  }
+                />
+              </div>
 
-        {/* Taxas e Impostos */}
-        <Separator className="my-8" />
-        <TaxasSection />
-      </div>
+              <div>
+                <Label>Telefone</Label>
+                <Input
+                  value={empresa.telefone}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      telefone: maskPhone(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <Button onClick={saveEmpresa} disabled={upsertConfig.isPending}>
+                {upsertConfig.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                Salvar Dados
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Integração WhatsApp
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <div>
+                <Label>URL da API (Evolution API ou Z-API)</Label>
+                <Input
+                  value={empresa.whatsapp_url || ""}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      whatsapp_url: e.target.value,
+                    }))
+                  }
+                  placeholder="https://api.evolution.exemplo.com"
+                />
+              </div>
+
+              <div>
+                <Label>API Key / Token</Label>
+                <Input
+                  type="password"
+                  value={empresa.whatsapp_token || ""}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      whatsapp_token: e.target.value,
+                    }))
+                  }
+                  placeholder="Seu token de autenticação"
+                />
+              </div>
+
+              <div>
+                <Label>Instância / ID da Sessão</Label>
+                <Input
+                  value={empresa.whatsapp_instancia || ""}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      whatsapp_instancia: e.target.value,
+                    }))
+                  }
+                  placeholder="nome-da-instancia"
+                />
+              </div>
+
+              <Button onClick={saveEmpresa} disabled={upsertConfig.isPending}>
+                {upsertConfig.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                Salvar Configuração WhatsApp
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="aparencia" className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Aparência</CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Tema</p>
+                  <p className="text-xs text-muted-foreground">
+                    Escolha o tema do sistema
+                  </p>
+                </div>
+
+                <Select value={notifConfig.tema} onValueChange={handleThemeChange}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="light">
+                      <span className="flex items-center gap-2">
+                        <Sun className="h-3.5 w-3.5" />
+                        Claro
+                      </span>
+                    </SelectItem>
+
+                    <SelectItem value="dark">
+                      <span className="flex items-center gap-2">
+                        <Moon className="h-3.5 w-3.5" />
+                        Escuro
+                      </span>
+                    </SelectItem>
+
+                    <SelectItem value="system">
+                      <span className="flex items-center gap-2">
+                        <Monitor className="h-3.5 w-3.5" />
+                        Sistema
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notificacoes" className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Notificações</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {notifItems.map((item, i) => (
+                <div key={item.key}>
+                  {i > 0 && <Separator className="mb-4" />}
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+
+                    <Switch
+                      checked={(notifConfig as any)[item.key]}
+                      onCheckedChange={(v) => toggleNotif(item.key, v)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="emails" className="max-w-5xl space-y-6">
+          <EmailTemplatesSection />
+        </TabsContent>
+
+        <TabsContent value="categorias" className="max-w-5xl space-y-6">
+          <CategoriasSection />
+        </TabsContent>
+
+        <TabsContent value="formas-pagamento" className="max-w-5xl space-y-6">
+          <FormasPagamentoSection />
+        </TabsContent>
+
+        <TabsContent value="taxas" className="max-w-5xl space-y-6">
+          <TaxasSection />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
