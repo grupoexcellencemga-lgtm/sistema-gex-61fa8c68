@@ -135,7 +135,7 @@ export const TabFechamento = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_profissional")
-        .select("conta_bancaria_id, valor, data, forma_pagamento, observacoes, profissionais(nome)")
+        .select("conta_bancaria_id, valor, data, forma_pagamento, observacoes, despesa_id, profissionais(nome)")
         .is("deleted_at", null)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
@@ -268,7 +268,7 @@ export const TabFechamento = () => {
       .filter((r: any) => r.conta_bancaria_id === contaId && filterFn(r.data))
       .reduce((s: number, r: any) => s + Number(r.valor), 0);
     const entradasEmpresariais = pagamentosEmpresariaisPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data))
+      .filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data) && !p.despesa_id)
       .reduce((s: number, p: any) => s + Number(p.valor), 0);
     const saidas = despesasPorConta
       .filter((d: any) => d.conta_bancaria_id === contaId && filterFn(d.data))
@@ -352,7 +352,7 @@ export const TabFechamento = () => {
     });
 
     // Pagamentos profissional
-    pagamentosProfissionalPorConta.filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data)).forEach((p: any) => {
+    pagamentosProfissionalPorConta.filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data) && !p.despesa_id).forEach((p: any) => {
       txs.push({
         date: p.data,
         tipo: "saida",
@@ -440,7 +440,7 @@ export const TabFechamento = () => {
       });
 
     pagamentosProcessoPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data) && !p.despesa_id)
       .forEach((p: any) => {
         const proc = processosPorConta.find((pr: any) => pr.id === p.processo_id);
         txs.push({
@@ -453,7 +453,7 @@ export const TabFechamento = () => {
       });
 
     pagamentosEmpresariaisPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data) && !p.despesa_id)
       .forEach((p: any) => {
         const proc = processosEmpresariaisPorConta.find((pr: any) => pr.id === p.processo_id);
         txs.push({
@@ -478,7 +478,7 @@ export const TabFechamento = () => {
       });
 
     pagamentosProfissionalPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data) && !p.despesa_id)
       .forEach((p: any) => {
         txs.push({
           date: p.data,
@@ -861,7 +861,7 @@ export const TabFechamento = () => {
                   + receitasAvulsasPorConta.filter((r: any) => r.conta_bancaria_id === c.id && filterAfter(r.data)).reduce((s: number, r: any) => s + Number(r.valor), 0)
                   + pagamentosEmpresariaisPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data)).reduce((s: number, p: any) => s + Number(p.valor), 0);
                 const totalSaidas = despesasPorConta.filter((d: any) => d.conta_bancaria_id === c.id && filterAfter(d.data)).reduce((s: number, d: any) => s + Number(d.valor), 0)
-                  + pagamentosProfissionalPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data)).reduce((s: number, p: any) => s + Number(p.valor), 0)
+                  + pagamentosProfissionalPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data) && !p.despesa_id).reduce((s: number, p: any) => s + Number(p.valor), 0)
                   + comissoesPorConta.filter((co: any) => co.conta_bancaria_id === c.id && filterAfter(co.data_pagamento)).reduce((s: number, co: any) => s + Number(co.valor_pago), 0);
                 const isExpanded = expandedConta === c.id;
                 const txs = isExpanded ? buildTransactions(c.id) : [];
