@@ -87,16 +87,17 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: categoriasReceita = [] } = useQuery({
-    queryKey: ["categorias_despesas_receita"],
+    queryKey: ["categorias_despesas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
-        .eq("tipo", "receita")
-        .order("nome");
+        .is("deleted_at", null)
+        .eq("ativo", true)
+        .order("nome", { ascending: true });
 
       if (error) throw error;
-      return data;
+      return data || [];
     },
   });
 

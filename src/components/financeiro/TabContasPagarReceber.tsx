@@ -266,13 +266,12 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: categoriasEmpresa = [] } = useQuery({
-    queryKey: ["categorias_despesas_empresa"],
+    queryKey: ["categorias_despesas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("id, nome, tipo, ativo")
         .is("deleted_at", null)
-        .eq("tipo", "empresa")
         .eq("ativo", true)
         .order("nome", { ascending: true });
 

@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -39,21 +32,19 @@ type Categoria = {
 };
 
 const tipoLabels: Record<string, string> = {
-  despesa: "Despesa",
-  receita: "Receita",
-  empresa: "Empresa",
+  geral: "Geral",
+  despesa: "Antiga: Despesa",
+  receita: "Antiga: Receita",
+  empresa: "Antiga: Empresa",
+  profissional: "Antiga: Profissional",
 };
 
 export function CategoriasSection() {
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(
-    null
-  );
-
+  const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [nome, setNome] = useState("");
-  const [tipo, setTipo] = useState("despesa");
 
   const { data: categorias = [], isLoading } = useQuery({
     queryKey: ["categorias_despesas"],
@@ -62,7 +53,7 @@ export function CategoriasSection() {
         .from("categorias_despesas")
         .select("*")
         .is("deleted_at", null)
-        .order("tipo", { ascending: true })
+        .eq("ativo", true)
         .order("nome", { ascending: true });
 
       if (error) throw error;
@@ -72,7 +63,6 @@ export function CategoriasSection() {
 
   const resetForm = () => {
     setNome("");
-    setTipo("despesa");
     setEditingCategoria(null);
     setDialogOpen(false);
   };
@@ -80,14 +70,12 @@ export function CategoriasSection() {
   const openNew = () => {
     setEditingCategoria(null);
     setNome("");
-    setTipo("despesa");
     setDialogOpen(true);
   };
 
   const openEdit = (categoria: Categoria) => {
     setEditingCategoria(categoria);
     setNome(categoria.nome || "");
-    setTipo(categoria.tipo || "despesa");
     setDialogOpen(true);
   };
 
@@ -97,9 +85,28 @@ export function CategoriasSection() {
         throw new Error("Informe o nome da categoria.");
       }
 
+      const nomeTratado = nome.trim();
+
+      const { data: categoriaExistente, error: categoriaExistenteError } =
+        await supabase
+          .from("categorias_despesas")
+          .select("id, nome")
+          .is("deleted_at", null)
+          .ilike("nome", nomeTratado)
+          .maybeSingle();
+
+      if (categoriaExistenteError) throw categoriaExistenteError;
+
+      if (
+        categoriaExistente &&
+        (!editingCategoria || categoriaExistente.id !== editingCategoria.id)
+      ) {
+        throw new Error("Já existe uma categoria com esse nome.");
+      }
+
       const payload = {
-        nome: nome.trim(),
-        tipo,
+        nome: nomeTratado,
+        tipo: "geral",
         ativo: true,
         updated_at: new Date().toISOString(),
       };
@@ -122,9 +129,8 @@ export function CategoriasSection() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categorias_despesas"] });
-      queryClient.invalidateQueries({
-        queryKey: ["categorias_despesas_receita"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["categorias_despesas_receita"] });
+      queryClient.invalidateQueries({ queryKey: ["categorias_despesas_empresa"] });
 
       toast({
         title: editingCategoria
@@ -163,9 +169,8 @@ export function CategoriasSection() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categorias_despesas"] });
-      queryClient.invalidateQueries({
-        queryKey: ["categorias_despesas_receita"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["categorias_despesas_receita"] });
+      queryClient.invalidateQueries({ queryKey: ["categorias_despesas_empresa"] });
 
       toast({ title: "Categoria removida." });
     },
@@ -175,12 +180,6 @@ export function CategoriasSection() {
         variant: "destructive",
       }),
   });
-
-  const categoriasPorTipo = {
-    despesa: categorias.filter((c) => c.tipo === "despesa"),
-    receita: categorias.filter((c) => c.tipo === "receita"),
-    empresa: categorias.filter((c) => c.tipo === "empresa"),
-  };
 
   return (
     <>
@@ -192,8 +191,8 @@ export function CategoriasSection() {
                 Categorias Financeiras
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Cadastre categorias para usar em despesas, receitas, reembolsos
-                e lançamentos financeiros.
+                Cadastre as categorias em um único lugar. Elas serão usadas em
+                contas a pagar, despesas e receitas.
               </p>
             </div>
 
@@ -204,95 +203,77 @@ export function CategoriasSection() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="space-y-6">
-              {(["despesa", "receita", "empresa"] as const).map((tipoKey) => (
-                <div key={tipoKey}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-semibold">
-                      {tipoLabels[tipoKey]}
-                    </h3>
-                    <Badge variant="outline">
-                      {categoriasPorTipo[tipoKey].length}
-                    </Badge>
-                  </div>
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead className="w-[100px] text-right">
+                      Ações
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
 
-                  <div className="rounded-lg border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Categoria</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead className="w-[100px] text-right">
-                            Ações
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
+                <TableBody>
+                  {categorias.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={3}
+                        className="text-center text-muted-foreground py-5"
+                      >
+                        Nenhuma categoria cadastrada.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    categorias.map((categoria) => (
+                      <TableRow key={categoria.id}>
+                        <TableCell className="font-medium">
+                          {categoria.nome}
+                        </TableCell>
 
-                      <TableBody>
-                        {categoriasPorTipo[tipoKey].length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={3}
-                              className="text-center text-muted-foreground py-5"
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {tipoLabels[categoria.tipo] || "Geral"}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openEdit(categoria)}
+                              title="Editar"
                             >
-                              Nenhuma categoria cadastrada.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          categoriasPorTipo[tipoKey].map((categoria) => (
-                            <TableRow key={categoria.id}>
-                              <TableCell className="font-medium">
-                                {categoria.nome}
-                              </TableCell>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
 
-                              <TableCell>
-                                <Badge variant="secondary">
-                                  {tipoLabels[categoria.tipo] ||
-                                    categoria.tipo}
-                                </Badge>
-                              </TableCell>
-
-                              <TableCell>
-                                <div className="flex justify-end gap-1">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => openEdit(categoria)}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() =>
-                                      deleteMutation.mutate(categoria)
-                                    }
-                                    title="Excluir"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              ))}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteMutation.mutate(categoria)}
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -312,23 +293,11 @@ export function CategoriasSection() {
               <Input
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Ex: Tráfego Pago, Aluguel, Coffee Break..."
+                placeholder="Ex: Aluguel, Tráfego Pago, Coffee Break..."
               />
-            </div>
-
-            <div>
-              <Label>Tipo</Label>
-              <Select value={tipo} onValueChange={setTipo}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="despesa">Despesa</SelectItem>
-                  <SelectItem value="receita">Receita</SelectItem>
-                  <SelectItem value="empresa">Empresa</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Essa categoria ficará disponível para contas a pagar, despesas e receitas.
+              </p>
             </div>
 
             <div className="flex gap-2">

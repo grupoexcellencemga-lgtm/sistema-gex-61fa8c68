@@ -104,12 +104,12 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
-        .eq("tipo", "despesa")
         .is("deleted_at", null)
-        .order("nome");
+        .eq("ativo", true)
+        .order("nome", { ascending: true });
 
       if (error) throw error;
-      return data;
+      return data || [];
     },
   });
 
