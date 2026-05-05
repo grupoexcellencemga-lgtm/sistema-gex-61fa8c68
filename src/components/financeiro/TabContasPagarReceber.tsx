@@ -265,6 +265,22 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     },
   });
 
+  const { data: categoriasEmpresa = [] } = useQuery({
+    queryKey: ["categorias_despesas_empresa"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("categorias_despesas")
+        .select("id, nome, tipo, ativo")
+        .is("deleted_at", null)
+        .eq("tipo", "empresa")
+        .eq("ativo", true)
+        .order("nome", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const contasConsolidadas: ContaItem[] = useMemo(() => {
     const items: ContaItem[] = [];
 
@@ -1273,11 +1289,30 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Categoria</Label>
-                <Input
+                <Select
                   value={form.categoria}
-                  onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
-                  placeholder="Ex: Aluguel, Contador..."
-                />
+                  onValueChange={(value) =>
+                    setForm((f) => ({ ...f, categoria: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {categoriasEmpresa.length === 0 ? (
+                      <SelectItem value="nenhuma_categoria_empresa" disabled>
+                        Nenhuma categoria de empresa cadastrada
+                      </SelectItem>
+                    ) : (
+                      categoriasEmpresa.map((categoria: any) => (
+                        <SelectItem key={categoria.id} value={categoria.nome}>
+                          {categoria.nome}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
