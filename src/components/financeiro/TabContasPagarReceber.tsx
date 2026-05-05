@@ -88,6 +88,10 @@ type ContaItem = {
   categoria: string;
   origem: string;
   forma_pagamento: string | null;
+  origem_tipo?: "manual" | "aluno" | "comissao" | "reembolso" | "profissional" | "processo_individual" | "processo_empresarial";
+  original_id?: string;
+  fornecedor?: string | null;
+  observacoes?: string | null;
 };
 
 const getUrgencia = (dataVencimento: string | null, status: string) => {
@@ -141,7 +145,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
   const [confirmAction, setConfirmAction] = useState<{
     type: "delete";
-    id: string;
+    item: any;
     descricao: string;
   } | null>(null);
 
@@ -149,6 +153,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   const [payingConta, setPayingConta] = useState<any>(null);
 
   const [payForm, setPayForm] = useState({
+    valor: "",
     data_pagamento: "",
     forma_pagamento: "",
     parcelas: "1",
@@ -190,7 +195,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comissoes")
-        .select("*, comerciais(nome)")
+        .select("*, comerciais(nome), alunos(nome), produtos(nome)")
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
 
@@ -204,7 +209,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
-        .select("id, cliente_nome, valor_total, status, data_inicio, data_fim")
+        .select("id, cliente_nome, valor_total, status, data_inicio, data_fim, profissional_id, responsavel, percentual_profissional")
         .is("deleted_at", null)
         .in("status", ["ativo", "aberto"]);
 
@@ -218,11 +223,51 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo")
-        .select("processo_id, valor")
+        .select("*")
         .is("deleted_at", null);
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: profissionais = [] } = useQuery({
+    queryKey: ["profissionais-contas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profissionais")
+        .select("id, nome")
+        .is("deleted_at", null);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: pagamentosProfissional = [] } = useQuery({
+    queryKey: ["pagamentos-profissional-contas"] ,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pagamentos_profissional")
+        .select("*, profissionais(nome), processos_individuais(cliente_nome)")
+        .is("deleted_at", null);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: reembolsos = [] } = useQuery({
+    queryKey: ["reembolsos-contas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reembolsos")
+        .select("*")
+        .is("deleted_at", null)
+        .order("data_despesa", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -245,7 +290,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo_empresarial")
-        .select("processo_id, valor")
+        .select("*")
         .is("deleted_at", null);
 
       if (error) throw error;
@@ -303,23 +348,31 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
         categoria: "Mensalidade",
         origem: "Aluno",
         forma_pagamento: p.forma_pagamento,
+        origem_tipo: "aluno",
+        original_id: p.id,
       });
     });
 
     comissoes.forEach((c: any) => {
       if (!showPagos && c.status === "pago") return;
 
+      const dataVencimento = c.data_pagamento || (c.created_at ? c.created_at.substring(0, 10) : hoje);
+      const isVencido = c.status !== "pago" && dataVencimento && dataVencimento < hoje;
+
       items.push({
         id: `com-${c.id}`,
         tipo: "pagar",
-        descricao: `Comissão — ${c.comerciais?.nome || "Vendedor"}`,
-        valor: Number(c.valor_comissao),
-        data_vencimento: c.created_at ? c.created_at.substring(0, 10) : null,
+        descricao: `Comissão: ${c.comerciais?.nome || "Vendedor"}${c.alunos?.nome ? ` — Aluno: ${c.alunos.nome}` : ""}${c.produtos?.nome ? ` — ${c.produtos.nome}` : ""}`,
+        valor: Number(c.valor_comissao || c.valor_pago || 0),
+        data_vencimento: dataVencimento,
         data_pagamento: c.data_pagamento,
-        status: c.status === "pago" ? "pago" : "pendente",
+        status: c.status === "pago" ? "pago" : isVencido ? "vencido" : "pendente",
         categoria: "Comissão",
         origem: "Comissão",
         forma_pagamento: c.forma_pagamento,
+        origem_tipo: "comissao",
+        original_id: c.id,
+        observacoes: c.observacoes || null,
       });
     });
 
@@ -340,7 +393,79 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
         categoria: m.categoria || "Conta Manual",
         origem: "Manual",
         forma_pagamento: m.forma_pagamento,
+        origem_tipo: "manual",
+        original_id: m.id,
+        fornecedor: m.fornecedor || null,
+        observacoes: m.observacoes || null,
       });
+    });
+
+    reembolsos.forEach((r: any) => {
+      if (!showPagos && r.status === "pago") return;
+
+      const dataVencimento = r.data_reembolso || r.data_despesa || hoje;
+      const isVencido = r.status !== "pago" && dataVencimento && dataVencimento < hoje;
+
+      items.push({
+        id: `reemb-${r.id}`,
+        tipo: "pagar",
+        descricao: `Reembolso: ${r.descricao}${r.pessoa_nome ? ` — ${r.pessoa_nome}` : ""}`,
+        valor: Number(r.valor || 0),
+        data_vencimento: dataVencimento,
+        data_pagamento: r.data_reembolso,
+        status: r.status === "pago" ? "pago" : isVencido ? "vencido" : "pendente",
+        categoria: "Reembolso",
+        origem: "Reembolso",
+        forma_pagamento: r.forma_pagamento,
+        origem_tipo: "reembolso",
+        original_id: r.id,
+        fornecedor: r.pessoa_nome || null,
+        observacoes: r.observacoes || null,
+      });
+    });
+
+    const pagamentosProfPorProcesso: Record<string, number> = {};
+    pagamentosProfissional.forEach((p: any) => {
+      pagamentosProfPorProcesso[p.processo_id] =
+        (pagamentosProfPorProcesso[p.processo_id] || 0) + Number(p.valor || 0);
+    });
+
+    processosIndividuais.forEach((proc: any) => {
+      if (proc.status === "cancelado") return;
+
+      const profissionalId = proc.profissional_id;
+      const profissional = profissionais.find((p: any) => p.id === profissionalId);
+      const profissionalNome = profissional?.nome || proc.responsavel || "Profissional";
+      const percentualProf = Number(proc.percentual_profissional ?? 50);
+      const totalRecebido = pagamentosProcesso
+        .filter((p: any) => p.processo_id === proc.id)
+        .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+      const parteProfissional = Math.round(((totalRecebido * percentualProf) / 100) * 100) / 100;
+      const totalPagoProfissional = pagamentosProfPorProcesso[proc.id] || 0;
+      const saldoProfissional = Math.round((parteProfissional - totalPagoProfissional) * 100) / 100;
+
+      if (saldoProfissional > 0.009) {
+        const vencimento = proc.data_fim || proc.data_inicio || hoje;
+        const isVencido = vencimento && vencimento < hoje;
+
+        items.push({
+          id: `prof-${proc.id}-${profissionalId || "sem-prof"}`,
+          tipo: "pagar",
+          descricao: `Pagamento profissional: ${profissionalNome} — Cliente: ${proc.cliente_nome}`,
+          valor: saldoProfissional,
+          data_vencimento: vencimento,
+          data_pagamento: null,
+          status: isVencido ? "vencido" : "pendente",
+          categoria: "Pagamento Profissional",
+          origem: "Profissional",
+          forma_pagamento: null,
+          origem_tipo: "profissional",
+          original_id: proc.id,
+          fornecedor: profissionalNome,
+          observacoes: `Total recebido do cliente: ${formatCurrency(totalRecebido)}. Parte do profissional (${percentualProf}%): ${formatCurrency(parteProfissional)}. Já pago: ${formatCurrency(totalPagoProfissional)}.`,
+        });
+      }
     });
 
     const pgtosProcMap: Record<string, number> = {};
@@ -364,6 +489,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
           categoria: "Processo Individual",
           origem: "Proc. Individual",
           forma_pagamento: null,
+          origem_tipo: "processo_individual",
+          original_id: proc.id,
         });
       }
     });
@@ -389,16 +516,26 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
           categoria: "Processo Empresarial",
           origem: "Proc. Empresarial",
           forma_pagamento: null,
+          origem_tipo: "processo_empresarial",
+          original_id: proc.id,
         });
       }
     });
+
+    const monthEnd = new Date(ano, mes + 1, 0).toISOString().split("T")[0];
 
     const monthFiltered = items.filter((item) => {
       const dateToCheck = item.status === "pago" ? item.data_pagamento : item.data_vencimento;
 
       if (!dateToCheck) return true;
 
-      return isInMonth(dateToCheck, mes, ano);
+      if (item.status === "pago") {
+        return isInMonth(dateToCheck, mes, ano);
+      }
+
+      // Tudo que ainda precisa ser pago/recebido continua aparecendo nos meses seguintes
+      // até ser marcado como pago. Assim nenhuma comissão, reembolso, profissional ou conta fica esquecida.
+      return dateToCheck <= monthEnd;
     });
 
     return monthFiltered.sort((a, b) => {
@@ -418,6 +555,9 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     pagamentosProcesso,
     processosEmpresariais,
     pagamentosProcessoEmp,
+    profissionais,
+    pagamentosProfissional,
+    reembolsos,
     hoje,
     showPagos,
     mes,
@@ -497,7 +637,132 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
         return;
       }
 
-      const { recorrencia_tipo, recorrencia_quantidade, ...payload } = formData;
+      const origemTipo = formData.origem_tipo || "manual";
+      const originalId = formData.original_id || String(formData.id || "").replace("manual-", "");
+
+      if (origemTipo && origemTipo !== "manual") {
+        const valor = parseFloat(formData.valor) || 0;
+
+        if (valor <= 0) {
+          throw new Error("Informe um valor maior que zero.");
+        }
+
+        if (origemTipo === "aluno") {
+          const { error } = await supabase
+            .from("pagamentos")
+            .update({
+              valor,
+              data_vencimento: formData.data_vencimento || null,
+              forma_pagamento: formData.forma_pagamento || null,
+              conta_bancaria_id: formData.conta_bancaria_id || null,
+            })
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+
+        if (origemTipo === "comissao") {
+          const { error } = await supabase
+            .from("comissoes")
+            .update({
+              valor_comissao: valor,
+              data_pagamento: formData.data_vencimento || null,
+              forma_pagamento: formData.forma_pagamento || null,
+              conta_bancaria_id: formData.conta_bancaria_id || null,
+              observacoes: formData.observacoes || null,
+            } as any)
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+
+        if (origemTipo === "reembolso") {
+          const { error } = await supabase
+            .from("reembolsos")
+            .update({
+              descricao: formData.descricao || null,
+              valor,
+              data_despesa: formData.data_vencimento || null,
+              pessoa_nome: formData.fornecedor || null,
+              forma_pagamento: formData.forma_pagamento || null,
+              conta_bancaria_id: formData.conta_bancaria_id || null,
+              observacoes: formData.observacoes || null,
+            } as any)
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+
+        if (origemTipo === "processo_individual") {
+          const totalPago = pagamentosProcesso
+            .filter((p: any) => p.processo_id === originalId)
+            .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+          const { error } = await supabase
+            .from("processos_individuais")
+            .update({
+              valor_total: totalPago + valor,
+              data_fim: formData.data_vencimento || null,
+            } as any)
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+
+        if (origemTipo === "processo_empresarial") {
+          const totalPago = pagamentosProcessoEmp
+            .filter((p: any) => p.processo_id === originalId)
+            .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+          const { error } = await supabase
+            .from("processos_empresariais")
+            .update({
+              valor_total: totalPago + valor,
+              data_fim: formData.data_vencimento || null,
+            } as any)
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+
+        if (origemTipo === "profissional") {
+          const processo = processosIndividuais.find((p: any) => p.id === originalId);
+          if (!processo) throw new Error("Processo do profissional não encontrado.");
+
+          const totalRecebido = pagamentosProcesso
+            .filter((p: any) => p.processo_id === originalId)
+            .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+          const totalPagoProfissional = pagamentosProfissional
+            .filter((p: any) => p.processo_id === originalId)
+            .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+          if (totalRecebido <= 0) {
+            throw new Error("Não existe valor recebido neste processo para recalcular a parte do profissional.");
+          }
+
+          const novoPercentualProfissional =
+            Math.round(((totalPagoProfissional + valor) / totalRecebido) * 10000) / 100;
+
+          const { error } = await supabase
+            .from("processos_individuais")
+            .update({
+              percentual_profissional: novoPercentualProfissional,
+              data_fim: formData.data_vencimento || null,
+            } as any)
+            .eq("id", originalId);
+
+          if (error) throw error;
+          return;
+        }
+      }
+
+      const { recorrencia_tipo, recorrencia_quantidade, origem_tipo, original_id, tipo, ...payload } = formData;
 
       if (payload.id) {
         const { id, ...updatePayload } = payload;
@@ -518,9 +783,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contas_a_pagar"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
+      invalidateTudoContas();
 
       setDialogOpen(false);
       setEditingConta(null);
@@ -537,72 +800,331 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("contas_a_pagar")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
+    mutationFn: async (item: any) => {
+      if (!item) throw new Error("Lançamento não encontrado.");
 
-      if (error) throw error;
+      const sourceType = item.origem_tipo || "manual";
+      const originalId =
+        item.original_id ||
+        String(item.id || "")
+          .replace("manual-", "")
+          .replace("pgto-", "")
+          .replace("com-", "")
+          .replace("reemb-", "")
+          .replace("prof-", "")
+          .replace("proc-ind-", "")
+          .replace("proc-emp-", "");
+
+      const deletedAt = new Date().toISOString();
+
+      if (sourceType === "manual") {
+        const { error } = await supabase
+          .from("contas_a_pagar")
+          .update({ deleted_at: deletedAt })
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "aluno") {
+        const { error } = await supabase
+          .from("pagamentos")
+          .update({ deleted_at: deletedAt })
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "comissao") {
+        const comissao = comissoes.find((c: any) => c.id === originalId);
+
+        if (comissao?.despesa_id) {
+          const { error: despesaError } = await supabase
+            .from("despesas")
+            .update({ deleted_at: deletedAt })
+            .eq("id", comissao.despesa_id);
+
+          if (despesaError) throw despesaError;
+        }
+
+        const { error } = await supabase
+          .from("comissoes")
+          .update({ deleted_at: deletedAt })
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "reembolso") {
+        const reembolso = reembolsos.find((r: any) => r.id === originalId);
+
+        if (reembolso?.despesa_id) {
+          const { error: despesaError } = await supabase
+            .from("despesas")
+            .update({ deleted_at: deletedAt })
+            .eq("id", reembolso.despesa_id);
+
+          if (despesaError) throw despesaError;
+        }
+
+        const { error } = await supabase
+          .from("reembolsos")
+          .update({ deleted_at: deletedAt })
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "processo_individual") {
+        const totalPago = pagamentosProcesso
+          .filter((p: any) => p.processo_id === originalId)
+          .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+        const { error } = await supabase
+          .from("processos_individuais")
+          .update({
+            valor_total: totalPago,
+            observacoes: `Ajustado pelo Contas a Pagar e Receber para remover pendência em ${new Date().toLocaleDateString("pt-BR")}.`,
+          } as any)
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "processo_empresarial") {
+        const totalPago = pagamentosProcessoEmp
+          .filter((p: any) => p.processo_id === originalId)
+          .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+        const { error } = await supabase
+          .from("processos_empresariais")
+          .update({
+            valor_total: totalPago,
+            observacoes: `Ajustado pelo Contas a Pagar e Receber para remover pendência em ${new Date().toLocaleDateString("pt-BR")}.`,
+          } as any)
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      if (sourceType === "profissional") {
+        const totalRecebido = pagamentosProcesso
+          .filter((p: any) => p.processo_id === originalId)
+          .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+        const totalPagoProfissional = pagamentosProfissional
+          .filter((p: any) => p.processo_id === originalId)
+          .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
+        const novoPercentual =
+          totalRecebido > 0
+            ? Math.round((totalPagoProfissional / totalRecebido) * 10000) / 100
+            : 0;
+
+        const { error } = await supabase
+          .from("processos_individuais")
+          .update({
+            percentual_profissional: novoPercentual,
+          } as any)
+          .eq("id", originalId);
+
+        if (error) throw error;
+        return;
+      }
+
+      throw new Error("Não foi possível identificar a origem deste lançamento.");
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contas_a_pagar"] });
-      toast({ title: "Conta removida" });
+      invalidateTudoContas();
+      toast({ title: "Lançamento removido/ajustado na origem." });
     },
+
+    onError: (err: any) =>
+      toast({
+        title: "Erro ao excluir lançamento",
+        description: err?.message || "Não foi possível excluir este lançamento.",
+        variant: "destructive",
+      }),
   });
+
+  const criarDespesaAutomatica = async ({
+    descricao,
+    valor,
+    data,
+    conta_bancaria_id,
+    forma_pagamento,
+    fornecedor,
+    observacoes,
+  }: {
+    descricao: string;
+    valor: number;
+    data: string;
+    conta_bancaria_id: string;
+    forma_pagamento: string;
+    fornecedor?: string | null;
+    observacoes?: string | null;
+  }) => {
+    const despesaId = crypto.randomUUID();
+
+    const { error } = await supabase.from("despesas").insert({
+      id: despesaId,
+      descricao,
+      valor,
+      data,
+      conta_bancaria_id,
+      forma_pagamento: forma_pagamento || null,
+      fornecedor: fornecedor || null,
+      observacoes: observacoes || null,
+      recorrente: false,
+    });
+
+    if (error) throw error;
+
+    return despesaId;
+  };
+
+
+  const getContaActionLabel = (conta: any) => {
+    return conta?.tipo === "receber" ? "recebimento" : "pagamento";
+  };
+
+  const invalidateTudoContas = () => {
+    queryClient.invalidateQueries({ queryKey: ["contas_a_pagar"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+    queryClient.invalidateQueries({ queryKey: ["comissoes"] });
+    queryClient.invalidateQueries({ queryKey: ["comissoes-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["reembolsos"] });
+    queryClient.invalidateQueries({ queryKey: ["reembolsos-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["processos-ind-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["pgtos-processo-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["processos-emp-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["pgtos-processo-emp-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos_profissional"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos-profissional-contas"] });
+    queryClient.invalidateQueries({ queryKey: ["despesas"] });
+    queryClient.invalidateQueries({ queryKey: ["despesas_por_conta_detail"] });
+    queryClient.invalidateQueries({ queryKey: ["contas_bancarias"] });
+    queryClient.invalidateQueries({ queryKey: ["contas_bancarias_all"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+    queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
+  };
 
   const markPaidMutation = useMutation({
     mutationFn: async ({
-      id,
+      conta,
       data_pagamento,
       forma_pagamento,
       parcelas,
       conta_bancaria_id,
+      valor_pago,
     }: {
-      id: string;
+      conta: any;
       data_pagamento: string;
       forma_pagamento: string;
       parcelas: number;
       conta_bancaria_id: string;
+      valor_pago: number;
     }) => {
-      const { data: conta, error: contaError } = await supabase
-        .from("contas_a_pagar")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (contaError) throw contaError;
-
       if (!conta) throw new Error("Conta não encontrada.");
-      if (conta.status === "pago") throw new Error("Essa conta já está marcada como paga.");
       if (!data_pagamento) throw new Error("Informe a data de pagamento.");
       if (!forma_pagamento) throw new Error("Informe a forma de pagamento.");
       if (!conta_bancaria_id) throw new Error("Informe a conta bancária usada para o pagamento.");
 
-      const quantidadeParcelas = Math.max(1, parcelas || 1);
-      const valorTotal = Number(conta.valor) || 0;
-      const valorParcela = Math.round((valorTotal / quantidadeParcelas) * 100) / 100;
+      const sourceType = conta.origem_tipo || "manual";
+      const originalId = conta.original_id || String(conta.id || "").replace("manual-", "");
+      const valorInformado = Number(valor_pago) > 0 ? Number(valor_pago) : Number(conta.valor || 0);
 
-      const despesasParaInserir = Array.from({ length: quantidadeParcelas }).map(
-        (_, index) => {
+      if (valorInformado <= 0) {
+        throw new Error("Informe um valor de pagamento maior que zero.");
+      }
+
+
+      if (sourceType === "aluno") {
+        const { error } = await supabase
+          .from("pagamentos")
+          .update({
+            status: "pago",
+            data_pagamento,
+            valor_pago: valorInformado,
+            forma_pagamento,
+            conta_bancaria_id,
+          })
+          .eq("id", originalId);
+
+        if (error) throw error;
+
+        return;
+      }
+
+      if (sourceType === "processo_individual") {
+        const { error } = await supabase.from("pagamentos_processo").insert({
+          processo_id: originalId,
+          valor: valorInformado,
+          data: data_pagamento,
+          forma_pagamento,
+          conta_bancaria_id,
+          observacoes: `Recebimento lançado pelo Contas a Pagar e Receber.`,
+        } as any);
+
+        if (error) throw error;
+
+        return;
+      }
+
+      if (sourceType === "processo_empresarial") {
+        const { error } = await supabase.from("pagamentos_processo_empresarial").insert({
+          processo_id: originalId,
+          valor: valorInformado,
+          data: data_pagamento,
+          forma_pagamento,
+          conta_bancaria_id,
+          observacoes: `Recebimento lançado pelo Contas a Pagar e Receber.`,
+        } as any);
+
+        if (error) throw error;
+
+        return;
+      }
+
+      if (sourceType === "manual") {
+        const { data: contaManual, error: contaError } = await supabase
+          .from("contas_a_pagar")
+          .select("*")
+          .eq("id", originalId)
+          .single();
+
+        if (contaError) throw contaError;
+        if (!contaManual) throw new Error("Conta manual não encontrada.");
+        if (contaManual.status === "pago") throw new Error("Essa conta já está marcada como paga.");
+
+        const quantidadeParcelas = Math.max(1, parcelas || 1);
+        const valorParcela = Math.round((valorInformado / quantidadeParcelas) * 100) / 100;
+
+        const despesasParaInserir = Array.from({ length: quantidadeParcelas }).map((_, index) => {
           const dataParcela = new Date(data_pagamento + "T12:00:00");
           dataParcela.setMonth(dataParcela.getMonth() + index);
-
           const dataDespesa = dataParcela.toISOString().split("T")[0];
 
           return {
             descricao:
               quantidadeParcelas > 1
-                ? `Conta paga: ${conta.descricao} (${index + 1}/${quantidadeParcelas})`
-                : `Conta paga: ${conta.descricao}`,
+                ? `Conta paga: ${contaManual.descricao} (${index + 1}/${quantidadeParcelas})`
+                : `Conta paga: ${contaManual.descricao}`,
             valor: valorParcela,
             data: dataDespesa,
             conta_bancaria_id,
-            fornecedor: conta.fornecedor || null,
+            fornecedor: contaManual.fornecedor || null,
             forma_pagamento,
             observacoes: [
-              conta.observacoes || "",
+              contaManual.observacoes || "",
               "Lançado automaticamente a partir de Contas a Pagar.",
               `Pagamento em ${quantidadeParcelas}x.`,
               `Data do pagamento: ${data_pagamento}.`,
@@ -611,54 +1133,159 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
               .join("\r\n"),
             recorrente: false,
           };
+        });
+
+        const { error: despesaError } = await supabase.from("despesas").insert(despesasParaInserir);
+        if (despesaError) throw despesaError;
+
+        const { error: updateError } = await supabase
+          .from("contas_a_pagar")
+          .update({
+            status: "pago",
+            data_pagamento,
+            forma_pagamento,
+            conta_bancaria_id,
+            observacoes: [
+              contaManual.observacoes || "",
+              `Pago em ${quantidadeParcelas}x.`,
+              `Forma de pagamento: ${forma_pagamento}.`,
+            ]
+              .filter(Boolean)
+              .join("\r\n"),
+          })
+          .eq("id", originalId);
+
+        if (updateError) throw updateError;
+
+        return;
+      }
+
+      if (sourceType === "comissao") {
+        const comissao = comissoes.find((c: any) => c.id === originalId);
+        if (!comissao) throw new Error("Comissão não encontrada.");
+
+        if (comissao.status === "pago" && comissao.despesa_id) {
+          await supabase
+            .from("despesas")
+            .update({ deleted_at: new Date().toISOString() })
+            .eq("id", comissao.despesa_id);
         }
-      );
 
-      const { error: despesaError } = await supabase
-        .from("despesas")
-        .insert(despesasParaInserir);
+        const alunoNome = comissao.alunos?.nome || "Aluno";
+        const comercialNome = comissao.comerciais?.nome || "Comercial";
 
-      if (despesaError) throw despesaError;
+        const despesaId = await criarDespesaAutomatica({
+          descricao: `Comissão: ${comercialNome} — Matrícula ${alunoNome}`,
+          valor: valorInformado,
+          data: data_pagamento,
+          conta_bancaria_id,
+          forma_pagamento,
+          fornecedor: comercialNome,
+          observacoes: `Comissão paga pelo Contas a Pagar. ${conta.observacoes || ""}`.trim(),
+        });
 
-      const { error: updateError } = await supabase
-        .from("contas_a_pagar")
-        .update({
-          status: "pago",
-          data_pagamento,
+        const { error } = await supabase
+          .from("comissoes")
+          .update({
+            valor_pago: valorInformado,
+            valor_comissao: valorInformado,
+            status: "pago",
+            data_pagamento,
+            forma_pagamento,
+            conta_bancaria_id,
+            despesa_id: despesaId,
+          })
+          .eq("id", originalId);
+
+        if (error) throw error;
+
+        return;
+      }
+
+      if (sourceType === "reembolso") {
+        const reembolso = reembolsos.find((r: any) => r.id === originalId);
+        if (!reembolso) throw new Error("Reembolso não encontrado.");
+
+        const despesaId = await criarDespesaAutomatica({
+          descricao: `Reembolso: ${reembolso.descricao} (${reembolso.pessoa_nome})`,
+          valor: valorInformado,
+          data: data_pagamento,
+          conta_bancaria_id,
+          forma_pagamento,
+          fornecedor: reembolso.pessoa_nome || null,
+          observacoes: `Reembolso pago a ${reembolso.pessoa_nome}`,
+        });
+
+        const { error } = await supabase
+          .from("reembolsos")
+          .update({
+            status: "pago",
+            data_reembolso: data_pagamento,
+            forma_pagamento,
+            conta_bancaria_id,
+            despesa_id: despesaId,
+          })
+          .eq("id", originalId);
+
+        if (error) throw error;
+
+        return;
+      }
+
+      if (sourceType === "profissional") {
+        const processo = processosIndividuais.find((p: any) => p.id === originalId);
+        if (!processo) throw new Error("Processo do profissional não encontrado.");
+
+        const profissionalId = processo.profissional_id;
+        const profissional = profissionais.find((p: any) => p.id === profissionalId);
+        const profissionalNome = profissional?.nome || processo.responsavel || "Profissional";
+
+        if (!profissionalId) {
+          throw new Error("Esse processo não tem profissional vinculado.");
+        }
+
+        const despesaId = await criarDespesaAutomatica({
+          descricao: `Pagamento profissional: ${profissionalNome} — Cliente: ${processo.cliente_nome}`,
+          valor: valorInformado,
+          data: data_pagamento,
+          conta_bancaria_id,
+          forma_pagamento,
+          fornecedor: profissionalNome,
+          observacoes: `Pagamento lançado pelo Contas a Pagar. ${conta.observacoes || ""}`.trim(),
+        });
+
+        const { error } = await supabase.from("pagamentos_profissional").insert({
+          profissional_id: profissionalId,
+          processo_id: processo.id,
+          valor: valorInformado,
+          data: data_pagamento,
           forma_pagamento,
           conta_bancaria_id,
-          observacoes: [
-            conta.observacoes || "",
-            `Pago em ${quantidadeParcelas}x.`,
-            `Forma de pagamento: ${forma_pagamento}.`,
-          ]
-            .filter(Boolean)
-            .join("\r\n"),
-        })
-        .eq("id", id);
+          observacoes: `Pagamento lançado pelo Contas a Pagar.`,
+          despesa_id: despesaId,
+        } as any);
 
-      if (updateError) throw updateError;
+        if (error) throw error;
+
+        return;
+      }
+
+      throw new Error("Este tipo de conta ainda não pode ser pago por esta tela.");
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contas_a_pagar"] });
-      queryClient.invalidateQueries({ queryKey: ["despesas"] });
-      queryClient.invalidateQueries({ queryKey: ["despesas_por_conta_detail"] });
-      queryClient.invalidateQueries({ queryKey: ["contas_bancarias"] });
-      queryClient.invalidateQueries({ queryKey: ["contas_bancarias_all"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["relatorios-data"] });
+      invalidateTudoContas();
 
       setPayDialogOpen(false);
       setPayingConta(null);
 
-      toast({ title: "Conta paga e lançada no banco!" });
+      toast({ title: "Lançamento confirmado e enviado ao banco!" });
     },
 
     onError: (err: any) =>
       toast({
-        title: "Erro ao pagar conta",
-        description: err?.message || "Não foi possível pagar a conta.",
+        title: "Erro ao confirmar lançamento",
+        description: err?.message || "Não foi possível confirmar o lançamento.",
         variant: "destructive",
       }),
   });
@@ -676,6 +1303,9 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     recorrente: false,
     recorrencia_tipo: "mensal",
     recorrencia_quantidade: "1",
+    origem_tipo: "",
+    original_id: "",
+    tipo: "pagar",
   });
 
   const openNew = () => {
@@ -692,6 +1322,9 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       recorrente: false,
       recorrencia_tipo: "mensal",
       recorrencia_quantidade: "1",
+      origem_tipo: "",
+      original_id: "",
+      tipo: "pagar",
     });
 
     setEditingConta(null);
@@ -699,19 +1332,33 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   };
 
   const openEdit = (conta: any) => {
+    const origemTipo = conta.origem_tipo || "manual";
+    const originalId =
+      conta.original_id ||
+      String(conta.id || "")
+        .replace("manual-", "")
+        .replace("pgto-", "")
+        .replace("com-", "")
+        .replace("reemb-", "")
+        .replace("proc-ind-", "")
+        .replace("proc-emp-", "");
+
     setForm({
-      id: conta.id,
-      descricao: conta.descricao,
-      valor: String(conta.valor),
-      data_vencimento: conta.data_vencimento || "",
+      id: conta.id || "",
+      descricao: conta.descricao || "",
+      valor: String(conta.valor ?? ""),
+      data_vencimento: conta.data_vencimento || conta.data_fim || conta.data_despesa || "",
       categoria: conta.categoria || "",
       fornecedor: conta.fornecedor || "",
       forma_pagamento: conta.forma_pagamento || "",
       conta_bancaria_id: conta.conta_bancaria_id || "",
       observacoes: conta.observacoes || "",
-      recorrente: conta.recorrente || false,
+      recorrente: false,
       recorrencia_tipo: "mensal",
       recorrencia_quantidade: "1",
+      origem_tipo: origemTipo,
+      original_id: originalId,
+      tipo: conta.tipo || "pagar",
     });
 
     setEditingConta(conta);
@@ -722,6 +1369,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     setPayingConta(conta);
 
     setPayForm({
+      valor: String(conta.valor || ""),
       data_pagamento: hoje,
       forma_pagamento: conta.forma_pagamento || "",
       parcelas: "1",
@@ -771,6 +1419,9 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     if (form.id) {
       saveMutation.mutate({
         id: form.id,
+        origem_tipo: form.origem_tipo,
+        original_id: form.original_id,
+        tipo: form.tipo,
         ...baseConta,
         data_vencimento: form.data_vencimento,
         observacoes: form.observacoes || null,
@@ -1219,7 +1870,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                   <TableHead>Urgência</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="w-[90px]">Ações</TableHead>
+                  <TableHead className="w-[120px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1308,57 +1959,54 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                       </TableCell>
 
                       <TableCell>
-                        {item.id.startsWith("manual-") && item.status !== "pago" && (
-                          <div className="flex gap-0.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Pagar conta"
-                              onClick={() => {
-                                const original = contasManuais.find(
-                                  (m: any) => m.id === item.id.replace("manual-", "")
-                                );
+                        <div className="flex gap-0.5">
+                          {item.status !== "pago" &&
+                            [
+                              "manual",
+                              "comissao",
+                              "reembolso",
+                              "profissional",
+                              "aluno",
+                              "processo_individual",
+                              "processo_empresarial",
+                            ].includes(item.origem_tipo || "") && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title={item.tipo === "receber" ? "Receber" : "Pagar"}
+                                onClick={() => openPayDialog(item)}
+                              >
+                                <Check className="h-3.5 w-3.5 text-chart-2" />
+                              </Button>
+                            )}
 
-                                if (original) openPayDialog(original);
-                              }}
-                            >
-                              <Check className="h-3.5 w-3.5 text-chart-2" />
-                            </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Editar"
+                            onClick={() => openEdit(item)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Editar"
-                              onClick={() => {
-                                const original = contasManuais.find(
-                                  (m: any) => m.id === item.id.replace("manual-", "")
-                                );
-
-                                if (original) openEdit(original);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Excluir"
-                              onClick={() =>
-                                setConfirmAction({
-                                  type: "delete",
-                                  id: item.id.replace("manual-", ""),
-                                  descricao: item.descricao,
-                                })
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          </div>
-                        )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Excluir / remover da origem"
+                            onClick={() =>
+                              setConfirmAction({
+                                type: "delete",
+                                item,
+                                descricao: item.descricao,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -1383,7 +2031,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
         >
           <DialogHeader>
             <DialogTitle>
-              {editingConta ? "Editar Conta a Pagar" : "Nova Conta a Pagar"}
+              {editingConta ? "Editar lançamento" : "Nova Conta a Pagar"}
             </DialogTitle>
           </DialogHeader>
 
@@ -1555,7 +2203,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Pagar Conta</DialogTitle>
+            <DialogTitle>{payingConta?.tipo === "receber" ? "Confirmar recebimento" : "Pagar conta"}</DialogTitle>
           </DialogHeader>
 
           {payingConta && (
@@ -1597,9 +2245,25 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label>Data de pagamento *</Label>
+                  <Label>{payingConta?.tipo === "receber" ? "Valor recebido *" : "Valor pago *"}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={payForm.valor}
+                    onChange={(e) => setPayForm((f) => ({ ...f, valor: e.target.value }))}
+                  />
+                  {payingConta?.origem_tipo === "profissional" && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Pode lançar valor parcial. O saldo restante continuará aparecendo até quitar.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label>{payingConta?.tipo === "receber" ? "Data do recebimento *" : "Data de pagamento *"}</Label>
                   <Input
                     type="date"
                     value={payForm.data_pagamento}
@@ -1610,7 +2274,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                 </div>
 
                 <div>
-                  <Label>Quantas vezes pagou? *</Label>
+                  <Label>{payingConta?.tipo === "receber" ? "Parcelas" : "Quantas vezes pagou? *"}</Label>
                   <Input
                     type="number"
                     min="1"
@@ -1618,13 +2282,14 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                     onChange={(e) =>
                       setPayForm((f) => ({ ...f, parcelas: e.target.value }))
                     }
+                    disabled={payingConta?.tipo === "receber" || payingConta?.origem_tipo !== "manual"}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Como pagou? *</Label>
+                  <Label>{payingConta?.tipo === "receber" ? "Como recebeu? *" : "Como pagou? *"}</Label>
                   <Select
                     value={payForm.forma_pagamento}
                     onValueChange={(value) =>
@@ -1652,7 +2317,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                 </div>
 
                 <div>
-                  <Label>Qual conta pagou? *</Label>
+                  <Label>{payingConta?.tipo === "receber" ? "Em qual conta recebeu? *" : "Qual conta pagou? *"}</Label>
                   <Select
                     value={payForm.conta_bancaria_id}
                     onValueChange={(value) =>
@@ -1679,18 +2344,21 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                   if (!payingConta) return;
 
                   markPaidMutation.mutate({
-                    id: payingConta.id,
+                    conta: payingConta,
                     data_pagamento: payForm.data_pagamento,
                     forma_pagamento: payForm.forma_pagamento,
                     parcelas: parseInt(payForm.parcelas) || 1,
                     conta_bancaria_id: payForm.conta_bancaria_id,
+                    valor_pago: Number(payForm.valor) || Number(payingConta.valor),
                   });
                 }}
                 disabled={markPaidMutation.isPending}
               >
                 {markPaidMutation.isPending
-                  ? "Registrando pagamento..."
-                  : "Confirmar pagamento"}
+                  ? "Registrando..."
+                  : payingConta?.tipo === "receber"
+                    ? "Confirmar recebimento"
+                    : "Confirmar pagamento"}
               </Button>
             </div>
           )}
@@ -1700,11 +2368,11 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir conta</AlertDialogTitle>
+            <AlertDialogTitle>Excluir lançamento</AlertDialogTitle>
 
             <AlertDialogDescription>
-              Tem certeza que deseja excluir "{confirmAction?.descricao}"? Esta ação não pode
-              ser desfeita.
+              Tem certeza que deseja excluir "{confirmAction?.descricao}"?
+              Essa ação também atualiza a origem do lançamento para manter o financeiro sincronizado.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -1715,7 +2383,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (confirmAction) {
-                  deleteMutation.mutate(confirmAction.id);
+                  deleteMutation.mutate(confirmAction.item);
                 }
 
                 setConfirmAction(null);
