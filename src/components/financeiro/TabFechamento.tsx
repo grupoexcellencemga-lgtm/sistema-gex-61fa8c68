@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, Building2, Receipt, Pencil, Trash2, Download, X, Check } from "lucide-react";
+import { Loader2, Plus, Building2, Receipt, Pencil, Trash2, Download, X, Check, History, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 
@@ -21,6 +21,10 @@ export const TabFechamento = () => {
   const [editingConta, setEditingConta] = useState<any>(null);
   const [expandedConta, setExpandedConta] = useState<string | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [extratosOpen, setExtratosOpen] = useState(false);
+  const [extratoContaId, setExtratoContaId] = useState("");
+  const [extratoMes, setExtratoMes] = useState(String(getBrazilNow().getMonth()));
+  const [extratoAno, setExtratoAno] = useState(String(getBrazilNow().getFullYear()));
   const [fechamentoLoading, setFechamentoLoading] = useState<string | null>(null);
 
   const { data: contas = [], isLoading } = useQuery({
@@ -397,6 +401,270 @@ export const TabFechamento = () => {
     return txs;
   };
 
+
+  const buildTransactionsPeriodo = (contaId: string, mes: number, ano: number) => {
+    const txs: { date: string; tipo: "entrada" | "saida"; descricao: string; valor: number; forma: string }[] = [];
+
+    const isInPeriodo = (dateStr: string | null | undefined) => {
+      if (!dateStr) return false;
+
+      const [yearStr, monthStr] = dateStr.substring(0, 10).split("-");
+      const year = Number(yearStr);
+      const month = Number(monthStr) - 1;
+
+      return year === ano && month === mes;
+    };
+
+    pagamentosPorConta
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data_pagamento))
+      .forEach((p: any) => {
+        txs.push({
+          date: p.data_pagamento || "",
+          tipo: "entrada",
+          descricao: `Pgto Aluno: ${(p as any).alunos?.nome || "—"}${(p as any).produtos?.nome ? ` — ${(p as any).produtos.nome}` : ""}`,
+          valor: Number(p.valor),
+          forma: p.forma_pagamento || "—",
+        });
+      });
+
+    receitasAvulsasPorConta
+      .filter((r: any) => r.conta_bancaria_id === contaId && isInPeriodo(r.data))
+      .forEach((r: any) => {
+        txs.push({
+          date: r.data,
+          tipo: "entrada",
+          descricao: `Receita Avulsa: ${r.descricao}${r.categoria ? ` (${r.categoria})` : ""}`,
+          valor: Number(r.valor),
+          forma: r.forma_pagamento || "—",
+        });
+      });
+
+    pagamentosProcessoPorConta
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .forEach((p: any) => {
+        const proc = processosPorConta.find((pr: any) => pr.id === p.processo_id);
+        txs.push({
+          date: p.data,
+          tipo: "entrada",
+          descricao: `Processo Individual: ${proc?.cliente_nome || "—"}`,
+          valor: Number(p.valor),
+          forma: p.forma_pagamento || "—",
+        });
+      });
+
+    pagamentosEmpresariaisPorConta
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .forEach((p: any) => {
+        const proc = processosEmpresariaisPorConta.find((pr: any) => pr.id === p.processo_id);
+        txs.push({
+          date: p.data,
+          tipo: "entrada",
+          descricao: `Processo Empresarial: ${proc?.empresa_nome || "—"}`,
+          valor: Number(p.valor),
+          forma: p.forma_pagamento || "—",
+        });
+      });
+
+    despesasPorConta
+      .filter((d: any) => d.conta_bancaria_id === contaId && isInPeriodo(d.data))
+      .forEach((d: any) => {
+        txs.push({
+          date: d.data,
+          tipo: "saida",
+          descricao: `Despesa: ${d.descricao}${(d as any).categorias_despesas?.nome ? ` (${(d as any).categorias_despesas.nome})` : ""}`,
+          valor: Number(d.valor),
+          forma: d.forma_pagamento || "—",
+        });
+      });
+
+    pagamentosProfissionalPorConta
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data))
+      .forEach((p: any) => {
+        txs.push({
+          date: p.data,
+          tipo: "saida",
+          descricao: `Pgto Profissional: ${(p as any).profissionais?.nome || "—"}`,
+          valor: Number(p.valor),
+          forma: p.forma_pagamento || "—",
+        });
+      });
+
+    comissoesPorConta
+      .filter((c: any) => c.conta_bancaria_id === contaId && isInPeriodo(c.data_pagamento))
+      .forEach((c: any) => {
+        txs.push({
+          date: c.data_pagamento || "",
+          tipo: "saida",
+          descricao: `Comissão: ${(c as any).comerciais?.nome || "—"} — Aluno: ${(c as any).alunos?.nome || "—"}`,
+          valor: Number(c.valor_pago),
+          forma: c.forma_pagamento || "—",
+        });
+      });
+
+    transferencias
+      .filter((t: any) => t.conta_destino_id === contaId && isInPeriodo(t.data))
+      .forEach((t: any) => {
+        const contaOrigem = contas.find((c: any) => c.id === t.conta_origem_id);
+        txs.push({
+          date: t.data,
+          tipo: "entrada",
+          descricao: `Transferência de: ${contaOrigem?.nome || "Outra conta"}${t.descricao ? ` — ${t.descricao}` : ""}`,
+          valor: Number(t.valor),
+          forma: "Transferência",
+        });
+      });
+
+    transferencias
+      .filter((t: any) => t.conta_origem_id === contaId && isInPeriodo(t.data))
+      .forEach((t: any) => {
+        const contaDestino = contas.find((c: any) => c.id === t.conta_destino_id);
+        txs.push({
+          date: t.data,
+          tipo: "saida",
+          descricao: `Transferência para: ${contaDestino?.nome || "Outra conta"}${t.descricao ? ` — ${t.descricao}` : ""}`,
+          valor: Number(t.valor),
+          forma: "Transferência",
+        });
+      });
+
+    txs.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    return txs;
+  };
+
+  const getSaldoInicialPeriodo = (contaId: string, mes: number, ano: number) => {
+    const conta = contas.find((c: any) => c.id === contaId);
+    const fechamentosConta = fechamentos
+      .filter((f: any) => f.conta_bancaria_id === contaId)
+      .sort((a: any, b: any) => (b.ano - a.ano) || (b.mes - a.mes));
+
+    const fechamentoAnterior = fechamentosConta.find((f: any) => {
+      if (f.ano < ano) return true;
+      if (f.ano === ano && f.mes < mes) return true;
+      return false;
+    });
+
+    return fechamentoAnterior ? Number(fechamentoAnterior.saldo_fechamento) : Number(conta?.saldo_inicial || 0);
+  };
+
+  const getFechamentoPeriodo = (contaId: string, mes: number, ano: number) => {
+    return fechamentos.find((f: any) => f.conta_bancaria_id === contaId && f.mes === mes && f.ano === ano) || null;
+  };
+
+  const getExtratoSelecionado = () => {
+    const conta = contas.find((c: any) => c.id === extratoContaId) || null;
+    const mes = Number(extratoMes);
+    const ano = Number(extratoAno);
+
+    if (!conta || Number.isNaN(mes) || Number.isNaN(ano)) {
+      return null;
+    }
+
+    const txs = buildTransactionsPeriodo(conta.id, mes, ano);
+    const totalEntradas = txs
+      .filter((tx) => tx.tipo === "entrada")
+      .reduce((s, tx) => s + tx.valor, 0);
+    const totalSaidas = txs
+      .filter((tx) => tx.tipo === "saida")
+      .reduce((s, tx) => s + tx.valor, 0);
+    const saldoInicial = getSaldoInicialPeriodo(conta.id, mes, ano);
+    const saldoFinalCalculado = saldoInicial + totalEntradas - totalSaidas;
+    const fechamentoMes = getFechamentoPeriodo(conta.id, mes, ano);
+    const saldoFinal = fechamentoMes ? Number(fechamentoMes.saldo_fechamento) : saldoFinalCalculado;
+
+    return {
+      conta,
+      mes,
+      ano,
+      txs,
+      totalEntradas,
+      totalSaidas,
+      saldoInicial,
+      saldoFinalCalculado,
+      saldoFinal,
+      fechamentoMes,
+    };
+  };
+
+  const exportarExtratoPdf = () => {
+    const extrato = getExtratoSelecionado();
+    if (!extrato) return;
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`Extrato anterior — ${extrato.conta.nome}`, 14, 20);
+
+    doc.setFontSize(10);
+    doc.text(`${extrato.conta.banco}${extrato.conta.agencia ? ` • Ag ${extrato.conta.agencia}` : ""}${extrato.conta.numero_conta ? ` • CC ${extrato.conta.numero_conta}` : ""}`, 14, 28);
+    doc.text(`Período: ${monthNamesShort[extrato.mes]}/${extrato.ano}`, 14, 34);
+    doc.text(`Saldo inicial: ${formatCurrency(extrato.saldoInicial)} | Entradas: ${formatCurrency(extrato.totalEntradas)} | Saídas: ${formatCurrency(extrato.totalSaidas)} | Saldo final: ${formatCurrency(extrato.saldoFinal)}`, 14, 40);
+
+    if (extrato.fechamentoMes) {
+      doc.text("Este mês possui fechamento mensal registrado.", 14, 46);
+    }
+
+    autoTable(doc, {
+      startY: extrato.fechamentoMes ? 52 : 46,
+      head: [["Data", "Tipo", "Descrição", "Forma Pgto", "Valor"]],
+      body: extrato.txs.map((tx) => [
+        formatDate(tx.date),
+        tx.tipo === "entrada" ? "Entrada" : "Saída",
+        tx.descricao,
+        tx.forma,
+        `${tx.tipo === "entrada" ? "+" : "-"}${formatCurrency(tx.valor)}`,
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    doc.save(`extrato-anterior-${extrato.conta.nome.replace(/\s+/g, "-").toLowerCase()}-${monthNamesShort[extrato.mes]}-${extrato.ano}.pdf`);
+  };
+
+  const exportarExtratoExcel = () => {
+    const extrato = getExtratoSelecionado();
+    if (!extrato) return;
+
+    const escapeCsv = (value: any) => {
+      const str = String(value ?? "");
+      if (str.includes(";") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const linhas = [
+      ["sep=;"],
+      ["Conta", extrato.conta.nome],
+      ["Banco", extrato.conta.banco || "—"],
+      ["Período", `${monthNamesShort[extrato.mes]}/${extrato.ano}`],
+      ["Saldo inicial", extrato.saldoInicial],
+      ["Total entradas", extrato.totalEntradas],
+      ["Total saídas", extrato.totalSaidas],
+      ["Saldo final", extrato.saldoFinal],
+      [],
+      ["Data", "Tipo", "Descrição", "Forma Pgto", "Valor"],
+      ...extrato.txs.map((tx) => [
+        formatDate(tx.date),
+        tx.tipo === "entrada" ? "Entrada" : "Saída",
+        tx.descricao,
+        tx.forma,
+        `${tx.tipo === "entrada" ? "+" : "-"}${tx.valor.toFixed(2).replace(".", ",")}`,
+      ]),
+    ];
+
+    const csv = linhas
+      .map((linha) => linha.map(escapeCsv).join(";"))
+      .join("\r\n");
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `extrato-anterior-${extrato.conta.nome.replace(/\s+/g, "-").toLowerCase()}-${monthNamesShort[extrato.mes]}-${extrato.ano}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+
   const saveConta = useMutation({
     mutationFn: async (form: any) => {
       const payload = {
@@ -511,6 +779,9 @@ export const TabFechamento = () => {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">Contas Bancárias</CardTitle>
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setExtratosOpen(true)}>
+                <History className="h-4 w-4 mr-1" /> Extratos anteriores
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
                 <Receipt className="h-4 w-4 mr-1" /> Transferência
               </Button>
@@ -739,6 +1010,187 @@ export const TabFechamento = () => {
           )}
         </CardContent>
       </Card>
+
+
+      {/* Dialog Extratos Anteriores */}
+      <Dialog open={extratosOpen} onOpenChange={setExtratosOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Extratos anteriores</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 rounded-lg border p-4 bg-muted/20">
+              <div className="md:col-span-2">
+                <Label>Conta bancária</Label>
+                <select
+                  value={extratoContaId}
+                  onChange={(e) => setExtratoContaId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Selecione uma conta...</option>
+                  {contas.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome} ({c.banco})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label>Mês</Label>
+                <select
+                  value={extratoMes}
+                  onChange={(e) => setExtratoMes(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {monthNamesShort.map((mes, index) => (
+                    <option key={index} value={String(index)}>
+                      {mes}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label>Ano</Label>
+                <Input
+                  type="number"
+                  value={extratoAno}
+                  onChange={(e) => setExtratoAno(e.target.value)}
+                  placeholder="2026"
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const extrato = getExtratoSelecionado();
+
+              if (!extrato) {
+                return (
+                  <div className="text-center text-sm text-muted-foreground py-10">
+                    Selecione uma conta, mês e ano para visualizar o extrato anterior.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-muted-foreground">Saldo inicial</p>
+                        <p className="text-lg font-semibold">{formatCurrency(extrato.saldoInicial)}</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-muted-foreground">Entradas</p>
+                        <p className="text-lg font-semibold text-emerald-600">{formatCurrency(extrato.totalEntradas)}</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-muted-foreground">Saídas</p>
+                        <p className="text-lg font-semibold text-destructive">{formatCurrency(extrato.totalSaidas)}</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-muted-foreground">Saldo final</p>
+                        <p className={`text-lg font-semibold ${extrato.saldoFinal >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          {formatCurrency(extrato.saldoFinal)}
+                        </p>
+                        {extrato.fechamentoMes && (
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            Fechamento registrado
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {extrato.conta.nome} — {monthNamesShort[extrato.mes]}/{extrato.ano}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {extrato.txs.length} movimentação(ões) encontradas.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={exportarExtratoExcel}
+                        disabled={extrato.txs.length === 0}
+                      >
+                        <FileSpreadsheet className="h-4 w-4 mr-1" />
+                        Excel
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={exportarExtratoPdf}
+                        disabled={extrato.txs.length === 0}
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
+
+                  {extrato.txs.length === 0 ? (
+                    <div className="text-center text-sm text-muted-foreground py-10 border rounded-lg">
+                      Nenhuma movimentação encontrada nesse período.
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-auto max-h-[420px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Descrição</TableHead>
+                            <TableHead>Forma Pgto</TableHead>
+                            <TableHead className="text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {extrato.txs.map((tx, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-xs whitespace-nowrap">{formatDate(tx.date)}</TableCell>
+                              <TableCell>
+                                <Badge variant={tx.tipo === "entrada" ? "default" : "destructive"} className="text-xs">
+                                  {tx.tipo === "entrada" ? "Entrada" : "Saída"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-xs max-w-[360px]">{tx.descricao}</TableCell>
+                              <TableCell className="text-xs">{tx.forma}</TableCell>
+                              <TableCell className={`text-xs text-right font-medium ${tx.tipo === "entrada" ? "text-emerald-600" : "text-destructive"}`}>
+                                {tx.tipo === "entrada" ? "+" : "-"}{formatCurrency(tx.valor)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Dialog Transferência */}
       <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
