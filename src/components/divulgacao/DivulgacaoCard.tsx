@@ -1,5 +1,7 @@
-import { Trash2, Edit, Video, ImageIcon, Calendar, EyeOff, Eye } from "lucide-react";
+import type { MouseEvent } from "react";
+import { Trash2, Edit, Video, ImageIcon, Calendar, EyeOff, Eye, Copy, Link2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export interface Divulgacao {
   id: string;
@@ -12,6 +14,8 @@ export interface Divulgacao {
   arquivo_url?: string | null;
   arquivo_tipo?: string | null;
   arquivo_nome?: string | null;
+  link_url?: string | null;
+  link_urls?: { titulo?: string; url: string }[] | string | null;
   responsavel_iniciais?: string | null;
   data?: string | null;
   ativo?: boolean;
@@ -24,6 +28,40 @@ const CATEGORIA_COLORS: Record<string, string> = {
   Evento: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   Treinamento: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
+
+type CardLink = { titulo?: string; url: string };
+
+function normalizeLinks(item: Divulgacao): CardLink[] {
+  const raw = item.link_urls;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((link: any) => ({
+        titulo: String(link?.titulo || "").trim(),
+        url: String(link?.url || "").trim(),
+      }))
+      .filter((link) => link.url);
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((link: any) => ({
+            titulo: String(link?.titulo || "").trim(),
+            url: String(link?.url || "").trim(),
+          }))
+          .filter((link) => link.url);
+      }
+    } catch {
+      // Mantém compatibilidade caso venha texto simples.
+    }
+  }
+
+  const legacy = item.link_url?.trim();
+  return legacy ? [{ titulo: "Link", url: legacy }] : [];
+}
 
 interface Props {
   item: Divulgacao;
@@ -47,6 +85,30 @@ export function DivulgacaoCard({
   const isImageArquivo = item.arquivo_tipo === "image";
   const previewUrl = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
   const ativo = item.ativo !== false;
+  const links = normalizeLinks(item);
+
+  const handleCopyLink = async (e: MouseEvent, url: string) => {
+    e.stopPropagation();
+
+    if (!url) {
+      toast.error("Este card não possui link cadastrado.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copiado!");
+    } catch (error) {
+      toast.error("Não foi possível copiar o link.");
+    }
+  };
+
+  const handleOpenLink = (e: MouseEvent, url: string) => {
+    e.stopPropagation();
+
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div
@@ -92,7 +154,7 @@ export function DivulgacaoCard({
 
       <div className="p-3 relative">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-card-foreground leading-tight line-clamp-2 flex-1">
+          <h3 className="text-sm font-semibold text-card-foreground leading-tight flex-1 whitespace-normal break-words">
             {item.titulo}
           </h3>
 
@@ -143,9 +205,58 @@ export function DivulgacaoCard({
         </div>
 
         {item.descricao && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+          <p className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap break-words leading-relaxed">
             {item.descricao}
           </p>
+        )}
+
+        {links.length > 0 && (
+          <div className="mt-3 rounded-lg border bg-muted/30 p-2 space-y-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+              <Link2 className="h-3.5 w-3.5 shrink-0" />
+              <span>{links.length === 1 ? "1 link cadastrado" : `${links.length} links cadastrados`}</span>
+            </div>
+
+            <div className="space-y-2">
+              {links.map((link, index) => (
+                <div key={`${link.url}-${index}`} className="rounded-md bg-background/70 border p-2 space-y-1.5">
+                  {link.titulo && (
+                    <p className="text-[11px] font-semibold text-foreground break-words">
+                      {link.titulo}
+                    </p>
+                  )}
+
+                  <p className="text-[11px] text-muted-foreground break-all whitespace-normal">
+                    {link.url}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={(e) => handleCopyLink(e, link.url)}
+                      title="Copiar link"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Copiar
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={(e) => handleOpenLink(e, link.url)}
+                      title="Abrir link"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Abrir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-1 mt-2">

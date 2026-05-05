@@ -200,6 +200,8 @@ const DivulgacaoPage = () => {
       arquivo_url: formData.arquivo_url || null,
       arquivo_tipo: formData.arquivo_tipo || null,
       arquivo_nome: formData.arquivo_nome || null,
+      link_url: formData.links?.[0]?.url || formData.link_url || null,
+      link_urls: formData.links || [],
     };
     if (editItem) {
       await updateMutation.mutateAsync({ id: editItem.id, data: payload });

@@ -17,11 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Upload, X, Video, ImageIcon } from "lucide-react";
+import { Loader2, Upload, X, Video, ImageIcon, Link2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Divulgacao } from "./DivulgacaoCard";
 import type { DivulgacaoColuna } from "./DivulgacaoColunaDialog";
+
+type CardLink = {
+  titulo: string;
+  url: string;
+};
 
 type FormData = {
   titulo: string;
@@ -34,6 +39,8 @@ type FormData = {
   arquivo_url: string;
   arquivo_tipo: string;
   arquivo_nome: string;
+  link_url: string;
+  links: CardLink[];
 };
 
 const EMPTY: FormData = {
@@ -47,9 +54,44 @@ const EMPTY: FormData = {
   arquivo_url: "",
   arquivo_tipo: "",
   arquivo_nome: "",
+  link_url: "",
+  links: [],
 };
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
+
+
+function normalizeLinks(initialData?: Divulgacao | null): CardLink[] {
+  const raw = initialData?.link_urls;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((link: any) => ({
+        titulo: String(link?.titulo || "").trim(),
+        url: String(link?.url || "").trim(),
+      }))
+      .filter((link) => link.url);
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((link: any) => ({
+            titulo: String(link?.titulo || "").trim(),
+            url: String(link?.url || "").trim(),
+          }))
+          .filter((link) => link.url);
+      }
+    } catch {
+      // Mantém compatibilidade se vier um texto simples.
+    }
+  }
+
+  const legacy = initialData?.link_url?.trim();
+  return legacy ? [{ titulo: "Link principal", url: legacy }] : [];
+}
 
 interface Props {
   open: boolean;
@@ -88,6 +130,8 @@ export function DivulgacaoFormDialog({
           arquivo_url: initialData.arquivo_url ?? "",
           arquivo_tipo: initialData.arquivo_tipo ?? "",
           arquivo_nome: initialData.arquivo_nome ?? "",
+          link_url: initialData.link_url ?? "",
+          links: normalizeLinks(initialData),
         });
       } else {
         setForm({
@@ -103,6 +147,30 @@ export function DivulgacaoFormDialog({
     (field: keyof FormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
+
+
+  const addLink = () => {
+    setForm((f) => ({
+      ...f,
+      links: [...f.links, { titulo: "", url: "" }],
+    }));
+  };
+
+  const updateLink = (index: number, field: keyof CardLink, value: string) => {
+    setForm((f) => ({
+      ...f,
+      links: f.links.map((link, i) =>
+        i === index ? { ...link, [field]: value } : link
+      ),
+    }));
+  };
+
+  const removeLink = (index: number) => {
+    setForm((f) => ({
+      ...f,
+      links: f.links.filter((_, i) => i !== index),
+    }));
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -164,7 +232,18 @@ export function DivulgacaoFormDialog({
     if (!form.titulo.trim()) return;
     setLoading(true);
     try {
-      await onSave(form);
+      const links = form.links
+        .map((link) => ({
+          titulo: link.titulo.trim(),
+          url: link.url.trim(),
+        }))
+        .filter((link) => link.url);
+
+      await onSave({
+        ...form,
+        links,
+        link_url: links[0]?.url || "",
+      });
       onClose();
     } finally {
       setLoading(false);
@@ -330,6 +409,74 @@ export function DivulgacaoFormDialog({
               className="hidden"
               onChange={handleFileSelect}
             />
+          </div>
+
+          {/* Links do card */}
+          <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5" />
+                  Links do card
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cadastre quantos links precisar: página, checkout, grupo, post, material ou destino.
+                </p>
+              </div>
+
+              <Button type="button" variant="outline" size="sm" onClick={addLink} className="gap-1 shrink-0">
+                <Plus className="h-3.5 w-3.5" />
+                Link
+              </Button>
+            </div>
+
+            {form.links.length === 0 ? (
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground text-center">
+                Nenhum link cadastrado ainda. Clique em “Link” para adicionar.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {form.links.map((link, index) => (
+                  <div key={index} className="rounded-md border bg-background p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Link {index + 1}
+                      </p>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => removeLink(index)}
+                        title="Remover link"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nome do link</Label>
+                      <Input
+                        value={link.titulo}
+                        onChange={(e) => updateLink(index, "titulo", e.target.value)}
+                        placeholder="Ex: Página de inscrição, Grupo do WhatsApp, Checkout..."
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">URL</Label>
+                      <Input
+                        value={link.url}
+                        onChange={(e) => updateLink(index, "url", e.target.value)}
+                        placeholder="https://..."
+                        type="url"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* URL de imagem externa (opcional) */}
