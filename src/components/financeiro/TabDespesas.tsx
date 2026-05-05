@@ -4,7 +4,10 @@ import { isInMonth } from "@/components/MonthFilter";
 import { supabase } from "@/integrations/supabase/client";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricDetailDialog, MetricDetailItem } from "@/components/MetricDetailDialog";
+import {
+  MetricDetailDialog,
+  MetricDetailItem,
+} from "@/components/MetricDetailDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +37,8 @@ import {
   Pencil,
   Trash2,
   Paperclip,
+  File,
+  Download,
   X,
 } from "lucide-react";
 import {
@@ -78,7 +83,26 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const [editingDespesa, setEditingDespesa] = useState<any>(null);
   const [formProdutoId, setFormProdutoId] = useState("");
 
-  const [arquivoNota, setArquivoNota] = useState<File | null>(null);
+  const getArquivosNota = (despesa: any) => {
+    const lista = Array.isArray(despesa?.comprovantes_urls)
+      ? despesa.comprovantes_urls
+      : [];
+
+    if (lista.length > 0) return lista;
+
+    if (despesa?.nota_url) {
+      return [
+        {
+          url: despesa.nota_url,
+          nome: despesa.nota_nome || "Comprovante anexado",
+        },
+      ];
+    }
+
+    return [];
+  };
+
+  const [arquivosNota, setArquivosNota] = useState<File[]>([]);
   const [removerNota, setRemoverNota] = useState(false);
   const [uploadingNota, setUploadingNota] = useState(false);
 
@@ -88,7 +112,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       const { data, error } = await supabase
         .from("despesas")
         .select(
-          "*, categorias_despesas(nome), contas_bancarias(nome), turmas(nome), produtos(nome)"
+          "*, categorias_despesas(nome), contas_bancarias(nome), turmas(nome), produtos(nome)",
         )
         .is("deleted_at", null)
         .order("data", { ascending: false });
@@ -177,17 +201,20 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
         recorrente: form.recorrente === "true",
         nota_url: form.nota_url || null,
         nota_nome: form.nota_nome || null,
+        comprovantes_urls: form.comprovantes_urls || [],
       };
 
       if (form.id) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("despesas")
           .update(payload)
           .eq("id", form.id);
 
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("despesas").insert(payload);
+        const { error } = await (supabase as any)
+          .from("despesas")
+          .insert(payload);
         if (error) throw error;
       }
     },
@@ -195,7 +222,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       queryClient.invalidateQueries({ queryKey: ["despesas"] });
       setDialogOpen(false);
       setEditingDespesa(null);
-      setArquivoNota(null);
+      setArquivosNota([]);
       setRemoverNota(false);
       toast({ title: "Despesa salva com sucesso" });
     },
@@ -229,50 +256,53 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
     if (editingDespesa) form.id = editingDespesa.id;
 
-    let nota_url: string | null = removerNota
-      ? null
-      : editingDespesa?.nota_url || null;
+    let comprovantes_urls: Array<{ url: string; nome: string }> = removerNota
+      ? []
+      : getArquivosNota(editingDespesa);
 
-    let nota_nome: string | null = removerNota
-      ? null
-      : editingDespesa?.nota_nome || null;
-
-    if (arquivoNota) {
+    if (arquivosNota.length > 0) {
       setUploadingNota(true);
 
-      const ext = arquivoNota.name.split(".").pop();
-      const path = `despesas/${Date.now()}_${Math.random()
-        .toString(36)
-        .slice(2)}.${ext}`;
+      const novosArquivos: Array<{ url: string; nome: string }> = [];
 
-      const { error: uploadError } = await supabase.storage
-        .from("comprovantes_reembolsos")
-        .upload(path, arquivoNota);
+      for (const arquivo of arquivosNota) {
+        const ext = arquivo.name.split(".").pop();
+        const path = `despesas/${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}.${ext}`;
 
-      if (uploadError) {
-        toast({
-          title: "Erro ao enviar a nota",
-          description: uploadError.message,
-          variant: "destructive",
-        });
-        setUploadingNota(false);
-        return;
+        const { error: uploadError } = await supabase.storage
+          .from("comprovantes_reembolsos")
+          .upload(path, arquivo);
+
+        if (uploadError) {
+          toast({
+            title: "Erro ao enviar comprovante",
+            description: uploadError.message,
+            variant: "destructive",
+          });
+          setUploadingNota(false);
+          return;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from("comprovantes_reembolsos")
+          .getPublicUrl(path);
+
+        novosArquivos.push({ url: urlData.publicUrl, nome: arquivo.name });
       }
 
-      const { data: urlData } = supabase.storage
-        .from("comprovantes_reembolsos")
-        .getPublicUrl(path);
-
-      nota_url = urlData.publicUrl;
-      nota_nome = arquivoNota.name;
-
+      comprovantes_urls = [...comprovantes_urls, ...novosArquivos];
       setUploadingNota(false);
     }
 
+    const primeiraNota = comprovantes_urls[0] || null;
+
     saveDespesa.mutate({
       ...form,
-      nota_url,
-      nota_nome,
+      nota_url: primeiraNota?.url || null,
+      nota_nome: primeiraNota?.nome || null,
+      comprovantes_urls,
     });
   };
 
@@ -286,7 +316,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
     const formaLabel = getFormaPagamentoLabel(
       d.forma_pagamento,
-      formasPagamento
+      formasPagamento,
     );
 
     return (
@@ -294,7 +324,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       matchField(d.descricao || "", filters.descricao) &&
       matchField(
         (d as any).categorias_despesas?.nome || "Sem categoria",
-        filters.categoria
+        filters.categoria,
       ) &&
       matchField((d as any).turmas?.nome || "Empresa", filters.turma) &&
       matchField(d.fornecedor || "", filters.fornecedor) &&
@@ -309,7 +339,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
   const totalDespesas = despesasMes.reduce(
     (s: number, d: any) => s + Number(d.valor),
-    0
+    0,
   );
 
   const despesasPorCategoria: Record<string, number> = {};
@@ -327,7 +357,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const openEdit = (d: any) => {
     setEditingDespesa(d);
     setFormProdutoId(d.produto_id || "");
-    setArquivoNota(null);
+    setArquivosNota([]);
     setRemoverNota(false);
     setDialogOpen(true);
   };
@@ -335,7 +365,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const openNew = () => {
     setEditingDespesa(null);
     setFormProdutoId("");
-    setArquivoNota(null);
+    setArquivosNota([]);
     setRemoverNota(false);
     setDialogOpen(true);
   };
@@ -467,7 +497,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
                 if (!o) {
                   setEditingDespesa(null);
-                  setArquivoNota(null);
+                  setArquivosNota([]);
                   setRemoverNota(false);
                 }
               }}
@@ -480,9 +510,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
               </DialogTrigger>
 
               <DialogContent
-  key={editingDespesa?.id || "nova-despesa"}
-  className="max-w-lg max-h-[90vh] overflow-y-auto"
->
+                key={editingDespesa?.id || "nova-despesa"}
+                className="max-w-lg max-h-[90vh] overflow-y-auto"
+              >
                 <DialogHeader>
                   <DialogTitle>
                     {editingDespesa ? "Editar Despesa" : "Nova Despesa"}
@@ -549,7 +579,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                         disabled={contasFetching}
                       >
                         <option value="">
-                          {contasFetching ? "Carregando contas..." : "Selecione"}
+                          {contasFetching
+                            ? "Carregando contas..."
+                            : "Selecione"}
                         </option>
                         {contas.map((c: any) => (
                           <option key={c.id} value={c.id}>
@@ -614,7 +646,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                         disabled={formasPagamentoLoading}
                       >
                         <option value="">
-                          {formasPagamentoLoading ? "Carregando..." : "Selecione"}
+                          {formasPagamentoLoading
+                            ? "Carregando..."
+                            : "Selecione"}
                         </option>
 
                         {formasPagamento.map((forma) => (
@@ -630,7 +664,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                       <select
                         name="recorrente"
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        defaultValue={editingDespesa?.recorrente ? "true" : "false"}
+                        defaultValue={
+                          editingDespesa?.recorrente ? "true" : "false"
+                        }
                       >
                         <option value="false">Não</option>
                         <option value="true">Sim</option>
@@ -640,29 +676,55 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                     <div className="col-span-2">
                       <Label>Foto / Nota da Despesa</Label>
 
-                      {editingDespesa?.nota_url && !arquivoNota && !removerNota && (
-                        <div className="flex items-center gap-2 mb-2 p-2 rounded-lg border bg-muted/50">
-                          <Paperclip className="h-4 w-4 text-muted-foreground" />
-                          <a
-                            href={editingDespesa.nota_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary underline truncate flex-1"
-                          >
-                            {editingDespesa.nota_nome || "Nota anexada"}
-                          </a>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={() => setRemoverNota(true)}
-                            title="Remover nota"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
+                      {getArquivosNota(editingDespesa).length > 0 &&
+                        !removerNota && (
+                          <div className="space-y-2 mb-2">
+                            {getArquivosNota(editingDespesa).map(
+                              (nota: any, index: number) => (
+                                <div
+                                  key={`${nota.url}-${index}`}
+                                  className="flex items-center gap-2 p-2 rounded-lg border bg-muted/50"
+                                >
+                                  <File className="h-4 w-4 text-primary shrink-0" />
+                                  <a
+                                    href={nota.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-primary underline truncate flex-1"
+                                  >
+                                    {nota.nome || `Comprovante ${index + 1}`}
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    asChild
+                                  >
+                                    <a
+                                      href={nota.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title="Abrir comprovante"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </a>
+                                  </Button>
+                                </div>
+                              ),
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full text-destructive"
+                              onClick={() => setRemoverNota(true)}
+                            >
+                              <X className="h-3 w-3 mr-1" />
+                              Remover todos os comprovantes atuais ao salvar
+                            </Button>
+                          </div>
+                        )}
 
                       {removerNota && (
                         <div className="mb-2 p-2 rounded-lg border border-destructive/30 bg-destructive/5 text-xs text-destructive">
@@ -672,15 +734,30 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
                       <Input
                         type="file"
+                        multiple
                         accept=".pdf,.png,.jpg,.jpeg,.webp"
                         onChange={(e) =>
-                          setArquivoNota(e.target.files?.[0] || null)
+                          setArquivosNota(Array.from(e.target.files || []))
                         }
                         className="cursor-pointer"
                       />
 
+                      {arquivosNota.length > 0 && (
+                        <div className="mt-2 space-y-1 rounded-lg border bg-muted/40 p-2">
+                          {arquivosNota.map((arquivo, index) => (
+                            <p
+                              key={`${arquivo.name}-${index}`}
+                              className="text-xs text-muted-foreground truncate"
+                            >
+                              {index + 1}. {arquivo.name}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
                       <p className="text-xs text-muted-foreground mt-1">
-                        PDF, PNG, JPG ou WEBP. Opcional.
+                        Você pode selecionar mais de um arquivo. PDF, PNG, JPG
+                        ou WEBP. Opcional.
                       </p>
                     </div>
 
@@ -822,7 +899,9 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
               <TableBody>
                 {filtered.map((d: any) => (
                   <TableRow key={d.id}>
-                    <TableCell className="text-sm">{formatDate(d.data)}</TableCell>
+                    <TableCell className="text-sm">
+                      {formatDate(d.data)}
+                    </TableCell>
 
                     <TableCell className="font-medium text-sm">
                       {d.descricao}
@@ -846,27 +925,44 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                       {(d as any).turmas?.nome || "Empresa"}
                     </TableCell>
 
-                    <TableCell className="text-sm">{d.fornecedor || "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {d.fornecedor || "—"}
+                    </TableCell>
 
                     <TableCell className="text-sm">
                       {(d as any).contas_bancarias?.nome || "—"}
                     </TableCell>
 
                     <TableCell className="text-sm">
-                      {getFormaPagamentoLabel(d.forma_pagamento, formasPagamento)}
+                      {getFormaPagamentoLabel(
+                        d.forma_pagamento,
+                        formasPagamento,
+                      )}
                     </TableCell>
 
                     <TableCell className="text-sm">
-                      {d.nota_url ? (
-                        <a
-                          href={d.nota_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={d.nota_nome || "Ver nota"}
-                          className="inline-flex items-center text-primary hover:underline"
-                        >
-                          <Paperclip className="h-4 w-4" />
-                        </a>
+                      {getArquivosNota(d).length > 0 ? (
+                        <div className="flex items-center gap-1">
+                          {getArquivosNota(d)
+                            .slice(0, 3)
+                            .map((nota: any, index: number) => (
+                              <a
+                                key={`${nota.url}-${index}`}
+                                href={nota.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={nota.nome || `Comprovante ${index + 1}`}
+                                className="inline-flex items-center text-primary hover:underline"
+                              >
+                                <Paperclip className="h-4 w-4" />
+                              </a>
+                            ))}
+                          {getArquivosNota(d).length > 3 && (
+                            <span className="text-xs text-muted-foreground">
+                              +{getArquivosNota(d).length - 3}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         "—"
                       )}
