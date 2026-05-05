@@ -597,7 +597,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
               `Data do pagamento: ${data_pagamento}.`,
             ]
               .filter(Boolean)
-              .join("\n"),
+              .join("\r\n"),
             recorrente: false,
           };
         }
@@ -622,7 +622,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
             `Forma de pagamento: ${forma_pagamento}.`,
           ]
             .filter(Boolean)
-            .join("\n"),
+            .join("\r\n"),
         })
         .eq("id", id);
 
@@ -837,6 +837,66 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     toast({ title: "PDF exportado com sucesso!" });
   };
 
+  const exportarExcel = () => {
+    const escapeCsv = (value: any) => {
+      const textValue = value === null || value === undefined ? "" : String(value);
+      return `"${textValue.replace(/"/g, '""')}"`;
+    };
+
+    const resumo = [
+      ["Relatório", "Contas a Pagar e Receber"],
+      ["Gerado em", new Date().toLocaleDateString("pt-BR")],
+      ["A Pagar", formatCurrency(totalAPagar)],
+      ["A Receber", formatCurrency(totalAReceber)],
+      ["Vencidos", formatCurrency(totalVencido)],
+      ["Saldo Projetado", formatCurrency(saldoProjetado)],
+      [],
+    ];
+
+    const header = [
+      "Tipo",
+      "Descrição",
+      "Origem",
+      "Categoria",
+      "Vencimento",
+      "Pagamento",
+      "Status",
+      "Forma de pagamento",
+      "Valor",
+    ];
+
+    const rows = filtered.map((c) => [
+      c.tipo === "pagar" ? "Pagar" : "Receber",
+      c.descricao,
+      c.origem,
+      c.categoria,
+      formatDate(c.data_vencimento),
+      formatDate(c.data_pagamento),
+      c.status === "vencido" ? "Vencido" : c.status === "pago" ? "Pago" : "Pendente",
+      c.forma_pagamento || "",
+      `${c.tipo === "pagar" ? "- " : "+ "}${formatCurrency(c.valor)}`,
+    ]);
+
+    const csv = ["sep=;", ...resumo, header, ...rows]
+      .map((row) => Array.isArray(row) ? row.map(escapeCsv).join(";") : row)
+      .join("\r\n");
+
+    const blob = new Blob(["\ufeff" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "contas-pagar-receber.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({ title: "Excel exportado com sucesso!" });
+  };
+
 
   return (
     <div className="space-y-6">
@@ -967,6 +1027,16 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
               </CardTitle>
 
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportarExcel}
+                  className="gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Excel
+                </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
