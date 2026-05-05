@@ -56,6 +56,7 @@ import {
   Filter,
   Wallet,
   Eye,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PaginationControls, paginate } from "@/components/Pagination";
@@ -127,6 +128,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   const [filterStatus, setFilterStatus] = useState<string>("todos");
   const [filterOrigem, setFilterOrigem] = useState<string>("todos");
   const [filterSearch, setFilterSearch] = useState("");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
 
   const [showPagos, setShowPagos] = useState(false);
   const [page, setPage] = useState(1);
@@ -461,6 +464,14 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     if (filterStatus !== "todos") items = items.filter((c) => c.status === filterStatus);
     if (filterOrigem !== "todos") items = items.filter((c) => c.origem === filterOrigem);
 
+    if (filterDataInicio) {
+      items = items.filter((c) => (c.data_vencimento || "").slice(0, 10) >= filterDataInicio);
+    }
+
+    if (filterDataFim) {
+      items = items.filter((c) => (c.data_vencimento || "").slice(0, 10) <= filterDataFim);
+    }
+
     if (filterSearch) {
       const s = filterSearch.toLowerCase();
 
@@ -474,7 +485,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
 
     return items;
-  }, [contasConsolidadas, filterTipo, filterStatus, filterOrigem, filterSearch]);
+  }, [contasConsolidadas, filterTipo, filterStatus, filterOrigem, filterDataInicio, filterDataFim, filterSearch]);
 
   const paged = paginate(filtered, page, 15);
 
@@ -845,6 +856,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
     const resumo = [
       ["Relatório", "Contas a Pagar e Receber"],
+      ["Filtro de vencimento", filterDataInicio || "Início", filterDataFim || "Fim"],
       ["Gerado em", new Date().toLocaleDateString("pt-BR")],
       ["A Pagar", formatCurrency(totalAPagar)],
       ["A Receber", formatCurrency(totalAReceber)],
@@ -1122,6 +1134,58 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                   ))}
                 </SelectContent>
               </Select>
+
+              <div className="flex flex-wrap items-end gap-2 rounded-md border bg-background px-2 py-1">
+                <div className="flex items-center gap-1 pb-1">
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Vencimento
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">De</Label>
+                  <Input
+                    type="date"
+                    value={filterDataInicio}
+                    onChange={(e) => {
+                      setFilterDataInicio(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-36 h-8 text-sm"
+                    title="Vencimento inicial"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Até</Label>
+                  <Input
+                    type="date"
+                    value={filterDataFim}
+                    onChange={(e) => {
+                      setFilterDataFim(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-36 h-8 text-sm"
+                    title="Vencimento final"
+                  />
+                </div>
+              </div>
+
+              {(filterDataInicio || filterDataFim) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFilterDataInicio("");
+                    setFilterDataFim("");
+                    setPage(1);
+                  }}
+                  className="h-8 px-2 text-xs"
+                >
+                  Limpar datas
+                </Button>
+              )}
 
               <div className="flex items-center gap-1.5 ml-auto">
                 <Switch
