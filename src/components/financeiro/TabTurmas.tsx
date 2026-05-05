@@ -59,25 +59,98 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
   const pgMes = pagamentos.filter((p: any) => isInMonth(p.data_pagamento, mes, ano));
   const despMes = despesas.filter((d: any) => isInMonth(d.data, mes, ano));
 
+  const getValorPago = (p: any) => {
+    const valorPago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
+    const valorOriginal = p.valor !== null && p.valor !== undefined ? Number(p.valor) : 0;
+
+    return valorPago > 0 ? valorPago : valorOriginal;
+  };
+
+  const pagamentoPertenceMatricula = (p: any, m: any, turmaId: string) => {
+    if (p.matricula_id && p.matricula_id === m.id) return true;
+
+    if (p.turma_id && p.turma_id === turmaId && p.aluno_id === m.aluno_id) {
+      return true;
+    }
+
+    if (
+      !p.matricula_id &&
+      p.aluno_id === m.aluno_id &&
+      p.produto_id === m.produto_id
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const getDataReferenciaPagamento = (p: any) => {
+    return p.data_pagamento || p.data_vencimento || p.created_at || null;
+  };
+
   const getTurmaData = (turmaId: string) => {
     const turmaMatriculas = matriculas.filter((m: any) => m.turma_id === turmaId);
+
     const alunoEntries = turmaMatriculas.map((m: any) => {
-      const pgtos = pgMes.filter((p: any) => {
-        if (p.matricula_id === m.id) return true;
-        if (!p.matricula_id && p.aluno_id === m.aluno_id && p.produto_id === m.produto_id) return true;
-        return false;
-      });
-      const totalAluno = pgtos.reduce((s: number, p: any) => s + Number(p.valor), 0);
-      const contas = [...new Set(pgtos.map((p: any) => p.contas_bancarias?.nome).filter(Boolean))].join(", ");
-      return { nome: m.alunos?.nome || "—", valor: totalAluno, conta: contas || "—" };
+      const pgtosTodos = pagamentos.filter((p: any) =>
+        pagamentoPertenceMatricula(p, m, turmaId)
+      );
+
+      const pgtosMes = pgtosTodos.filter((p: any) =>
+        isInMonth(getDataReferenciaPagamento(p), mes, ano)
+      );
+
+      const totalAlunoMes = pgtosMes.reduce(
+        (s: number, p: any) => s + getValorPago(p),
+        0
+      );
+
+      const totalAlunoGeral = pgtosTodos.reduce(
+        (s: number, p: any) => s + getValorPago(p),
+        0
+      );
+
+      const contasMes = [
+        ...new Set(
+          pgtosMes.map((p: any) => p.contas_bancarias?.nome).filter(Boolean)
+        ),
+      ].join(", ");
+
+      const contasGeral = [
+        ...new Set(
+          pgtosTodos.map((p: any) => p.contas_bancarias?.nome).filter(Boolean)
+        ),
+      ].join(", ");
+
+      return {
+        nome: m.alunos?.nome || "—",
+        valorMes: totalAlunoMes,
+        valorTotal: totalAlunoGeral,
+        conta: contasMes || contasGeral || "—",
+        pagamentosMes: pgtosMes.length,
+        pagamentosTotal: pgtosTodos.length,
+      };
     });
-    const totalEntradas = alunoEntries.reduce((s, a) => s + a.valor, 0);
+
+    const totalEntradas = alunoEntries.reduce((s, a) => s + a.valorMes, 0);
+    const totalPagoGeral = alunoEntries.reduce((s, a) => s + a.valorTotal, 0);
+
     const despesasTurma = despMes.filter((d: any) => d.turma_id === turmaId);
     const totalDespesas = despesasTurma.reduce((s: number, d: any) => s + Number(d.valor), 0);
     const liquido = totalEntradas - totalDespesas;
     const parteGex = liquido * 0.5;
     const parteResponsavel = liquido * 0.5;
-    return { alunoEntries, totalEntradas, totalDespesas, liquido, parteGex, parteResponsavel, despesasTurma };
+
+    return {
+      alunoEntries,
+      totalEntradas,
+      totalPagoGeral,
+      totalDespesas,
+      liquido,
+      parteGex,
+      parteResponsavel,
+      despesasTurma,
+    };
   };
 
   const turmasPorProduto = (produtoId: string) => turmas.filter((t: any) => t.produto_id === produtoId);
@@ -135,8 +208,11 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
                             <CardContent className="pt-0 space-y-4">
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 <div className="rounded-lg bg-muted/50 p-3">
-                                  <p className="text-xs text-muted-foreground">Total Entradas</p>
+                                  <p className="text-xs text-muted-foreground">Entradas no mês</p>
                                   <p className="font-bold text-sm text-emerald-600">{formatCurrency(data.totalEntradas)}</p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Total pago: {formatCurrency(data.totalPagoGeral)}
+                                  </p>
                                 </div>
                                 <div className="rounded-lg bg-muted/50 p-3">
                                   <p className="text-xs text-muted-foreground">Despesas Turma</p>
@@ -157,7 +233,8 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
                                   <TableRow>
                                     <TableHead>Aluno</TableHead>
                                     <TableHead>Entrou em</TableHead>
-                                    <TableHead className="text-right">Valor Pago</TableHead>
+                                    <TableHead className="text-right">Pago no mês</TableHead>
+                                    <TableHead className="text-right">Total pago</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -165,11 +242,16 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
                                     <TableRow key={i}>
                                       <TableCell className="text-sm font-medium">{a.nome}</TableCell>
                                       <TableCell className="text-sm text-muted-foreground">{a.conta}</TableCell>
-                                      <TableCell className="text-sm text-right">{formatCurrency(a.valor)}</TableCell>
+                                      <TableCell className="text-sm text-right text-emerald-600">
+                                        {formatCurrency(a.valorMes)}
+                                      </TableCell>
+                                      <TableCell className="text-sm text-right font-medium">
+                                        {formatCurrency(a.valorTotal)}
+                                      </TableCell>
                                     </TableRow>
                                   ))}
                                   {data.alunoEntries.length === 0 && (
-                                    <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Nenhum aluno nesta turma</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Nenhum aluno nesta turma</TableCell></TableRow>
                                   )}
                                 </TableBody>
                               </Table>
