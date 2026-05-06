@@ -277,18 +277,53 @@ const Alunos = () => {
 
   const insertMatricula = useMutation({
     mutationFn: async () => {
-      const valorTotal = parseFloat(matriculaForm.valor_total) || 0;
+      if (!selectedAluno) return;
+
+      const turmaSelecionada = turmas.find(
+        (t: any) => t.id === matriculaForm.turma_id
+      );
+
+      const produtoIdResolvido =
+        matriculaForm.produto_id || turmaSelecionada?.produto_id || null;
+
+      const produtoSelecionado = produtos.find(
+        (p: any) => p.id === produtoIdResolvido
+      );
+
+      const valorTotal =
+        parseFloat(matriculaForm.valor_total) ||
+        Number(produtoSelecionado?.valor || 0);
+
       const desconto = parseFloat(matriculaForm.desconto) || 0;
-      const valorFinal = valorTotal - desconto;
+      const valorFinal = Math.max(valorTotal - desconto, 0);
+
+      const dataInicioResolvida =
+        matriculaForm.data_inicio || turmaSelecionada?.data_inicio || null;
+
+      const dataFimResolvida =
+        matriculaForm.data_fim || turmaSelecionada?.data_fim || null;
+
+      const dataVencimentoResolvida =
+        matriculaForm.data_vencimento ||
+        dataInicioResolvida ||
+        new Date().toISOString().split("T")[0];
+
+      if (!produtoIdResolvido) {
+        throw new Error("Selecione um produto ou uma turma vinculada a um produto.");
+      }
+
+      if (valorFinal <= 0) {
+        throw new Error("O produto selecionado está sem valor. Verifique o cadastro do produto.");
+      }
 
       const { data: mat, error: matErr } = await supabase
         .from("matriculas")
         .insert({
           aluno_id: selectedAluno.id,
-          produto_id: matriculaForm.produto_id || null,
+          produto_id: produtoIdResolvido,
           turma_id: matriculaForm.turma_id || null,
-          data_inicio: matriculaForm.data_inicio || null,
-          data_fim: matriculaForm.data_fim || null,
+          data_inicio: dataInicioResolvida,
+          data_fim: dataFimResolvida,
           status: matriculaForm.status,
           observacoes: matriculaForm.observacoes || null,
           valor_total: valorTotal,
@@ -300,7 +335,7 @@ const Alunos = () => {
 
       if (matErr) throw matErr;
 
-      if (valorFinal > 0 && matriculaForm.data_vencimento) {
+      if (valorFinal > 0) {
         const isCartao = ["credito", "cartao_credito", "cartao"].includes(
           matriculaForm.forma_pagamento
         );
@@ -324,13 +359,13 @@ const Alunos = () => {
         const valorParcela = valorBase / numParcelas;
 
         const rows = Array.from({ length: numParcelas }, (_, i) => {
-          const d = new Date(matriculaForm.data_vencimento + "T12:00:00");
+          const d = new Date(dataVencimentoResolvida + "T12:00:00");
 
           if (!isCartao) d.setMonth(d.getMonth() + i);
 
           return {
             aluno_id: selectedAluno.id,
-            produto_id: matriculaForm.produto_id || null,
+            produto_id: produtoIdResolvido,
             matricula_id: mat.id,
             valor: Math.round(valorParcela * 100) / 100,
             forma_pagamento: matriculaForm.forma_pagamento || null,
@@ -356,7 +391,7 @@ const Alunos = () => {
           matricula_id: mat.id,
           comercial_id: matriculaForm.comercial_id,
           aluno_id: selectedAluno.id,
-          produto_id: matriculaForm.produto_id || null,
+          produto_id: produtoIdResolvido,
           turma_id: matriculaForm.turma_id || null,
           valor_matricula: valorFinal,
           percentual: pctComissao,
@@ -370,7 +405,7 @@ const Alunos = () => {
           .eq("id", mat.id);
       }
 
-      const produtoNome = produtos.find((p: any) => p.id === matriculaForm.produto_id)?.nome || "Produto";
+      const produtoNome = produtoSelecionado?.nome || "Produto";
       const turmaNome = turmas.find((t: any) => t.id === matriculaForm.turma_id)?.nome;
 
       await logActivity({
@@ -383,6 +418,9 @@ const Alunos = () => {
       queryClient.invalidateQueries({ queryKey: ["matriculas", selectedAluno?.id] });
       queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno?.id] });
       queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-financeiro-turmas"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["atividades", selectedAluno?.id] });
       queryClient.invalidateQueries({ queryKey: ["comissoes"] });
       toast.success("Matrícula criada com parcelas geradas automaticamente!");
@@ -913,7 +951,10 @@ const Alunos = () => {
       ...prev,
       produto_id: produtoId,
       turma_id: "",
-      valor_total: produto?.valor ? String(produto.valor) : prev.valor_total,
+      valor_total:
+        produto?.valor !== null && produto?.valor !== undefined
+          ? String(produto.valor)
+          : prev.valor_total,
     }));
   };
 

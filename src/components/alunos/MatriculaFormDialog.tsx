@@ -232,9 +232,19 @@ export const MatriculaFormDialog = ({
                   (t: any) => t.id === v
                 );
 
+                const produtoDaTurma = turmaSelecionada?.produto_id
+                  ? produtos.find((p: any) => p.id === turmaSelecionada.produto_id)
+                  : null;
+
                 setMatriculaForm((p) => ({
                   ...p,
                   turma_id: v,
+                  produto_id: turmaSelecionada?.produto_id || p.produto_id,
+                  valor_total:
+                    produtoDaTurma?.valor !== null &&
+                    produtoDaTurma?.valor !== undefined
+                      ? String(produtoDaTurma.valor)
+                      : p.valor_total,
                   data_inicio:
                     turmaSelecionada?.data_inicio ||
                     turmaSelecionada?.dataInicio ||
