@@ -1,7 +1,21 @@
-import type { MouseEvent } from "react";
-import { Trash2, Edit, Video, ImageIcon, Calendar, EyeOff, Eye, Copy, Link2, ExternalLink } from "lucide-react";
+import {
+  Trash2,
+  Edit,
+  Video,
+  ImageIcon,
+  Calendar,
+  EyeOff,
+  Eye,
+  FileText,
+  GripVertical,
+  Link as LinkIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+
+export type DivulgacaoLink = {
+  titulo?: string;
+  url: string;
+};
 
 export interface Divulgacao {
   id: string;
@@ -10,15 +24,15 @@ export interface Divulgacao {
   categoria: string;
   status: string;
   coluna_id?: string | null;
+  ordem?: number | null;
   imagem_url?: string | null;
   arquivo_url?: string | null;
   arquivo_tipo?: string | null;
   arquivo_nome?: string | null;
-  link_url?: string | null;
-  link_urls?: { titulo?: string; url: string }[] | string | null;
   responsavel_iniciais?: string | null;
   data?: string | null;
   ativo?: boolean;
+  links?: DivulgacaoLink[] | string | null;
   created_at?: string;
 }
 
@@ -29,40 +43,6 @@ const CATEGORIA_COLORS: Record<string, string> = {
   Treinamento: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
-type CardLink = { titulo?: string; url: string };
-
-function normalizeLinks(item: Divulgacao): CardLink[] {
-  const raw = item.link_urls;
-
-  if (Array.isArray(raw)) {
-    return raw
-      .map((link: any) => ({
-        titulo: String(link?.titulo || "").trim(),
-        url: String(link?.url || "").trim(),
-      }))
-      .filter((link) => link.url);
-  }
-
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((link: any) => ({
-            titulo: String(link?.titulo || "").trim(),
-            url: String(link?.url || "").trim(),
-          }))
-          .filter((link) => link.url);
-      }
-    } catch {
-      // Mantém compatibilidade caso venha texto simples.
-    }
-  }
-
-  const legacy = item.link_url?.trim();
-  return legacy ? [{ titulo: "Link", url: legacy }] : [];
-}
-
 interface Props {
   item: Divulgacao;
   onEdit: (item: Divulgacao) => void;
@@ -71,6 +51,25 @@ interface Props {
   onToggleAtivo: (id: string, ativo: boolean) => void;
   isDragging?: boolean;
 }
+
+const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
+  if (!links) return [];
+
+  if (Array.isArray(links)) {
+    return links.filter((l) => l?.url);
+  }
+
+  if (typeof links === "string") {
+    try {
+      const parsed = JSON.parse(links);
+      return Array.isArray(parsed) ? parsed.filter((l) => l?.url) : [];
+    } catch {
+      return links.trim() ? [{ titulo: "Link", url: links.trim() }] : [];
+    }
+  }
+
+  return [];
+};
 
 export function DivulgacaoCard({
   item,
@@ -82,33 +81,11 @@ export function DivulgacaoCard({
 }: Props) {
   const arquivoUrl = item.arquivo_url;
   const isVideo = item.arquivo_tipo === "video";
+  const isPdf = item.arquivo_tipo === "pdf";
   const isImageArquivo = item.arquivo_tipo === "image";
   const previewUrl = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
   const ativo = item.ativo !== false;
-  const links = normalizeLinks(item);
-
-  const handleCopyLink = async (e: MouseEvent, url: string) => {
-    e.stopPropagation();
-
-    if (!url) {
-      toast.error("Este card não possui link cadastrado.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copiado!");
-    } catch (error) {
-      toast.error("Não foi possível copiar o link.");
-    }
-  };
-
-  const handleOpenLink = (e: MouseEvent, url: string) => {
-    e.stopPropagation();
-
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+  const links = normalizeLinks(item.links);
 
   return (
     <div
@@ -122,6 +99,10 @@ export function DivulgacaoCard({
       }`}
       title="Clique para abrir o card"
     >
+      <div className="absolute top-2 right-2 z-10 hidden group-hover:flex items-center justify-center h-6 w-6 rounded-md bg-background/90 border text-muted-foreground shadow-sm">
+        <GripVertical className="h-3.5 w-3.5" />
+      </div>
+
       {!ativo && (
         <div className="absolute top-1 left-1 z-10 bg-muted/90 text-muted-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full border">
           Inativo
@@ -145,7 +126,16 @@ export function DivulgacaoCard({
         </div>
       )}
 
-      {!previewUrl && !isVideo && (
+      {!previewUrl && isPdf && arquivoUrl && (
+        <div className="w-full h-32 rounded-t-xl overflow-hidden bg-red-50 dark:bg-red-950/30 flex flex-col items-center justify-center hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors gap-1">
+          <FileText className="h-8 w-8 text-red-500" />
+          <span className="text-red-600 dark:text-red-300 text-[10px] font-medium">
+            PDF anexado
+          </span>
+        </div>
+      )}
+
+      {!previewUrl && !isVideo && !isPdf && (
         <div className="w-full h-24 rounded-t-xl overflow-hidden bg-muted/60 flex flex-col items-center justify-center gap-1">
           <ImageIcon className="h-7 w-7 text-muted-foreground/60" />
           <span className="text-muted-foreground text-[10px]">Clique para visualizar</span>
@@ -154,11 +144,11 @@ export function DivulgacaoCard({
 
       <div className="p-3 relative">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-card-foreground leading-tight flex-1 whitespace-normal break-words">
+          <h3 className="text-sm font-semibold text-card-foreground leading-tight line-clamp-2 flex-1">
             {item.titulo}
           </h3>
 
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pr-7">
             <Button
               variant="ghost"
               size="icon"
@@ -205,58 +195,9 @@ export function DivulgacaoCard({
         </div>
 
         {item.descricao && (
-          <p className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap break-words leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
             {item.descricao}
           </p>
-        )}
-
-        {links.length > 0 && (
-          <div className="mt-3 rounded-lg border bg-muted/30 p-2 space-y-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-              <Link2 className="h-3.5 w-3.5 shrink-0" />
-              <span>{links.length === 1 ? "1 link cadastrado" : `${links.length} links cadastrados`}</span>
-            </div>
-
-            <div className="space-y-2">
-              {links.map((link, index) => (
-                <div key={`${link.url}-${index}`} className="rounded-md bg-background/70 border p-2 space-y-1.5">
-                  {link.titulo && (
-                    <p className="text-[11px] font-semibold text-foreground break-words">
-                      {link.titulo}
-                    </p>
-                  )}
-
-                  <p className="text-[11px] text-muted-foreground break-all whitespace-normal">
-                    {link.url}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[11px] gap-1"
-                      onClick={(e) => handleCopyLink(e, link.url)}
-                      title="Copiar link"
-                    >
-                      <Copy className="h-3 w-3" />
-                      Copiar
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-[11px] gap-1"
-                      onClick={(e) => handleOpenLink(e, link.url)}
-                      title="Abrir link"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Abrir
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
         <div className="flex flex-wrap gap-1 mt-2">
@@ -267,6 +208,20 @@ export function DivulgacaoCard({
           >
             {item.categoria}
           </span>
+
+          {isPdf && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              <FileText className="h-2.5 w-2.5" />
+              PDF
+            </span>
+          )}
+
+          {links.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              <LinkIcon className="h-2.5 w-2.5" />
+              {links.length} link{links.length > 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-between mt-2">
@@ -285,7 +240,7 @@ export function DivulgacaoCard({
             )}
           </div>
 
-          {(arquivoUrl || item.imagem_url) && (
+          {(arquivoUrl || item.imagem_url || links.length > 0) && (
             <Button
               variant="ghost"
               size="icon"
@@ -298,6 +253,8 @@ export function DivulgacaoCard({
             >
               {isVideo ? (
                 <Video className="h-3.5 w-3.5" />
+              ) : isPdf ? (
+                <FileText className="h-3.5 w-3.5" />
               ) : (
                 <ImageIcon className="h-3.5 w-3.5" />
               )}

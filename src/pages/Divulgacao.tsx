@@ -16,28 +16,22 @@ import type { DivulgacaoColuna } from "@/components/divulgacao/DivulgacaoColunaD
 const DivulgacaoPage = () => {
   const queryClient = useQueryClient();
 
-  // Form state
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<Divulgacao | null>(null);
   const [defaultColunaId, setDefaultColunaId] = useState<string>("");
 
-  // File viewer
   const [viewerItem, setViewerItem] = useState<Divulgacao | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
 
-  // Coluna dialog
   const [colunaDialogOpen, setColunaDialogOpen] = useState(false);
   const [editColuna, setEditColuna] = useState<DivulgacaoColuna | null>(null);
 
-  // Drag state
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("todos");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
 
-  // ── Fetch colunas ────────────────────────────────────────────────────────────
   const { data: colunas = [] } = useQuery<DivulgacaoColuna[]>({
     queryKey: ["divulgacao-colunas"],
     queryFn: async () => {
@@ -45,48 +39,71 @@ const DivulgacaoPage = () => {
         .from("divulgacao_colunas")
         .select("*")
         .order("ordem", { ascending: true });
+
       if (error) throw error;
       return (data ?? []) as DivulgacaoColuna[];
     },
   });
 
-  // ── Fetch cards ──────────────────────────────────────────────────────────────
   const { data: items = [], isLoading } = useQuery<Divulgacao[]>({
     queryKey: ["divulgacoes"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("divulgacoes")
         .select("*")
+        .order("coluna_id", { ascending: true, nullsFirst: false })
+        .order("ordem", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       return (data ?? []) as Divulgacao[];
     },
   });
 
-  // ── Responsaveis for filter ──────────────────────────────────────────────────
   const responsaveis = useMemo(() => {
     const set = new Set<string>();
-    items.forEach((i) => { if (i.responsavel_iniciais) set.add(i.responsavel_iniciais); });
+    items.forEach((i) => {
+      if (i.responsavel_iniciais) set.add(i.responsavel_iniciais);
+    });
     return Array.from(set).sort();
   }, [items]);
 
-  // ── Filter logic ─────────────────────────────────────────────────────────────
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const colunaA = a.coluna_id || "";
+      const colunaB = b.coluna_id || "";
+
+      if (colunaA !== colunaB) return colunaA.localeCompare(colunaB);
+
+      const ordemA = Number(a.ordem ?? 999999);
+      const ordemB = Number(b.ordem ?? 999999);
+
+      if (ordemA !== ordemB) return ordemA - ordemB;
+
+      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    });
+  }, [items]);
+
   const filtered = useMemo(() => {
-    return items.filter((item) => {
+    return sortedItems.filter((item) => {
       if (
         search &&
         !item.titulo.toLowerCase().includes(search.toLowerCase()) &&
         !(item.descricao ?? "").toLowerCase().includes(search.toLowerCase())
-      )
+      ) {
         return false;
+      }
+
       if (filterCategoria !== "todos" && item.categoria !== filterCategoria) return false;
-      if (filterResponsavel !== "todos" && item.responsavel_iniciais !== filterResponsavel)
+
+      if (filterResponsavel !== "todos" && item.responsavel_iniciais !== filterResponsavel) {
         return false;
+      }
+
       return true;
     });
-  }, [items, search, filterCategoria, filterResponsavel]);
+  }, [sortedItems, search, filterCategoria, filterResponsavel]);
 
-  // ── Mutations — cards ────────────────────────────────────────────────────────
   const insertMutation = useMutation({
     mutationFn: async (data: any) => {
       const { error } = await supabase.from("divulgacoes").insert([data]);
@@ -109,6 +126,30 @@ const DivulgacaoPage = () => {
       toast.success("Card atualizado!");
     },
     onError: (err: any) => toast.error("Erro ao atualizar card: " + (err?.message ?? err)),
+  });
+
+  const reorderCardsMutation = useMutation({
+    mutationFn: async (updates: Array<{ id: string; coluna_id: string | null; status: string; ordem: number }>) => {
+      const results = await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("divulgacoes")
+            .update({
+              coluna_id: update.coluna_id,
+              status: update.status,
+              ordem: update.ordem,
+            } as any)
+            .eq("id", update.id)
+        )
+      );
+
+      const error = results.find((r) => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["divulgacoes"] });
+    },
+    onError: (err: any) => toast.error("Erro ao reordenar cards: " + (err?.message ?? err)),
   });
 
   const deleteMutation = useMutation({
@@ -138,7 +179,6 @@ const DivulgacaoPage = () => {
     onError: (err: any) => toast.error("Erro ao alterar status do card: " + (err?.message ?? err)),
   });
 
-  // ── Mutations — colunas ──────────────────────────────────────────────────────
   const insertColunaMutation = useMutation({
     mutationFn: async (data: { nome: string; cor: string; icone: string }) => {
       const ordem = colunas.length;
@@ -185,9 +225,15 @@ const DivulgacaoPage = () => {
     onError: (err: any) => toast.error("Erro ao remover coluna: " + (err?.message ?? err)),
   });
 
-  // ── Handlers — cards ─────────────────────────────────────────────────────────
+  const getNextOrdem = (colunaId: string) => {
+    const cardsDaColuna = sortedItems.filter((i) => i.coluna_id === colunaId);
+    const max = cardsDaColuna.reduce((acc, item) => Math.max(acc, Number(item.ordem ?? 0)), -1);
+    return max + 1;
+  };
+
   const handleSave = async (formData: any) => {
     const novaColuna = colunas.find((c) => c.id === formData.coluna_id);
+
     const payload = {
       titulo: formData.titulo,
       descricao: formData.descricao || null,
@@ -200,13 +246,16 @@ const DivulgacaoPage = () => {
       arquivo_url: formData.arquivo_url || null,
       arquivo_tipo: formData.arquivo_tipo || null,
       arquivo_nome: formData.arquivo_nome || null,
-      link_url: formData.links?.[0]?.url || formData.link_url || null,
-      link_urls: formData.links || [],
+      links: formData.links || [],
     };
+
     if (editItem) {
       await updateMutation.mutateAsync({ id: editItem.id, data: payload });
     } else {
-      await insertMutation.mutateAsync(payload);
+      await insertMutation.mutateAsync({
+        ...payload,
+        ordem: getNextOrdem(formData.coluna_id),
+      });
     }
   };
 
@@ -236,30 +285,56 @@ const DivulgacaoPage = () => {
     setEditItem(null);
   };
 
-  // ── Handlers — file viewer ───────────────────────────────────────────────────
   const handleViewFile = (item: Divulgacao) => {
     setViewerItem(item);
     setViewerOpen(true);
   };
 
-  // ── Handlers — drag & drop ───────────────────────────────────────────────────
   const handleDropCard = useCallback(
-    async (cardId: string, targetColunaId: string) => {
-      const card = items.find((i) => i.id === cardId);
-      if (!card || card.coluna_id === targetColunaId) return;
-      const novaColuna = colunas.find((c) => c.id === targetColunaId);
-      await updateMutation.mutateAsync({
-        id: cardId,
-        data: {
+    async (cardId: string, targetColunaId: string, targetIndex = 0) => {
+      const card = sortedItems.find((i) => i.id === cardId);
+      if (!card) return;
+
+      const targetColuna = colunas.find((c) => c.id === targetColunaId);
+      if (!targetColuna) return;
+
+      const sourceColunaId = card.coluna_id || "";
+      const targetCards = sortedItems.filter((i) => i.coluna_id === targetColunaId && i.id !== cardId);
+      const safeIndex = Math.max(0, Math.min(targetIndex, targetCards.length));
+
+      const reorderedTarget = [
+        ...targetCards.slice(0, safeIndex),
+        { ...card, coluna_id: targetColunaId, status: targetColuna.nome },
+        ...targetCards.slice(safeIndex),
+      ];
+
+      const updates: Array<{ id: string; coluna_id: string | null; status: string; ordem: number }> =
+        reorderedTarget.map((item, index) => ({
+          id: item.id,
           coluna_id: targetColunaId,
-          status: novaColuna?.nome ?? "",
-        },
-      });
+          status: targetColuna.nome,
+          ordem: index,
+        }));
+
+      if (sourceColunaId && sourceColunaId !== targetColunaId) {
+        const sourceColuna = colunas.find((c) => c.id === sourceColunaId);
+        const sourceCards = sortedItems.filter((i) => i.coluna_id === sourceColunaId && i.id !== cardId);
+
+        sourceCards.forEach((item, index) => {
+          updates.push({
+            id: item.id,
+            coluna_id: sourceColunaId,
+            status: sourceColuna?.nome ?? item.status ?? "",
+            ordem: index,
+          });
+        });
+      }
+
+      await reorderCardsMutation.mutateAsync(updates);
     },
-    [items, colunas, updateMutation]
+    [sortedItems, colunas, reorderCardsMutation]
   );
 
-  // ── Handlers — colunas ───────────────────────────────────────────────────────
   const handleSaveColuna = async (data: { nome: string; cor: string; icone: string }) => {
     if (editColuna) {
       await updateColunaMutation.mutateAsync({ id: editColuna.id, data });
@@ -313,7 +388,6 @@ const DivulgacaoPage = () => {
         </Button>
       </PageHeader>
 
-      {/* Filters */}
       <div className="px-4 md:px-6 py-3 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <DivulgacaoFilters
           search={search}
@@ -326,7 +400,6 @@ const DivulgacaoPage = () => {
         />
       </div>
 
-      {/* Kanban Board */}
       <div className="flex-1 overflow-auto p-4 md:p-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
@@ -371,7 +444,6 @@ const DivulgacaoPage = () => {
         )}
       </div>
 
-      {/* Form Dialog */}
       <DivulgacaoFormDialog
         open={formOpen}
         onClose={handleCloseForm}
@@ -381,17 +453,21 @@ const DivulgacaoPage = () => {
         colunas={colunas}
       />
 
-      {/* File Viewer */}
       <DivulgacaoFileViewer
         item={viewerItem}
         open={viewerOpen}
-        onClose={() => { setViewerOpen(false); setViewerItem(null); }}
+        onClose={() => {
+          setViewerOpen(false);
+          setViewerItem(null);
+        }}
       />
 
-      {/* Coluna Dialog */}
       <DivulgacaoColunaDialog
         open={colunaDialogOpen}
-        onClose={() => { setColunaDialogOpen(false); setEditColuna(null); }}
+        onClose={() => {
+          setColunaDialogOpen(false);
+          setEditColuna(null);
+        }}
         onSave={handleSaveColuna}
         initialData={editColuna}
       />

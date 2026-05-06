@@ -1,9 +1,17 @@
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, Video, ImageIcon, Copy, Check, Link2, ExternalLink } from "lucide-react";
+import {
+  Download,
+  Video,
+  ImageIcon,
+  Copy,
+  Check,
+  FileText,
+  ExternalLink,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
-import type { Divulgacao } from "./DivulgacaoCard";
+import type { Divulgacao, DivulgacaoLink } from "./DivulgacaoCard";
 
 interface Props {
   item: Divulgacao | null;
@@ -11,52 +19,39 @@ interface Props {
   onClose: () => void;
 }
 
-type CardLink = { titulo?: string; url: string };
+const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
+  if (!links) return [];
 
-function normalizeLinks(item: Divulgacao): CardLink[] {
-  const raw = item.link_urls;
-
-  if (Array.isArray(raw)) {
-    return raw
-      .map((link: any) => ({
-        titulo: String(link?.titulo || "").trim(),
-        url: String(link?.url || "").trim(),
-      }))
-      .filter((link) => link.url);
+  if (Array.isArray(links)) {
+    return links.filter((l) => l?.url);
   }
 
-  if (typeof raw === "string" && raw.trim()) {
+  if (typeof links === "string") {
     try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((link: any) => ({
-            titulo: String(link?.titulo || "").trim(),
-            url: String(link?.url || "").trim(),
-          }))
-          .filter((link) => link.url);
-      }
+      const parsed = JSON.parse(links);
+      return Array.isArray(parsed) ? parsed.filter((l) => l?.url) : [];
     } catch {
-      // Mantém compatibilidade caso venha texto simples.
+      return links.trim() ? [{ titulo: "Link", url: links.trim() }] : [];
     }
   }
 
-  const legacy = item.link_url?.trim();
-  return legacy ? [{ titulo: "Link", url: legacy }] : [];
-}
+  return [];
+};
 
 export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
-  const [copiedText, setCopiedText] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copiedLinkIndex, setCopiedLinkIndex] = useState<number | null>(null);
+
+  const links = useMemo(() => normalizeLinks(item?.links), [item?.links]);
 
   if (!item) return null;
 
   const arquivoUrl = item.arquivo_url || item.imagem_url;
-  const links = normalizeLinks(item);
   const isVideo = item.arquivo_tipo === "video";
+  const isPdf = item.arquivo_tipo === "pdf";
   const fileName =
     item.arquivo_nome ||
-    `${item.titulo || "card-divulgacao"}.${isVideo ? "mp4" : "jpg"}`;
+    `${item.titulo || "card-divulgacao"}.${isVideo ? "mp4" : isPdf ? "pdf" : "jpg"}`;
 
   const textoParaCopiar = [item.titulo, item.descricao]
     .filter(Boolean)
@@ -71,39 +66,29 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
 
     try {
       await navigator.clipboard.writeText(textoParaCopiar);
-      setCopiedText(true);
+      setCopied(true);
       toast.success("Texto copiado!");
 
       setTimeout(() => {
-        setCopiedText(false);
+        setCopied(false);
       }, 1800);
     } catch (error) {
       toast.error("Não foi possível copiar o texto.");
     }
   };
 
-  const handleCopyLink = async (url: string) => {
-    if (!url) {
-      toast.error("Este card não possui link cadastrado.");
-      return;
-    }
-
+  const handleCopyLink = async (url: string, index: number) => {
     try {
       await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
+      setCopiedLinkIndex(index);
       toast.success("Link copiado!");
 
       setTimeout(() => {
-        setCopiedLink(false);
+        setCopiedLinkIndex(null);
       }, 1800);
     } catch (error) {
       toast.error("Não foi possível copiar o link.");
     }
-  };
-
-  const handleOpenLink = (url: string) => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleDownload = async () => {
@@ -135,147 +120,155 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl w-full p-0 overflow-hidden gap-0">
-        <DialogHeader className="px-4 py-3 border-b flex flex-row items-center justify-between space-y-0 gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {isVideo ? (
-              <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-            ) : (
-              <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-            )}
-
-            <DialogTitle className="text-sm font-medium truncate max-w-[360px]">
-              {item.titulo}
-            </DialogTitle>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyText}
-              className="gap-1.5"
-              disabled={!textoParaCopiar}
-            >
-              {copiedText ? (
-                <Check className="h-3.5 w-3.5" />
+      <DialogContent className="max-w-5xl w-[calc(100vw-2rem)] h-[94vh] max-h-[94vh] p-0 overflow-hidden gap-0 flex flex-col">
+        <DialogHeader className="px-4 py-3 border-b shrink-0">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 min-w-0 pr-8">
+              {isVideo ? (
+                <Video className="h-4 w-4 text-muted-foreground shrink-0" />
+              ) : isPdf ? (
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" />
               )}
-              {copiedText ? "Copiado" : "Copiar texto"}
-            </Button>
 
-            {links.length > 0 && (
+              <DialogTitle className="text-sm font-medium truncate">
+                {item.titulo}
+              </DialogTitle>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pr-8">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleCopyLink(links[0].url)}
+                onClick={handleCopyText}
                 className="gap-1.5"
+                disabled={!textoParaCopiar}
               >
-                {copiedLink ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Link2 className="h-3.5 w-3.5" />
-                )}
-                {copiedLink ? "Copiado" : links.length === 1 ? "Copiar link" : "Copiar 1º link"}
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copiado" : "Copiar texto"}
               </Button>
-            )}
 
-            {arquivoUrl && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleDownload}
-                className="gap-1.5"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Baixar card
-              </Button>
-            )}
+              {arquivoUrl && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleDownload}
+                  className="gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Baixar {isPdf ? "PDF" : "card"}
+                </Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
-        {arquivoUrl ? (
-          <div
-            className="flex items-center justify-center bg-black/5 dark:bg-black/40"
-            style={{ minHeight: 300, maxHeight: "72vh" }}
-          >
-            {isVideo ? (
-              <video
-                src={arquivoUrl}
-                controls
-                autoPlay={false}
-                className="max-w-full rounded-sm"
-                style={{ maxHeight: "68vh" }}
-              >
-                Seu navegador não suporta o player de vídeo.
-              </video>
-            ) : (
-              <img
-                src={arquivoUrl}
-                alt={item.titulo}
-                className="max-w-full object-contain"
-                style={{ maxHeight: "68vh" }}
-              />
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center min-h-[260px] bg-muted/40 text-muted-foreground gap-2">
-            <ImageIcon className="h-10 w-10 opacity-50" />
-            <p className="text-sm">Este card não possui imagem ou arquivo anexado.</p>
-          </div>
-        )}
-
-        <div className="px-4 py-3 border-t bg-background space-y-4 max-h-[38vh] overflow-y-auto">
-          {item.descricao ? (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Texto do card
-              </p>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
-                {item.descricao}
-              </p>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {arquivoUrl ? (
+            <div className="bg-black/5 dark:bg-black/40 p-4">
+              {isVideo ? (
+                <div className="flex items-center justify-center">
+                  <video
+                    src={arquivoUrl}
+                    controls
+                    autoPlay={false}
+                    className="max-w-full rounded-sm"
+                    style={{ maxHeight: "68vh" }}
+                  >
+                    Seu navegador não suporta o player de vídeo.
+                  </video>
+                </div>
+              ) : isPdf ? (
+                <div className="w-full h-[70vh] rounded-md overflow-hidden border bg-background">
+                  <iframe
+                    src={arquivoUrl}
+                    title={item.titulo}
+                    className="w-full h-full"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-start justify-center">
+                  <img
+                    src={arquivoUrl}
+                    alt={item.titulo}
+                    className="w-auto max-w-full h-auto object-contain rounded-sm"
+                    style={{ maxHeight: "none" }}
+                  />
+                </div>
+              )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Nenhum texto foi inserido neste card.
-            </p>
-          )}
-
-          {links.length > 0 && (
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Links do card
-              </p>
-
-              <div className="space-y-3">
-                {links.map((link, index) => (
-                  <div key={`${link.url}-${index}`} className="rounded-md border bg-background p-3 space-y-2">
-                    <div>
-                      <p className="text-sm font-semibold break-words">
-                        {link.titulo || `Link ${index + 1}`}
-                      </p>
-                      <p className="text-sm text-muted-foreground break-all whitespace-normal mt-1">
-                        {link.url}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleCopyLink(link.url)} className="gap-1.5">
-                        {copiedLink ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        Copiar link
-                      </Button>
-
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenLink(link.url)} className="gap-1.5">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Abrir link
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="flex flex-col items-center justify-center min-h-[260px] bg-muted/40 text-muted-foreground gap-2">
+              <ImageIcon className="h-10 w-10 opacity-50" />
+              <p className="text-sm">Este card não possui imagem ou arquivo anexado.</p>
             </div>
           )}
+
+          <div className="px-4 pt-4 pb-10 border-t bg-background space-y-5">
+            {item.descricao ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Texto do card
+                </p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
+                  {item.descricao}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum texto foi inserido neste card.
+              </p>
+            )}
+
+            {links.length > 0 && (
+              <div className="space-y-3 pb-6">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Links ({links.length})
+                </p>
+
+                <div className="space-y-2">
+                  {links.map((link, index) => (
+                    <div
+                      key={`${link.url}-${index}`}
+                      className="rounded-lg border bg-muted/20 p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {link.titulo || `Link ${index + 1}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground break-all">
+                          {link.url}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyLink(link.url, index)}
+                          className="gap-1.5"
+                        >
+                          {copiedLinkIndex === index ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          Copiar
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
+                          className="gap-1.5"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Abrir
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
