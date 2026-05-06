@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { MetricCard } from "@/components/MetricCard";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import { ProcessoEmpFilters } from "@/components/processos-empresariais/Processo
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 const ProcessoEmpresarial = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const processoIdFromUrl = searchParams.get("processo");
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -43,6 +46,34 @@ const ProcessoEmpresarial = () => {
   // ── Queries ──
   const { data: processosRaw = [], isLoading } = useQuery({ queryKey: ["processos_empresariais"], queryFn: async () => { const { data, error } = await supabase.from("processos_empresariais").select("*").is("deleted_at", null).order("created_at", { ascending: false }); if (error) throw error; return data; } });
   const processos = filterByResponsavel(processosRaw);
+
+  useEffect(() => {
+    if (!processoIdFromUrl) return;
+    if (!processos.length) return;
+
+    const processoDaUrl = processos.find((p: any) => p.id === processoIdFromUrl);
+    if (!processoDaUrl) return;
+
+    setDetalhesProcesso((atual: any) => {
+      if (atual?.id === processoDaUrl.id) return atual;
+      return processoDaUrl;
+    });
+  }, [processoIdFromUrl, processos]);
+
+  const openProcessoDetail = (processo: any) => {
+    setDetalhesProcesso(processo);
+    const next = new URLSearchParams(searchParams);
+    next.set("processo", processo.id);
+    setSearchParams(next, { replace: false });
+  };
+
+  const closeProcessoDetail = () => {
+    setDetalhesProcesso(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("processo");
+    setSearchParams(next, { replace: true });
+  };
+
   const { data: profissionais = [] } = useQuery({ queryKey: ["profissionais-select"], queryFn: async () => { const { data } = await supabase.from("profissionais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
   const { data: comerciais = [] } = useQuery({ queryKey: ["comerciais-select"], queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
   const { data: contas = [] } = useQuery({ queryKey: ["contas-select"], queryFn: async () => { const { data } = await supabase.from("contas_bancarias").select("id, nome, banco").is("deleted_at", null).eq("ativo", true).order("nome"); return data || []; } });
@@ -185,11 +216,11 @@ const ProcessoEmpresarial = () => {
 
       <ProcessoEmpFormDialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }} form={form} setForm={setForm} onSubmit={handleSave} isPending={saveMutation.isPending} isEditing={!!editing} editing={editing} tipoPagamento={tipoPagamento} setTipoPagamento={setTipoPagamento} profissionais={profissionais} comerciais={comerciais} contas={contas} valorNumerico={valorNumerico} propostaFile={propostaFile} setPropostaFile={setPropostaFile} uploadingProposta={uploadingProposta} />
 
-      <ProcessoEmpTable processos={paginatedItems} pagamentosTotalPorProcesso={pagamentosTotalPorProcesso} onSelect={setDetalhesProcesso} onEdit={openEdit} onDelete={(id) => deleteMutationProcesso.mutate(id)} onFinalize={(id) => finalizarMutation.mutate(id)} onCancel={(p) => { setCancelProcesso(p); setCancelDialogOpen(true); }} onSessao={(id, v) => sessaoMutation.mutate({ id, sessoes_realizadas: v })} contas={contas} />
+      <ProcessoEmpTable processos={paginatedItems} pagamentosTotalPorProcesso={pagamentosTotalPorProcesso} onSelect={openProcessoDetail} onEdit={openEdit} onDelete={(id) => deleteMutationProcesso.mutate(id)} onFinalize={(id) => finalizarMutation.mutate(id)} onCancel={(p) => { setCancelProcesso(p); setCancelDialogOpen(true); }} onSessao={(id, v) => sessaoMutation.mutate({ id, sessoes_realizadas: v })} contas={contas} />
 
       <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={pageSize} onPageChange={setPage} />
 
-      {detalhesProcesso && <DetalhesProcessoEmpDialog processo={detalhesProcesso} onClose={() => setDetalhesProcesso(null)} />}
+      {detalhesProcesso && <DetalhesProcessoEmpDialog processo={detalhesProcesso} onClose={closeProcessoDetail} />}
 
       {/* Cancel Dialog */}
       <Dialog open={cancelDialogOpen} onOpenChange={(o) => { setCancelDialogOpen(o); if (!o) { setCancelProcesso(null); setMotivoCancelamento(""); } }}>

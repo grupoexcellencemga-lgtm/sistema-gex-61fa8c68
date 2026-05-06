@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,6 +32,32 @@ interface TurmaForm {
 const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio: "", data_fim: "", responsavel: "", produto_id: "" };
 
 const Turmas = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const turmaIdFromUrl = searchParams.get("turma");
+  const activeTurmaTab = searchParams.get("tab") || "presenca";
+
+  const setTurmaUrl = (turmaId: string, tab = "presenca") => {
+    const next = new URLSearchParams(searchParams);
+    next.set("turma", turmaId);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: false });
+  };
+
+  const clearTurmaUrl = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("turma");
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleTurmaTabChange = (tab: string) => {
+    if (!selectedTurma?.id) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("turma", selectedTurma.id);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -52,6 +79,29 @@ const Turmas = () => {
   });
 
   const turmas = filterByResponsavel(turmasRaw);
+
+  useEffect(() => {
+    if (!turmaIdFromUrl) return;
+    if (!turmas.length) return;
+
+    const turmaDaUrl = turmas.find((t: any) => t.id === turmaIdFromUrl);
+    if (!turmaDaUrl) return;
+
+    setSelectedTurma((atual: any) => {
+      if (atual?.id === turmaDaUrl.id) return atual;
+      return turmaDaUrl;
+    });
+  }, [turmaIdFromUrl, turmas]);
+
+  const openTurmaDetail = (turma: any) => {
+    setSelectedTurma(turma);
+    setTurmaUrl(turma.id, activeTurmaTab);
+  };
+
+  const closeTurmaDetail = () => {
+    setSelectedTurma(null);
+    clearTurmaUrl();
+  };
 
   const { data: produtos = [] } = useQuery({
     queryKey: ["produtos"],
@@ -167,7 +217,7 @@ const Turmas = () => {
                 <CheckCircle2 className="h-4 w-4 mr-2" />Finalizar Turma
               </Button>
             )}
-            <Button variant="outline" onClick={() => setSelectedTurma(null)}>
+            <Button variant="outline" onClick={closeTurmaDetail}>
               <ArrowLeft className="h-4 w-4 mr-2" />Voltar
             </Button>
           </div>
@@ -175,7 +225,7 @@ const Turmas = () => {
         {isFinalizada && (
           <Badge variant="secondary" className="mb-4 bg-green-100 text-green-800">Turma Finalizada</Badge>
         )}
-        <Tabs defaultValue="presenca" className="mt-4">
+        <Tabs value={activeTurmaTab} onValueChange={handleTurmaTabChange} className="mt-4">
           <TabsList>
             <TabsTrigger value="presenca"><ClipboardCheck className="h-4 w-4 mr-1" />Presença / Frequência</TabsTrigger>
           </TabsList>
@@ -276,7 +326,7 @@ const Turmas = () => {
                     m(t.responsavel || "", filters.responsavel)
                   );
                 }).map((t: any) => (
-                  <TableRow key={t.id} className={`transition-snappy hover:bg-secondary/50 cursor-pointer ${(t.status || "ativa") === "finalizada" ? "opacity-60" : ""}`} onClick={() => setSelectedTurma(t)}>
+                  <TableRow key={t.id} className={`transition-snappy hover:bg-secondary/50 cursor-pointer ${(t.status || "ativa") === "finalizada" ? "opacity-60" : ""}`} onClick={() => openTurmaDetail(t)}>
                     <TableCell className="font-medium text-sm">
                       {t.nome}
                       {(t.status || "ativa") === "finalizada" && <Badge variant="secondary" className="ml-2 text-xs">Finalizada</Badge>}

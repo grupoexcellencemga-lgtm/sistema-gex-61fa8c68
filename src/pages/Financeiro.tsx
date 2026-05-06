@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MonthFilter, getBrazilNow } from "@/components/MonthFilter";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,15 @@ import { TabReembolsos } from "@/components/financeiro/TabReembolsos";
 import { TabEventos } from "@/components/financeiro/TabEventos";
 
 const Financeiro = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "painel";
+
+  const handleTabChange = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const brNow = getBrazilNow();
   const [mes, setMes] = useState(brNow.getMonth());
   const [ano, setAno] = useState(brNow.getFullYear());
@@ -46,7 +56,7 @@ const Financeiro = () => {
         />
       </div>
 
-      <Tabs defaultValue="painel" className="space-y-6 min-w-0">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6 min-w-0">
         <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-2">
           <TabsList className="inline-flex w-max min-w-max whitespace-nowrap">
             <TabsTrigger value="painel" className="gap-1.5 shrink-0">

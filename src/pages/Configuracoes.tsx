@@ -5,6 +5,7 @@ import { FormasPagamentoSection } from "@/components/configuracoes/FormasPagamen
 import { CategoriasSection } from "@/components/configuracoes/CategoriasSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams } from "react-router-dom";
 import { maskPhone } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
@@ -76,6 +77,15 @@ const defaultConfig: Omit<ConfigRow, "id" | "user_id"> = {
 };
 
 const Configuracoes = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "perfil";
+
+  const handleTabChange = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const { user } = useAuth();
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
@@ -301,7 +311,7 @@ const Configuracoes = () => {
         description="Organize preferências, empresa, integrações e regras do sistema"
       />
 
-      <Tabs defaultValue="perfil" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-2">
           <TabsList className="inline-flex w-max min-w-max whitespace-nowrap">
             <TabsTrigger value="perfil" className="gap-1.5 shrink-0">

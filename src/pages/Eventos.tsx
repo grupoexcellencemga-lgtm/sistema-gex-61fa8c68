@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -12,6 +13,9 @@ import { EventoTable } from "@/components/eventos/EventoTable";
 import { ParticipantesSection } from "@/components/eventos/ParticipantesSection";
 
 const Eventos = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const eventoIdFromUrl = searchParams.get("evento");
+
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
   const { filterByResponsavel } = useDataFilter();
@@ -42,6 +46,33 @@ const Eventos = () => {
   });
 
   const eventos = filterByResponsavel(eventosRaw);
+
+  useEffect(() => {
+    if (!eventoIdFromUrl) return;
+    if (!eventos.length) return;
+
+    const eventoDaUrl = eventos.find((e: any) => e.id === eventoIdFromUrl);
+    if (!eventoDaUrl) return;
+
+    setSelectedEvento((atual: any) => {
+      if (atual?.id === eventoDaUrl.id) return atual;
+      return eventoDaUrl;
+    });
+  }, [eventoIdFromUrl, eventos]);
+
+  const openEventoDetail = (evento: any) => {
+    setSelectedEvento(evento);
+    const next = new URLSearchParams(searchParams);
+    next.set("evento", evento.id);
+    setSearchParams(next, { replace: false });
+  };
+
+  const closeEventoDetail = () => {
+    setSelectedEvento(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("evento");
+    setSearchParams(next, { replace: true });
+  };
 
   const { data: allParticipantes = [] } = useQuery({
     queryKey: ["all_participantes_eventos"],
@@ -134,7 +165,7 @@ const Eventos = () => {
       const { error } = await supabase.from("eventos").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["eventos"] }); toast.success("Evento excluído"); if (selectedEvento) setSelectedEvento(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["eventos"] }); toast.success("Evento excluído"); if (selectedEvento) closeEventoDetail(); },
     onError: (err: any) => toast.error("Erro ao excluir: " + err.message),
   });
 
@@ -163,7 +194,7 @@ const Eventos = () => {
       <>
         <ParticipantesSection
           evento={selectedEvento}
-          onBack={() => setSelectedEvento(null)}
+          onBack={closeEventoDetail}
           onEditEvento={openEdit}
           currentUserName={currentUserName}
           produtos={produtosEvento}
@@ -209,7 +240,7 @@ const Eventos = () => {
         eventos={eventos}
         isLoading={isLoading}
         countParticipantes={countParticipantes}
-        onSelect={setSelectedEvento}
+        onSelect={openEventoDetail}
         onEdit={openEdit}
         onDelete={(id) => deleteMutation.mutate(id)}
       />

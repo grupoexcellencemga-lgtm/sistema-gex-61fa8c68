@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams } from "react-router-dom";
 import { exportToCSV } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,6 +75,15 @@ function pctChange(atual: number, anterior: number): { pct: number; direction: "
 }
 
 const Relatorios = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "geral";
+
+  const handleTabChange = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const [preset, setPreset] = useState<PeriodPreset>("mes_atual");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -195,7 +205,7 @@ const Relatorios = () => {
     <div>
       <PageHeader title="Relatórios" description="Relatórios automáticos do Grupo Excellence" />
 
-      <Tabs defaultValue="geral" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="geral" className="gap-1.5"><Calendar className="h-3.5 w-3.5" />Relatório Geral</TabsTrigger>
           <TabsTrigger value="personalizado" className="gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />Relatório Personalizado</TabsTrigger>
