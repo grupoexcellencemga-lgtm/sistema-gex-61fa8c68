@@ -106,7 +106,7 @@ export function DivulgacaoColumn({
   };
 
   return (
-    <div className="flex flex-col min-w-[280px] md:min-w-0 flex-1">
+    <div className="flex flex-col w-[320px] min-w-[320px] max-w-[320px] shrink-0">
       <div className={`flex items-center justify-between mb-3 px-1 pb-2 border-b-2 ${corBorder}`}>
         <div className="flex items-center gap-2">
           <span className="text-base">{coluna.icone}</span>

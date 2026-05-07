@@ -66,6 +66,16 @@ const EMPTY: FormData = {
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024;
 
+const isPowerPointFile = (file: File) => {
+  const name = file.name.toLowerCase();
+  return (
+    name.endsWith(".ppt") ||
+    name.endsWith(".pptx") ||
+    file.type === "application/vnd.ms-powerpoint" ||
+    file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  );
+};
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -194,9 +204,10 @@ export function DivulgacaoFormDialog({
     const isVideo = file.type.startsWith("video/");
     const isImage = file.type.startsWith("image/");
     const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isPpt = isPowerPointFile(file);
 
-    if (!isVideo && !isImage && !isPdf) {
-      toast.error("Apenas imagens, vídeos e PDFs são permitidos");
+    if (!isVideo && !isImage && !isPdf && !isPpt) {
+      toast.error("Apenas imagens, vídeos, PDFs e PowerPoints são permitidos");
       return;
     }
 
@@ -250,7 +261,7 @@ export function DivulgacaoFormDialog({
       setForm((f) => ({
         ...f,
         arquivo_url: urlData.publicUrl,
-        arquivo_tipo: isVideo ? "video" : isPdf ? "pdf" : "image",
+        arquivo_tipo: isVideo ? "video" : isPdf ? "pdf" : isPpt ? "ppt" : "image",
         arquivo_nome: file.name,
         imagem_url: isPdf && capaPdfUrl ? capaPdfUrl : isImage ? urlData.publicUrl : f.imagem_url,
       }));
@@ -325,6 +336,7 @@ export function DivulgacaoFormDialog({
   const isVideo = form.arquivo_tipo === "video";
   const isImageArq = form.arquivo_tipo === "image";
   const isPdf = form.arquivo_tipo === "pdf";
+  const isPpt = form.arquivo_tipo === "ppt";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -447,6 +459,14 @@ export function DivulgacaoFormDialog({
                     </span>
                   </div>
                 )}
+                {isPpt && (
+                  <div className="w-full h-40 bg-purple-50 dark:bg-purple-950/30 flex flex-col items-center justify-center gap-1 px-4 text-center">
+                    <FileText className="h-8 w-8 text-purple-500" />
+                    <span className="text-purple-700 dark:text-purple-300 text-xs font-medium break-all">
+                      {form.arquivo_nome || "PowerPoint anexado"}
+                    </span>
+                  </div>
+                )}
                 <Button
                   type="button"
                   variant="destructive"
@@ -473,10 +493,10 @@ export function DivulgacaoFormDialog({
                   <>
                     <Upload className="h-8 w-8 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      Clique para enviar imagem, vídeo ou PDF
+                      Clique para enviar imagem, vídeo, PDF ou PPT
                     </span>
                     <span className="text-xs text-muted-foreground/60">
-                      JPG, PNG, GIF, WebP, MP4, WebM, PDF — máx. 500 MB
+                      JPG, PNG, GIF, WebP, MP4, WebM, PDF, PPT, PPTX — máx. 500 MB
                     </span>
                   </>
                 )}
@@ -486,7 +506,7 @@ export function DivulgacaoFormDialog({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,application/pdf,.pdf"
+              accept="image/*,video/*,application/pdf,.pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               className="hidden"
               onChange={handleFileSelect}
             />

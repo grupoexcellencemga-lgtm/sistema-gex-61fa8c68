@@ -83,6 +83,7 @@ export function DivulgacaoCard({
   const arquivoUrl = item.arquivo_url;
   const isVideo = item.arquivo_tipo === "video";
   const isPdf = item.arquivo_tipo === "pdf";
+  const isPpt = item.arquivo_tipo === "ppt";
   const isImageArquivo = item.arquivo_tipo === "image";
   const previewUrlBase = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
   const previewUrl = previewUrlBase
@@ -139,7 +140,16 @@ export function DivulgacaoCard({
         </div>
       )}
 
-      {!previewUrl && !isVideo && !isPdf && (
+      {!previewUrl && isPpt && arquivoUrl && (
+        <div className="w-full h-32 rounded-t-xl overflow-hidden bg-purple-50 dark:bg-purple-950/30 flex flex-col items-center justify-center hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors gap-1">
+          <FileText className="h-8 w-8 text-purple-500" />
+          <span className="text-purple-700 dark:text-purple-300 text-[10px] font-medium">
+            PPT anexado
+          </span>
+        </div>
+      )}
+
+      {!previewUrl && !isVideo && !isPdf && !isPpt && (
         <div className="w-full h-24 rounded-t-xl overflow-hidden bg-muted/60 flex flex-col items-center justify-center gap-1">
           <ImageIcon className="h-7 w-7 text-muted-foreground/60" />
           <span className="text-muted-foreground text-[10px]">Clique para visualizar</span>
@@ -220,6 +230,13 @@ export function DivulgacaoCard({
             </span>
           )}
 
+          {isPpt && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+              <FileText className="h-2.5 w-2.5" />
+              PPT
+            </span>
+          )}
+
           {links.length > 0 && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
               <LinkIcon className="h-2.5 w-2.5" />
@@ -257,7 +274,7 @@ export function DivulgacaoCard({
             >
               {isVideo ? (
                 <Video className="h-3.5 w-3.5" />
-              ) : isPdf ? (
+              ) : isPdf || isPpt ? (
                 <FileText className="h-3.5 w-3.5" />
               ) : (
                 <ImageIcon className="h-3.5 w-3.5" />

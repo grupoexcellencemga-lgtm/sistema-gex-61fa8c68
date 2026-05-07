@@ -52,9 +52,10 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
     : "";
   const isVideo = item.arquivo_tipo === "video";
   const isPdf = item.arquivo_tipo === "pdf";
+  const isPpt = item.arquivo_tipo === "ppt";
   const fileName =
     item.arquivo_nome ||
-    `${item.titulo || "card-divulgacao"}.${isVideo ? "mp4" : isPdf ? "pdf" : "jpg"}`;
+    `${item.titulo || "card-divulgacao"}.${isVideo ? "mp4" : isPdf ? "pdf" : isPpt ? "pptx" : "jpg"}`;
 
   const textoParaCopiar = [item.titulo, item.descricao]
     .filter(Boolean)
@@ -129,7 +130,7 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
             <div className="flex items-center gap-2 min-w-0 pr-8">
               {isVideo ? (
                 <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-              ) : isPdf ? (
+              ) : isPdf || isPpt ? (
                 <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
               ) : (
                 <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -160,7 +161,7 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
                   className="gap-1.5"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Baixar {isPdf ? "PDF" : "card"}
+                  Baixar {isPdf ? "PDF" : isPpt ? "PPT" : "card"}
                 </Button>
               )}
             </div>
@@ -189,6 +190,26 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
                     title={item.titulo}
                     className="w-full h-full"
                   />
+                </div>
+              ) : isPpt ? (
+                <div className="min-h-[320px] rounded-md border bg-background flex flex-col items-center justify-center gap-4 p-8 text-center">
+                  <FileText className="h-14 w-14 text-purple-500" />
+                  <div>
+                    <p className="text-base font-semibold">PowerPoint anexado</p>
+                    <p className="text-sm text-muted-foreground break-all mt-1">
+                      {fileName}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button onClick={() => window.open(arquivoUrl, "_blank", "noopener,noreferrer")} className="gap-1.5">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Abrir
+                    </Button>
+                    <Button variant="outline" onClick={handleDownload} className="gap-1.5">
+                      <Download className="h-3.5 w-3.5" />
+                      Baixar PPT
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-start justify-center">

@@ -17,6 +17,8 @@ import {
   Check,
   Edit2,
   LayoutDashboard,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Trash2,
   X,
@@ -53,6 +55,7 @@ const DivulgacaoPage = () => {
   const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
   const [editingQuadroName, setEditingQuadroName] = useState("");
   const [quadroDialogOpen, setQuadroDialogOpen] = useState(false);
+  const [quadrosVisible, setQuadrosVisible] = useState(true);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<Divulgacao | null>(null);
@@ -570,6 +573,7 @@ const DivulgacaoPage = () => {
 
   return (
     <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
+      {quadrosVisible && (
       <aside className="w-[280px] shrink-0 border-r bg-card flex flex-col">
         <div className="p-4 border-b flex items-center gap-2">
           <LayoutDashboard className="h-5 w-5 text-primary" />
@@ -680,12 +684,22 @@ const DivulgacaoPage = () => {
           )}
         </div>
       </aside>
+      )}
 
       <main className="flex-1 min-w-0 flex flex-col bg-background">
         <PageHeader
-          title={selectedQuadro ? selectedQuadro.nome : "Divulgação"}
+          title={selectedQuadro ? selectedQuadro.nome : "Quadros de Divulgação"}
           description="Gerencie cards, campanhas, conteúdos e materiais por quadro"
         >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setQuadrosVisible((v) => !v)}
+            className="gap-1"
+          >
+            {quadrosVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            {quadrosVisible ? "Ocultar quadros" : "Mostrar quadros"}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -722,7 +736,7 @@ const DivulgacaoPage = () => {
           />
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="flex-1 min-h-0 overflow-auto p-4 md:p-6">
           {!selectedQuadroId ? (
             <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
               <LayoutDashboard className="h-14 w-14 text-muted-foreground/30" />
@@ -752,7 +766,8 @@ const DivulgacaoPage = () => {
               </Button>
             </div>
           ) : (
-            <div className="flex gap-4 h-full min-h-[400px] snap-x snap-mandatory md:snap-none overflow-x-auto pb-4 group">
+            <div className="w-full overflow-x-auto overflow-y-hidden pb-4">
+              <div className="flex w-max gap-4 min-h-[400px] group">
               {colunas.map((col) => (
                 <DivulgacaoColumn
                   key={col.id}
@@ -771,6 +786,7 @@ const DivulgacaoPage = () => {
                   onDragEnd={() => setDraggingId(null)}
                 />
               ))}
+              </div>
             </div>
           )}
         </div>
