@@ -65,9 +65,23 @@ export function TurmaPresencaTab({ turma }: Props) {
       const { data, error } = await supabase
         .from("matriculas")
         .select("aluno_id, alunos(id, nome, telefone)")
-        .eq("turma_id", turma.id);
+        .eq("turma_id", turma.id)
+        .is("deleted_at", null);
+
       if (error) throw error;
-      return data?.map((m: any) => m.alunos).filter(Boolean) || [];
+
+      const alunosMap = new Map<string, any>();
+
+      (data || []).forEach((matricula: any) => {
+        const aluno = matricula.alunos;
+        if (aluno?.id && !alunosMap.has(aluno.id)) {
+          alunosMap.set(aluno.id, aluno);
+        }
+      });
+
+      return Array.from(alunosMap.values()).sort((a: any, b: any) =>
+        String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR")
+      );
     },
   });
 
@@ -275,6 +289,35 @@ export function TurmaPresencaTab({ turma }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Alunos da turma */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Alunos da Turma</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {alunosMatriculados.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground text-sm">Nenhum aluno matriculado nesta turma.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Aluno</TableHead>
+                  <TableHead>Telefone</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {alunosMatriculados.map((aluno: any) => (
+                  <TableRow key={aluno.id}>
+                    <TableCell className="font-medium">{aluno.nome}</TableCell>
+                    <TableCell className="text-muted-foreground">{aluno.telefone || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Encontros + Presença Table */}
       <Card>

@@ -115,13 +115,24 @@ const Turmas = () => {
   const { data: matriculaCounts = [] } = useQuery({
     queryKey: ["matricula-counts"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("matriculas").select("turma_id").is("deleted_at", null);
+      const { data, error } = await supabase
+        .from("matriculas")
+        .select("turma_id, aluno_id")
+        .is("deleted_at", null);
       if (error) throw error;
-      return data;
+      return data || [];
     },
   });
 
-  const countByTurma = (turmaId: string) => matriculaCounts.filter(m => m.turma_id === turmaId).length;
+  const countByTurma = (turmaId: string) => {
+    const alunosUnicos = new Set(
+      matriculaCounts
+        .filter((m: any) => m.turma_id === turmaId && m.aluno_id)
+        .map((m: any) => m.aluno_id)
+    );
+
+    return alunosUnicos.size;
+  };
 
   const insertMutation = useMutation({
     mutationFn: async (data: TurmaForm) => {
