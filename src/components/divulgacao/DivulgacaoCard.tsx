@@ -34,6 +34,7 @@ export interface Divulgacao {
   ativo?: boolean;
   links?: DivulgacaoLink[] | string | null;
   created_at?: string;
+  updated_at?: string;
 }
 
 const CATEGORIA_COLORS: Record<string, string> = {
@@ -83,7 +84,10 @@ export function DivulgacaoCard({
   const isVideo = item.arquivo_tipo === "video";
   const isPdf = item.arquivo_tipo === "pdf";
   const isImageArquivo = item.arquivo_tipo === "image";
-  const previewUrl = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
+  const previewUrlBase = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
+  const previewUrl = previewUrlBase
+    ? `${previewUrlBase}${previewUrlBase.includes("?") ? "&" : "?"}v=${encodeURIComponent(item.updated_at || item.created_at || item.id)}`
+    : null;
   const ativo = item.ativo !== false;
   const links = normalizeLinks(item.links);
 

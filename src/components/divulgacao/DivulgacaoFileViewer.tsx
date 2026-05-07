@@ -46,7 +46,10 @@ export function DivulgacaoFileViewer({ item, open, onClose }: Props) {
 
   if (!item) return null;
 
-  const arquivoUrl = item.arquivo_url || item.imagem_url;
+  const arquivoUrlBase = item.arquivo_url || item.imagem_url;
+  const arquivoUrl = arquivoUrlBase
+    ? `${arquivoUrlBase}${arquivoUrlBase.includes("?") ? "&" : "?"}v=${encodeURIComponent(item.updated_at || item.created_at || item.id)}`
+    : "";
   const isVideo = item.arquivo_tipo === "video";
   const isPdf = item.arquivo_tipo === "pdf";
   const fileName =

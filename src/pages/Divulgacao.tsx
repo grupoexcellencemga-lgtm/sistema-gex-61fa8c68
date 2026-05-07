@@ -1,9 +1,26 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import {
+  Brain,
+  Check,
+  Edit2,
+  LayoutDashboard,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { DivulgacaoColumn } from "@/components/divulgacao/DivulgacaoColumn";
 import { DivulgacaoFilters } from "@/components/divulgacao/DivulgacaoFilters";
@@ -13,8 +30,29 @@ import { DivulgacaoColunaDialog } from "@/components/divulgacao/DivulgacaoColuna
 import type { Divulgacao } from "@/components/divulgacao/DivulgacaoCard";
 import type { DivulgacaoColuna } from "@/components/divulgacao/DivulgacaoColunaDialog";
 
+type DivulgacaoQuadro = {
+  id: string;
+  nome: string;
+  ordem: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+const COLUNAS_PADRAO = [
+  { nome: "Ideias", cor: "slate", icone: "💡" },
+  { nome: "Em produção", cor: "orange", icone: "🎨" },
+  { nome: "Agendado", cor: "blue", icone: "📅" },
+  { nome: "Publicado", cor: "green", icone: "✅" },
+];
+
 const DivulgacaoPage = () => {
   const queryClient = useQueryClient();
+
+  const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
+  const [newQuadroName, setNewQuadroName] = useState("");
+  const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
+  const [editingQuadroName, setEditingQuadroName] = useState("");
+  const [quadroDialogOpen, setQuadroDialogOpen] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<Divulgacao | null>(null);
@@ -32,25 +70,89 @@ const DivulgacaoPage = () => {
   const [filterCategoria, setFilterCategoria] = useState("todos");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
 
-  const { data: colunas = [] } = useQuery<DivulgacaoColuna[]>({
-    queryKey: ["divulgacao-colunas"],
+  const { data: quadros = [], isLoading: quadrosLoading } = useQuery<DivulgacaoQuadro[]>({
+    queryKey: ["divulgacao-quadros"],
     queryFn: async () => {
+      const { data, error } = await supabase
+        .from("divulgacao_quadros")
+        .select("*")
+        .is("deleted_at", null)
+        .order("ordem", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as DivulgacaoQuadro[];
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedQuadroId && quadros.length > 0) {
+      setSelectedQuadroId(quadros[0].id);
+    }
+  }, [quadros, selectedQuadroId]);
+
+  const selectedQuadro = useMemo(
+    () => quadros.find((q) => q.id === selectedQuadroId) ?? null,
+    [quadros, selectedQuadroId]
+  );
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("divulgacao-realtime-global")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "divulgacao_quadros" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["divulgacao-quadros"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "divulgacao_colunas" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["divulgacao-colunas"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "divulgacoes" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["divulgacoes"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  const { data: colunas = [] } = useQuery<DivulgacaoColuna[]>({
+    queryKey: ["divulgacao-colunas", selectedQuadroId],
+    queryFn: async () => {
+      if (!selectedQuadroId) return [];
+
       const { data, error } = await supabase
         .from("divulgacao_colunas")
         .select("*")
+        .eq("quadro_id", selectedQuadroId)
         .order("ordem", { ascending: true });
 
       if (error) throw error;
       return (data ?? []) as DivulgacaoColuna[];
     },
+    enabled: !!selectedQuadroId,
   });
 
   const { data: items = [], isLoading } = useQuery<Divulgacao[]>({
-    queryKey: ["divulgacoes"],
+    queryKey: ["divulgacoes", selectedQuadroId],
     queryFn: async () => {
+      if (!selectedQuadroId) return [];
+
       const { data, error } = await supabase
         .from("divulgacoes")
         .select("*")
+        .eq("quadro_id", selectedQuadroId)
         .order("coluna_id", { ascending: true, nullsFirst: false })
         .order("ordem", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
@@ -58,6 +160,7 @@ const DivulgacaoPage = () => {
       if (error) throw error;
       return (data ?? []) as Divulgacao[];
     },
+    enabled: !!selectedQuadroId,
   });
 
   const responsaveis = useMemo(() => {
@@ -104,6 +207,86 @@ const DivulgacaoPage = () => {
     });
   }, [sortedItems, search, filterCategoria, filterResponsavel]);
 
+  const createQuadroMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const nome = name.trim() || "Novo quadro";
+      const ordem = quadros.length;
+
+      const { data: quadro, error } = await supabase
+        .from("divulgacao_quadros")
+        .insert([{ nome, ordem }])
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      const colunasPadrao = COLUNAS_PADRAO.map((coluna, index) => ({
+        ...coluna,
+        quadro_id: quadro.id,
+        ordem: index,
+      }));
+
+      const { error: colunasError } = await supabase
+        .from("divulgacao_colunas")
+        .insert(colunasPadrao);
+
+      if (colunasError) throw colunasError;
+
+      return quadro;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-quadros"] });
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-colunas"] });
+      setSelectedQuadroId(data.id);
+      setNewQuadroName("");
+      setQuadroDialogOpen(false);
+      toast.success("Quadro criado!");
+    },
+    onError: (err: any) => toast.error("Erro ao criar quadro: " + (err?.message ?? err)),
+  });
+
+  const renameQuadroMutation = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await supabase
+        .from("divulgacao_quadros")
+        .update({ nome: nome.trim() || "Quadro sem nome", updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-quadros"] });
+      setEditingQuadroId(null);
+      setEditingQuadroName("");
+      toast.success("Quadro renomeado!");
+    },
+    onError: (err: any) => toast.error("Erro ao renomear quadro: " + (err?.message ?? err)),
+  });
+
+  const deleteQuadroMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("divulgacao_quadros")
+        .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-quadros"] });
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-colunas"] });
+      queryClient.invalidateQueries({ queryKey: ["divulgacoes"] });
+
+      if (selectedQuadroId === id) {
+        const nextQuadro = quadros.find((q) => q.id !== id);
+        setSelectedQuadroId(nextQuadro?.id ?? null);
+      }
+
+      toast.success("Quadro removido!");
+    },
+    onError: (err: any) => toast.error("Erro ao remover quadro: " + (err?.message ?? err)),
+  });
+
   const insertMutation = useMutation({
     mutationFn: async (data: any) => {
       const { error } = await supabase.from("divulgacoes").insert([data]);
@@ -138,6 +321,7 @@ const DivulgacaoPage = () => {
               coluna_id: update.coluna_id,
               status: update.status,
               ordem: update.ordem,
+              updated_at: new Date().toISOString(),
             } as any)
             .eq("id", update.id)
         )
@@ -168,7 +352,7 @@ const DivulgacaoPage = () => {
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
       const { error } = await supabase
         .from("divulgacoes")
-        .update({ ativo } as any)
+        .update({ ativo, updated_at: new Date().toISOString() } as any)
         .eq("id", id);
       if (error) throw error;
     },
@@ -181,10 +365,12 @@ const DivulgacaoPage = () => {
 
   const insertColunaMutation = useMutation({
     mutationFn: async (data: { nome: string; cor: string; icone: string }) => {
+      if (!selectedQuadroId) throw new Error("Selecione um quadro primeiro.");
+
       const ordem = colunas.length;
       const { error } = await supabase
         .from("divulgacao_colunas")
-        .insert([{ ...data, ordem }]);
+        .insert([{ ...data, ordem, quadro_id: selectedQuadroId }]);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -198,7 +384,7 @@ const DivulgacaoPage = () => {
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const { error } = await supabase
         .from("divulgacao_colunas")
-        .update(data)
+        .update({ ...data, updated_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
     },
@@ -225,13 +411,25 @@ const DivulgacaoPage = () => {
     onError: (err: any) => toast.error("Erro ao remover coluna: " + (err?.message ?? err)),
   });
 
-  const getNextOrdem = (colunaId: string) => {
+  const getFirstOrdem = (colunaId: string) => {
     const cardsDaColuna = sortedItems.filter((i) => i.coluna_id === colunaId);
-    const max = cardsDaColuna.reduce((acc, item) => Math.max(acc, Number(item.ordem ?? 0)), -1);
-    return max + 1;
+
+    if (cardsDaColuna.length === 0) return 0;
+
+    const min = cardsDaColuna.reduce(
+      (acc, item) => Math.min(acc, Number(item.ordem ?? 0)),
+      Number(cardsDaColuna[0]?.ordem ?? 0)
+    );
+
+    return min - 1;
   };
 
   const handleSave = async (formData: any) => {
+    if (!selectedQuadroId) {
+      toast.error("Crie ou selecione um quadro primeiro.");
+      return;
+    }
+
     const novaColuna = colunas.find((c) => c.id === formData.coluna_id);
 
     const payload = {
@@ -240,6 +438,7 @@ const DivulgacaoPage = () => {
       categoria: formData.categoria,
       status: novaColuna?.nome ?? "",
       coluna_id: formData.coluna_id || null,
+      quadro_id: selectedQuadroId,
       imagem_url: formData.imagem_url || null,
       responsavel_iniciais: formData.responsavel_iniciais || null,
       data: formData.data || null,
@@ -247,6 +446,7 @@ const DivulgacaoPage = () => {
       arquivo_tipo: formData.arquivo_tipo || null,
       arquivo_nome: formData.arquivo_nome || null,
       links: formData.links || [],
+      updated_at: new Date().toISOString(),
     };
 
     if (editItem) {
@@ -254,7 +454,7 @@ const DivulgacaoPage = () => {
     } else {
       await insertMutation.mutateAsync({
         ...payload,
-        ordem: getNextOrdem(formData.coluna_id),
+        ordem: getFirstOrdem(formData.coluna_id),
       });
     }
   };
@@ -359,90 +559,246 @@ const DivulgacaoPage = () => {
     }
   };
 
+  const handleDeleteQuadro = (quadro: DivulgacaoQuadro) => {
+    const msg =
+      "Deseja remover este quadro?\n\nAs colunas e cards dele ficarão ocultos junto com o quadro, mas não serão apagados definitivamente do banco.";
+
+    if (window.confirm(msg)) {
+      deleteQuadroMutation.mutate(quadro.id);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader
-        title="Divulgação"
-        description="Gerencie comunicados, campanhas, eventos e treinamentos"
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setEditColuna(null);
-            setColunaDialogOpen(true);
-          }}
-          className="gap-1"
-        >
-          <Plus className="h-4 w-4" />
-          Nova coluna
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => handleAdd(colunas[0]?.id ?? "")}
-          className="gap-1"
-          disabled={colunas.length === 0}
-        >
-          <Plus className="h-4 w-4" />
-          Novo card
-        </Button>
-      </PageHeader>
-
-      <div className="px-4 md:px-6 py-3 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <DivulgacaoFilters
-          search={search}
-          onSearchChange={setSearch}
-          categoria={filterCategoria}
-          onCategoriaChange={setFilterCategoria}
-          responsavel={filterResponsavel}
-          onResponsavelChange={setFilterResponsavel}
-          responsaveis={responsaveis}
-        />
-      </div>
-
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
-            Carregando...
+    <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
+      <aside className="w-[280px] shrink-0 border-r bg-card flex flex-col">
+        <div className="p-4 border-b flex items-center gap-2">
+          <LayoutDashboard className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="text-sm font-semibold leading-tight">Quadros de Divulgação</h2>
+            <p className="text-xs text-muted-foreground">Separe campanhas, perfis e projetos</p>
           </div>
-        ) : colunas.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
-            <p className="text-sm">Nenhuma coluna criada ainda.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEditColuna(null);
-                setColunaDialogOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Criar primeira coluna
+        </div>
+
+        <div className="p-3 border-b">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              createQuadroMutation.mutate(newQuadroName);
+            }}
+            className="flex gap-2"
+          >
+            <Input
+              value={newQuadroName}
+              onChange={(e) => setNewQuadroName(e.target.value)}
+              placeholder="Nome do quadro..."
+              className="h-9 text-sm"
+            />
+            <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
+              <Plus className="h-4 w-4" />
             </Button>
+          </form>
+        </div>
+
+        <div className="flex-1 overflow-auto p-2 space-y-1">
+          {quadrosLoading ? (
+            <p className="text-xs text-muted-foreground text-center p-4">Carregando quadros...</p>
+          ) : quadros.length === 0 ? (
+            <div className="text-center p-4 space-y-3">
+              <Brain className="h-10 w-10 mx-auto text-muted-foreground/30" />
+              <p className="text-xs text-muted-foreground">Crie o primeiro quadro de divulgação.</p>
+              <Button size="sm" onClick={() => setQuadroDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Criar quadro
+              </Button>
+            </div>
+          ) : (
+            quadros.map((quadro) => (
+              <div
+                key={quadro.id}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
+                  selectedQuadroId === quadro.id
+                    ? "bg-primary/15 text-primary font-medium"
+                    : "hover:bg-muted text-foreground"
+                )}
+              >
+                {editingQuadroId === quadro.id ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
+                    }}
+                    className="flex items-center gap-1 flex-1"
+                  >
+                    <Input
+                      value={editingQuadroName}
+                      onChange={(e) => setEditingQuadroName(e.target.value)}
+                      className="h-7 text-xs"
+                      autoFocus
+                    />
+                    <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => setEditingQuadroId(null)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
+                      {quadro.nome}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                      onClick={() => {
+                        setEditingQuadroId(quadro.id);
+                        setEditingQuadroName(quadro.nome);
+                      }}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                      onClick={() => handleDeleteQuadro(quadro)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      <main className="flex-1 min-w-0 flex flex-col bg-background">
+        <PageHeader
+          title={selectedQuadro ? selectedQuadro.nome : "Divulgação"}
+          description="Gerencie cards, campanhas, conteúdos e materiais por quadro"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditColuna(null);
+              setColunaDialogOpen(true);
+            }}
+            className="gap-1"
+            disabled={!selectedQuadroId}
+          >
+            <Plus className="h-4 w-4" />
+            Nova coluna
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => handleAdd(colunas[0]?.id ?? "")}
+            className="gap-1"
+            disabled={!selectedQuadroId || colunas.length === 0}
+          >
+            <Plus className="h-4 w-4" />
+            Novo card
+          </Button>
+        </PageHeader>
+
+        <div className="px-4 md:px-6 py-3 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+          <DivulgacaoFilters
+            search={search}
+            onSearchChange={setSearch}
+            categoria={filterCategoria}
+            onCategoriaChange={setFilterCategoria}
+            responsavel={filterResponsavel}
+            onResponsavelChange={setFilterResponsavel}
+            responsaveis={responsaveis}
+          />
+        </div>
+
+        <div className="flex-1 overflow-auto p-4 md:p-6">
+          {!selectedQuadroId ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+              <LayoutDashboard className="h-14 w-14 text-muted-foreground/30" />
+              <p className="text-sm">Crie ou selecione um quadro de divulgação.</p>
+              <Button size="sm" onClick={() => setQuadroDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Criar quadro
+              </Button>
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+              Carregando...
+            </div>
+          ) : colunas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
+              <p className="text-sm">Nenhuma coluna criada neste quadro ainda.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditColuna(null);
+                  setColunaDialogOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Criar primeira coluna
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-4 h-full min-h-[400px] snap-x snap-mandatory md:snap-none overflow-x-auto pb-4 group">
+              {colunas.map((col) => (
+                <DivulgacaoColumn
+                  key={col.id}
+                  coluna={col}
+                  items={filtered.filter((i) => i.coluna_id === col.id)}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onAdd={handleAdd}
+                  onViewFile={handleViewFile}
+                  onToggleAtivo={handleToggleAtivo}
+                  onEditColuna={handleEditColuna}
+                  onDeleteColuna={handleDeleteColuna}
+                  onDropCard={handleDropCard}
+                  draggingId={draggingId}
+                  onDragStart={setDraggingId}
+                  onDragEnd={() => setDraggingId(null)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      <Dialog open={quadroDialogOpen} onOpenChange={(v) => !v && setQuadroDialogOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Novo quadro de divulgação</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={newQuadroName}
+              onChange={(e) => setNewQuadroName(e.target.value)}
+              placeholder="Ex: Conteúdos Mércia"
+              autoFocus
+            />
           </div>
-        ) : (
-          <div className="flex gap-4 h-full min-h-[400px] snap-x snap-mandatory md:snap-none overflow-x-auto pb-4 group">
-            {colunas.map((col) => (
-              <DivulgacaoColumn
-                key={col.id}
-                coluna={col}
-                items={filtered.filter((i) => i.coluna_id === col.id)}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onAdd={handleAdd}
-                onViewFile={handleViewFile}
-                onToggleAtivo={handleToggleAtivo}
-                onEditColuna={handleEditColuna}
-                onDeleteColuna={handleDeleteColuna}
-                onDropCard={handleDropCard}
-                draggingId={draggingId}
-                onDragStart={setDraggingId}
-                onDragEnd={() => setDraggingId(null)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuadroDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => createQuadroMutation.mutate(newQuadroName)} disabled={createQuadroMutation.isPending}>
+              Criar quadro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DivulgacaoFormDialog
         open={formOpen}

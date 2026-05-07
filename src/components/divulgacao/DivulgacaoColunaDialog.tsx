@@ -17,6 +17,7 @@ export interface DivulgacaoColuna {
   ordem: number;
   cor: string;
   icone: string;
+  quadro_id?: string | null;
 }
 
 const CORES = [

@@ -24,6 +24,29 @@ import { useFormasPagamento, getFormaPagamentoLabel, isFormaCredito } from "@/ho
 
 export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+
+  const getValorOriginalEntrada = (pagamento: any) => Number(pagamento?.valor || 0);
+
+  const getValorPagoEntrada = (pagamento: any) => {
+    const valorPago = pagamento?.valor_pago !== null && pagamento?.valor_pago !== undefined
+      ? Number(pagamento.valor_pago)
+      : 0;
+
+    return valorPago > 0 ? valorPago : Number(pagamento?.valor || 0);
+  };
+
+  const getSaldoEntrada = (pagamento: any) => {
+    return Math.max(getValorOriginalEntrada(pagamento) - Number(pagamento?.valor_pago || 0), 0);
+  };
+
+  const getStatusEntrada = (pagamento: any) => {
+    const valorPago = Number(pagamento?.valor_pago || 0);
+    const valorOriginal = getValorOriginalEntrada(pagamento);
+
+    if (valorPago > 0 && valorPago < valorOriginal) return "parcial";
+    return pagamento?.status || "pendente";
+  };
+
   const { data: formasPagamento = [] } = useFormasPagamento();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({
@@ -87,17 +110,16 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: categoriasReceita = [] } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas_receita"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
-        .is("deleted_at", null)
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
+        .eq("tipo", "receita")
+        .order("nome");
 
       if (error) throw error;
-      return data || [];
+      return data;
     },
   });
 
@@ -352,7 +374,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       return (
         match(p.alunos?.nome || "", filters.aluno) &&
         match(p.produtos?.nome || "", filters.produto) &&
-        match(formatCurrency(Number(p.valor)), filters.valor) &&
+        match(formatCurrency(getValorPagoEntrada(p)), filters.valor) || match(formatCurrency(getValorOriginalEntrada(p)), filters.valor) &&
         match(getFormaPagamentoLabel(p.forma_pagamento, formasPagamento), filters.forma) &&
         match((p as any).contas_bancarias?.nome || "", filters.banco) &&
         match(formatDate(p.data_vencimento), filters.vencimento) &&
@@ -368,27 +390,27 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const pagamentosProcessoEmpresarialMes = pagamentosProcessoEmpresarial.filter((p: any) => inMonth(p.data));
 
   const totalPago = pagMes
-    .filter((p: any) => p.status === "pago")
-    .reduce((s: number, p: any) => s + Number(p.valor), 0);
+    .filter((p: any) => p.status === "pago" || Number(p.valor_pago || 0) > 0)
+    .reduce((s: number, p: any) => s + getValorPagoEntrada(p), 0);
 
   const totalAvulsas = receitasAvulsasMes.reduce((s: number, r: any) => s + Number(r.valor), 0);
 
   const totalPendente = pagMes
-    .filter((p: any) => p.status === "pendente")
-    .reduce((s: number, p: any) => s + Number(p.valor), 0);
+    .filter((p: any) => getStatusEntrada(p) === "pendente" || getStatusEntrada(p) === "parcial")
+    .reduce((s: number, p: any) => s + getSaldoEntrada(p), 0);
 
   const hojeCalc = new Date().toISOString().split("T")[0];
 
   const totalVencido = pagMes
-    .filter((p: any) => p.status === "pendente" && p.data_vencimento && p.data_vencimento < hojeCalc)
-    .reduce((s: number, p: any) => s + Number(p.valor), 0);
+    .filter((p: any) => getStatusEntrada(p) !== "pago" && p.data_vencimento && p.data_vencimento < hojeCalc)
+    .reduce((s: number, p: any) => s + getSaldoEntrada(p), 0);
 
   const totalProcessos = pagamentosProcessoMes.reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalProcessosEmpresariais = pagamentosProcessoEmpresarialMes.reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalEventos = participantesEventosMes.reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
 
   const totalGeral =
-    pagMes.reduce((s: number, p: any) => s + Number(p.valor), 0) +
+    pagMes.reduce((s: number, p: any) => s + getValorPagoEntrada(p), 0) +
     totalAvulsas +
     totalProcessos +
     totalProcessosEmpresariais +
@@ -417,8 +439,8 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
     .sort((a, b) => b.receita - a.receita);
 
   const hoje = new Date().toISOString().split("T")[0];
-  const pgtosPendentesDetail = pagMes.filter((p: any) => p.status === "pendente");
-  const pgtosVencidosDetail = pagMes.filter((p: any) => p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje);
+  const pgtosPendentesDetail = pagMes.filter((p: any) => getStatusEntrada(p) === "pendente" || getStatusEntrada(p) === "parcial");
+  const pgtosVencidosDetail = pagMes.filter((p: any) => getStatusEntrada(p) !== "pago" && p.data_vencimento && p.data_vencimento < hoje);
 
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
 
@@ -430,7 +452,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         .map((p: any) => ({
           nome: p.alunos?.nome || "—",
           data: p.data_pagamento || "",
-          valor: formatCurrency(Number(p.valor)),
+          valor: formatCurrency(getValorPagoEntrada(p)),
         })),
     },
     avulsas: {
@@ -449,7 +471,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         return {
           nome: proc?.cliente_nome || "—",
           data: p.data,
-          valor: formatCurrency(Number(p.valor)),
+          valor: formatCurrency(getValorPagoEntrada(p)),
         };
       }),
     },
@@ -458,7 +480,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       items: pagamentosProcessoEmpresarialMes.map((p: any) => ({
         nome: "Processo Empresarial",
         data: p.data,
-        valor: formatCurrency(Number(p.valor)),
+        valor: formatCurrency(getValorPagoEntrada(p)),
       })),
     },
     eventos: {
@@ -475,7 +497,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         ...pagMes.map((p: any) => ({
           nome: `Aluno: ${p.alunos?.nome || "—"}`,
           data: p.data_pagamento || p.data_vencimento || "",
-          valor: formatCurrency(Number(p.valor)),
+          valor: formatCurrency(getValorPagoEntrada(p)),
         })),
         ...receitasAvulsasMes.map((r: any) => ({
           nome: `Avulsa: ${r.descricao}`,
@@ -485,7 +507,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         ...pagamentosProcessoMes.map((p: any) => ({
           nome: `Processo: ${processoMap[p.processo_id]?.cliente_nome || "—"}`,
           data: p.data,
-          valor: formatCurrency(Number(p.valor)),
+          valor: formatCurrency(getValorPagoEntrada(p)),
         })),
         ...participantesEventosMes.map((p: any) => ({
           nome: `Evento: ${p.nome}`,
@@ -499,7 +521,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       items: pgtosPendentesDetail.map((p: any) => ({
         nome: p.alunos?.nome || "—",
         data: p.data_vencimento || "",
-        valor: formatCurrency(Number(p.valor)),
+        valor: formatCurrency(getValorPagoEntrada(p)),
       })),
     },
     vencidos: {
@@ -507,7 +529,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       items: pgtosVencidosDetail.map((p: any) => ({
         nome: p.alunos?.nome || "—",
         data: p.data_vencimento || "",
-        valor: formatCurrency(Number(p.valor)),
+        valor: formatCurrency(getValorPagoEntrada(p)),
       })),
     },
   };
@@ -1106,7 +1128,14 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                         <div className="text-xs text-muted-foreground">{(p as any).matriculas.turmas.nome}</div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{formatCurrency(Number(p.valor))}</TableCell>
+                    <TableCell className="text-sm">
+                      <div>{formatCurrency(getValorPagoEntrada(p))}</div>
+                      {Number(p.valor_pago || 0) > 0 && Number(p.valor_pago || 0) < Number(p.valor || 0) && (
+                        <div className="text-xs text-muted-foreground">
+                          Total: {formatCurrency(Number(p.valor))} • Saldo: {formatCurrency(getSaldoEntrada(p))}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {isFormaCredito(p.forma_pagamento) && p.parcelas_cartao
                         ? `1/1 (${p.parcelas_cartao}x no crédito)`
@@ -1117,7 +1146,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     <TableCell className="text-sm">{formatDate(p.data_vencimento)}</TableCell>
                     <TableCell className="text-sm">{formatDate(p.data_pagamento)}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant[p.status] || "outline"}>{p.status}</Badge>
+                      <Badge variant={statusVariant[getStatusEntrada(p)] || "outline"}>{getStatusEntrada(p)}</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -1132,7 +1161,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                                 alunoNome: p.alunos?.nome || "—",
                                 alunoCpf: undefined,
                                 produtoNome: p.produtos?.nome || "—",
-                                valor: Number(p.valor),
+                                valor: getValorPagoEntrada(p),
                                 dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
                                 formaPagamento: getFormaPagamentoLabel(p.forma_pagamento, formasPagamento),
                                 parcela: p.parcelas > 1 ? `${p.parcela_atual}/${p.parcelas}` : undefined,

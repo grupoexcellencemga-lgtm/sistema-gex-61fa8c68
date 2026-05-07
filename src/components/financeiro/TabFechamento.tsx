@@ -36,13 +36,40 @@ export const TabFechamento = () => {
     },
   });
 
+  const { data: movimentacoesContas = [] } = useQuery({
+    queryKey: ["movimentacoes_contas_bancos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("movimentacoes_contas" as any)
+        .select("*, contas_bancarias(nome)")
+        .is("deleted_at", null)
+        .order("data", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const temMovimentacaoAluno = (pagamentoId: string) =>
+    movimentacoesContas.some((m: any) => m.conta_origem_tipo === "aluno" && m.conta_origem_id === pagamentoId);
+
+  const getMovimentacoesAlunoConta = (contaId: string, filterFn: (dateStr: string | null) => boolean) =>
+    movimentacoesContas.filter(
+      (m: any) =>
+        m.conta_origem_tipo === "aluno" &&
+        m.tipo === "receber" &&
+        m.conta_bancaria_id === contaId &&
+        filterFn(m.data)
+    );
+
+
   // Pagamentos de alunos (entradas)
   const { data: pagamentosPorConta = [] } = useQuery({
     queryKey: ["pagamentos_por_conta_detail"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
-        .select("conta_bancaria_id, valor, status, data_pagamento, forma_pagamento, alunos(nome), produtos(nome)")
+        .select("id, conta_bancaria_id, valor, valor_pago, status, data_pagamento, forma_pagamento, alunos(nome), produtos(nome)")
         .eq("status", "pago")
         .not("conta_bancaria_id", "is", null)
         .is("deleted_at", null);
@@ -135,7 +162,7 @@ export const TabFechamento = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_profissional")
-        .select("conta_bancaria_id, valor, data, forma_pagamento, observacoes, despesa_id, profissionais(nome)")
+        .select("conta_bancaria_id, valor, data, forma_pagamento, observacoes, despesa_id, profissionais(nome), processos_individuais(cliente_nome)")
         .is("deleted_at", null)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
@@ -250,8 +277,11 @@ export const TabFechamento = () => {
     const filterFn = (dateStr: string | null) => isAfterFechamento(dateStr, fechamento);
 
     const entradas = pagamentosPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data_pagamento))
-      .reduce((s: number, p: any) => s + Number(p.valor), 0);
+      .filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data_pagamento) && !temMovimentacaoAluno(p.id))
+      .reduce((s: number, p: any) => s + Number(p.valor_pago || p.valor || 0), 0);
+
+    const entradasAlunoParciais = getMovimentacoesAlunoConta(contaId, filterFn)
+      .reduce((s: number, m: any) => s + Number(m.valor || 0), 0);
     const entradasProcessos = (() => {
       const processosDaConta = processosPorConta.filter((p: any) => p.conta_bancaria_id === contaId);
       const processoIds = new Set(processosDaConta.map((p: any) => p.id));
@@ -285,7 +315,7 @@ export const TabFechamento = () => {
     const transferSaindo = transferencias
       .filter((t: any) => t.conta_origem_id === contaId && filterFn(t.data))
       .reduce((s: number, t: any) => s + Number(t.valor), 0);
-    return baseSaldo + entradas + entradasProcessos + entradasAvulsas + entradasEmpresariais + transferEntrando - saidas - saidasProfissional - saidasComissoes - transferSaindo;
+    return baseSaldo + entradas + entradasAlunoParciais + entradasProcessos + entradasAvulsas + entradasEmpresariais + transferEntrando - saidas - saidasProfissional - saidasComissoes - transferSaindo;
   };
 
   // Build unified transaction list for a given account (only after last fechamento)
@@ -294,13 +324,26 @@ export const TabFechamento = () => {
     const filterFn = (dateStr: string | null) => isAfterFechamento(dateStr, fechamento);
     const txs: { date: string; tipo: "entrada" | "saida"; descricao: string; valor: number; forma: string }[] = [];
 
-    // Pagamentos de alunos
-    pagamentosPorConta.filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data_pagamento)).forEach((p: any) => {
+    // Pagamentos de alunos via baixa parcial/total no Contas a Pagar e Receber
+    getMovimentacoesAlunoConta(contaId, filterFn).forEach((m: any) => {
+      const pagamento = pagamentosPorConta.find((p: any) => p.id === m.conta_origem_id);
+
+      txs.push({
+        date: m.data || "",
+        tipo: "entrada",
+        descricao: `Pgto Aluno: ${(pagamento as any)?.alunos?.nome || "—"}${(pagamento as any)?.produtos?.nome ? ` — ${(pagamento as any).produtos.nome}` : ""}`,
+        valor: Number(m.valor || 0),
+        forma: m.forma_pagamento || "—",
+      });
+    });
+
+    // Pagamentos de alunos antigos/sem movimentação própria
+    pagamentosPorConta.filter((p: any) => p.conta_bancaria_id === contaId && filterFn(p.data_pagamento) && !temMovimentacaoAluno(p.id)).forEach((p: any) => {
       txs.push({
         date: p.data_pagamento || "",
         tipo: "entrada",
         descricao: `Pgto Aluno: ${(p as any).alunos?.nome || "—"}${(p as any).produtos?.nome ? ` — ${(p as any).produtos.nome}` : ""}`,
-        valor: Number(p.valor),
+        valor: Number(p.valor_pago || p.valor || 0),
         forma: p.forma_pagamento || "—",
       });
     });
@@ -356,7 +399,7 @@ export const TabFechamento = () => {
       txs.push({
         date: p.data,
         tipo: "saida",
-        descricao: `Pgto Profissional: ${(p as any).profissionais?.nome || "—"}`,
+        descricao: `Pagamento profissional: ${(p as any).profissionais?.nome || "—"} — Cliente: ${(p as any).processos_individuais?.cliente_nome || "—"}`,
         valor: Number(p.valor),
         forma: p.forma_pagamento || "—",
       });
@@ -415,14 +458,26 @@ export const TabFechamento = () => {
       return year === ano && month === mes;
     };
 
+    getMovimentacoesAlunoConta(contaId, isInPeriodo).forEach((m: any) => {
+      const pagamento = pagamentosPorConta.find((p: any) => p.id === m.conta_origem_id);
+
+      txs.push({
+        date: m.data || "",
+        tipo: "entrada",
+        descricao: `Pgto Aluno: ${(pagamento as any)?.alunos?.nome || "—"}${(pagamento as any)?.produtos?.nome ? ` — ${(pagamento as any).produtos.nome}` : ""}`,
+        valor: Number(m.valor || 0),
+        forma: m.forma_pagamento || "—",
+      });
+    });
+
     pagamentosPorConta
-      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data_pagamento))
+      .filter((p: any) => p.conta_bancaria_id === contaId && isInPeriodo(p.data_pagamento) && !temMovimentacaoAluno(p.id))
       .forEach((p: any) => {
         txs.push({
           date: p.data_pagamento || "",
           tipo: "entrada",
           descricao: `Pgto Aluno: ${(p as any).alunos?.nome || "—"}${(p as any).produtos?.nome ? ` — ${(p as any).produtos.nome}` : ""}`,
-          valor: Number(p.valor),
+          valor: Number(p.valor_pago || p.valor || 0),
           forma: p.forma_pagamento || "—",
         });
       });
@@ -483,7 +538,7 @@ export const TabFechamento = () => {
         txs.push({
           date: p.data,
           tipo: "saida",
-          descricao: `Pgto Profissional: ${(p as any).profissionais?.nome || "—"}`,
+          descricao: `Pagamento profissional: ${(p as any).profissionais?.nome || "—"} — Cliente: ${(p as any).processos_individuais?.cliente_nome || "—"}`,
           valor: Number(p.valor),
           forma: p.forma_pagamento || "—",
         });
@@ -856,7 +911,7 @@ export const TabFechamento = () => {
                 const saldoReal = calcSaldoReal(c.id, Number(c.saldo_inicial));
                 const fechamento = getUltimoFechamento(c.id);
                 const filterAfter = (dateStr: string | null) => isAfterFechamento(dateStr, fechamento);
-                const totalEntradas = pagamentosPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data_pagamento)).reduce((s: number, p: any) => s + Number(p.valor), 0)
+                const totalEntradas = pagamentosPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data_pagamento) && !temMovimentacaoAluno(p.id)).reduce((s: number, p: any) => s + Number(p.valor_pago || p.valor || 0), 0) + getMovimentacoesAlunoConta(c.id, filterAfter).reduce((s: number, m: any) => s + Number(m.valor || 0), 0)
                   + (fechamento ? 0 : calcEntradasProcessosConta(c.id))
                   + receitasAvulsasPorConta.filter((r: any) => r.conta_bancaria_id === c.id && filterAfter(r.data)).reduce((s: number, r: any) => s + Number(r.valor), 0)
                   + pagamentosEmpresariaisPorConta.filter((p: any) => p.conta_bancaria_id === c.id && filterAfter(p.data)).reduce((s: number, p: any) => s + Number(p.valor), 0);
@@ -1173,7 +1228,7 @@ export const TabFechamento = () => {
                                   {tx.tipo === "entrada" ? "Entrada" : "Saída"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-xs max-w-[360px]">{tx.descricao}</TableCell>
+                              <TableCell className="text-xs max-w-[520px] whitespace-normal break-words">{tx.descricao}</TableCell>
                               <TableCell className="text-xs">{tx.forma}</TableCell>
                               <TableCell className={`text-xs text-right font-medium ${tx.tipo === "entrada" ? "text-emerald-600" : "text-destructive"}`}>
                                 {tx.tipo === "entrada" ? "+" : "-"}{formatCurrency(tx.valor)}

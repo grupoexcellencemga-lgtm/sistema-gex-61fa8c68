@@ -691,6 +691,33 @@ export type Database = {
           },
         ]
       }
+      divulgacao_quadros: {
+        Row: {
+          id: string
+          nome: string
+          ordem: number | null
+          deleted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          nome: string
+          ordem?: number | null
+          deleted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          ordem?: number | null
+          deleted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       divulgacao_colunas: {
         Row: {
           id: string
@@ -698,6 +725,7 @@ export type Database = {
           ordem: number
           cor: string
           icone: string
+          quadro_id: string | null
           created_at: string
           updated_at: string
         }
@@ -707,6 +735,7 @@ export type Database = {
           ordem?: number
           cor?: string
           icone?: string
+          quadro_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -716,10 +745,19 @@ export type Database = {
           ordem?: number
           cor?: string
           icone?: string
+          quadro_id?: string | null
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "divulgacao_colunas_quadro_id_fkey"
+            columns: ["quadro_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_quadros"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       divulgacoes: {
         Row: {
@@ -729,6 +767,7 @@ export type Database = {
           categoria: string
           status: string
           coluna_id: string | null
+          quadro_id: string | null
           imagem_url: string | null
           arquivo_url: string | null
           arquivo_tipo: string | null
@@ -746,6 +785,7 @@ export type Database = {
           categoria: string
           status?: string
           coluna_id?: string | null
+          quadro_id?: string | null
           imagem_url?: string | null
           arquivo_url?: string | null
           arquivo_tipo?: string | null
@@ -763,6 +803,7 @@ export type Database = {
           categoria?: string
           status?: string
           coluna_id?: string | null
+          quadro_id?: string | null
           imagem_url?: string | null
           arquivo_url?: string | null
           arquivo_tipo?: string | null
@@ -779,6 +820,13 @@ export type Database = {
             columns: ["coluna_id"]
             isOneToOne: false
             referencedRelation: "divulgacao_colunas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "divulgacoes_quadro_id_fkey"
+            columns: ["quadro_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_quadros"
             referencedColumns: ["id"]
           },
         ]

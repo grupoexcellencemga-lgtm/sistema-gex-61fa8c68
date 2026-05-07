@@ -209,7 +209,7 @@ export function DivulgacaoFormDialog({
 
       const { data, error } = await supabase.storage
         .from("divulgacoes")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
+        .upload(path, file, { cacheControl: "0", upsert: false });
 
       if (error) throw error;
 
@@ -228,7 +228,7 @@ export function DivulgacaoFormDialog({
             .from("divulgacoes")
             .upload(capaPath, capaBlob, {
               contentType: "image/png",
-              cacheControl: "3600",
+              cacheControl: "0",
               upsert: false,
             });
 
@@ -270,7 +270,13 @@ export function DivulgacaoFormDialog({
   };
 
   const removeArquivo = () => {
-    setForm((f) => ({ ...f, arquivo_url: "", arquivo_tipo: "", arquivo_nome: "" }));
+    setForm((f) => ({
+      ...f,
+      imagem_url: "",
+      arquivo_url: "",
+      arquivo_tipo: "",
+      arquivo_nome: "",
+    }));
   };
 
   const addLink = () => {
@@ -409,7 +415,7 @@ export function DivulgacaoFormDialog({
           </div>
 
           <div className="space-y-2 rounded-lg border p-3">
-            <Label>Arquivo do card</Label>
+            <Label>Arte/arquivo do card</Label>
 
             {form.arquivo_url && (
               <div className="relative rounded-lg overflow-hidden border bg-muted/30">
@@ -496,13 +502,23 @@ export function DivulgacaoFormDialog({
               type="url"
             />
             {form.imagem_url && (
-              <div className="mt-1 h-20 w-full overflow-hidden rounded-md border">
+              <div className="mt-1 relative h-20 w-full overflow-hidden rounded-md border">
                 <img
-                  src={form.imagem_url}
+                  src={`${form.imagem_url}${form.imagem_url.includes("?") ? "&" : "?"}v=${Date.now()}`}
                   alt="preview"
                   className="h-full w-full object-cover"
                   onError={(e) => (e.currentTarget.style.display = "none")}
                 />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-2 right-2 h-7 w-7"
+                  onClick={() => setForm((f) => ({ ...f, imagem_url: "" }))}
+                  title="Remover imagem"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
               </div>
             )}
           </div>
