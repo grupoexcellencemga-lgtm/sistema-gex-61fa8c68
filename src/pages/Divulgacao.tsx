@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LayoutGroup } from "framer-motion";
 import { DivulgacaoColumn } from "@/components/divulgacao/DivulgacaoColumn";
 import { DivulgacaoFilters } from "@/components/divulgacao/DivulgacaoFilters";
 import { DivulgacaoFormDialog } from "@/components/divulgacao/DivulgacaoFormDialog";
@@ -68,6 +69,10 @@ const DivulgacaoPage = () => {
   const [editColuna, setEditColuna] = useState<DivulgacaoColuna | null>(null);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingColunaId, setDraggingColunaId] = useState<string | null>(null);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const syncingScrollRef = useRef(false);
 
   const [search, setSearch] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("todos");
@@ -209,6 +214,28 @@ const DivulgacaoPage = () => {
       return true;
     });
   }, [sortedItems, search, filterCategoria, filterResponsavel]);
+
+  const boardWidth = Math.max(colunas.length * 336, 1);
+
+  const syncScroll = (from: "top" | "board") => {
+    if (syncingScrollRef.current) return;
+
+    const top = topScrollRef.current;
+    const board = boardScrollRef.current;
+    if (!top || !board) return;
+
+    syncingScrollRef.current = true;
+
+    if (from === "top") {
+      board.scrollLeft = top.scrollLeft;
+    } else {
+      top.scrollLeft = board.scrollLeft;
+    }
+
+    requestAnimationFrame(() => {
+      syncingScrollRef.current = false;
+    });
+  };
 
   const createQuadroMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -398,6 +425,26 @@ const DivulgacaoPage = () => {
     onError: (err: any) => toast.error("Erro ao atualizar coluna: " + (err?.message ?? err)),
   });
 
+  const reorderColunasMutation = useMutation({
+    mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
+      const results = await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("divulgacao_colunas")
+            .update({ ordem: update.ordem, updated_at: new Date().toISOString() })
+            .eq("id", update.id)
+        )
+      );
+
+      const error = results.find((r) => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["divulgacao-colunas"] });
+    },
+    onError: (err: any) => toast.error("Erro ao mover coluna: " + (err?.message ?? err)),
+  });
+
   const deleteColunaMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -537,6 +584,34 @@ const DivulgacaoPage = () => {
     },
     [sortedItems, colunas, reorderCardsMutation]
   );
+
+  const handleDropColuna = async (targetColunaId: string) => {
+    if (!draggingColunaId || draggingColunaId === targetColunaId) {
+      setDraggingColunaId(null);
+      return;
+    }
+
+    const origemIndex = colunas.findIndex((coluna) => coluna.id === draggingColunaId);
+    const destinoIndex = colunas.findIndex((coluna) => coluna.id === targetColunaId);
+
+    if (origemIndex < 0 || destinoIndex < 0) {
+      setDraggingColunaId(null);
+      return;
+    }
+
+    const novasColunas = [...colunas];
+    const [colunaMovida] = novasColunas.splice(origemIndex, 1);
+    novasColunas.splice(destinoIndex, 0, colunaMovida);
+
+    await reorderColunasMutation.mutateAsync(
+      novasColunas.map((coluna, index) => ({
+        id: coluna.id,
+        ordem: index,
+      }))
+    );
+
+    setDraggingColunaId(null);
+  };
 
   const handleSaveColuna = async (data: { nome: string; cor: string; icone: string }) => {
     if (editColuna) {
@@ -766,26 +841,46 @@ const DivulgacaoPage = () => {
               </Button>
             </div>
           ) : (
-            <div className="w-full overflow-x-auto overflow-y-hidden pb-4">
-              <div className="flex w-max gap-4 min-h-[400px] group">
-              {colunas.map((col) => (
-                <DivulgacaoColumn
-                  key={col.id}
-                  coluna={col}
-                  items={filtered.filter((i) => i.coluna_id === col.id)}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onAdd={handleAdd}
-                  onViewFile={handleViewFile}
-                  onToggleAtivo={handleToggleAtivo}
-                  onEditColuna={handleEditColuna}
-                  onDeleteColuna={handleDeleteColuna}
-                  onDropCard={handleDropCard}
-                  draggingId={draggingId}
-                  onDragStart={setDraggingId}
-                  onDragEnd={() => setDraggingId(null)}
-                />
-              ))}
+            <div className="space-y-3">
+              <div
+                ref={topScrollRef}
+                className="w-full overflow-x-auto overflow-y-hidden pb-1"
+                onScroll={() => syncScroll("top")}
+              >
+                <div style={{ width: boardWidth }} className="h-1" />
+              </div>
+
+              <div
+                ref={boardScrollRef}
+                className="w-full overflow-x-auto overflow-y-hidden pb-4"
+                onScroll={() => syncScroll("board")}
+              >
+                <LayoutGroup id={`divulgacao-colunas-${selectedQuadroId}`}>
+                  <div className="flex w-max gap-4 min-h-[400px] group">
+                    {colunas.map((col) => (
+                    <DivulgacaoColumn
+                      key={col.id}
+                      coluna={col}
+                      items={filtered.filter((i) => i.coluna_id === col.id)}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onAdd={handleAdd}
+                      onViewFile={handleViewFile}
+                      onToggleAtivo={handleToggleAtivo}
+                      onEditColuna={handleEditColuna}
+                      onDeleteColuna={handleDeleteColuna}
+                      onDropCard={handleDropCard}
+                      draggingId={draggingId}
+                      onDragStart={setDraggingId}
+                      onDragEnd={() => setDraggingId(null)}
+                      draggingColunaId={draggingColunaId}
+                      onColumnDragStart={setDraggingColunaId}
+                      onColumnDrop={handleDropColuna}
+                      onColumnDragEnd={() => setDraggingColunaId(null)}
+                    />
+                    ))}
+                  </div>
+                </LayoutGroup>
               </div>
             </div>
           )}

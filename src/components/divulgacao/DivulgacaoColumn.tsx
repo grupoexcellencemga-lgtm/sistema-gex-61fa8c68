@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Pencil, Trash2 } from "lucide-react";
 import { DivulgacaoCard, type Divulgacao } from "./DivulgacaoCard";
 import type { DivulgacaoColuna } from "./DivulgacaoColunaDialog";
 
@@ -44,6 +45,10 @@ interface Props {
   draggingId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
+  draggingColunaId?: string | null;
+  onColumnDragStart?: (id: string) => void;
+  onColumnDrop?: (targetColunaId: string) => void;
+  onColumnDragEnd?: () => void;
 }
 
 export function DivulgacaoColumn({
@@ -60,6 +65,10 @@ export function DivulgacaoColumn({
   draggingId,
   onDragStart,
   onDragEnd,
+  draggingColunaId,
+  onColumnDragStart,
+  onColumnDrop,
+  onColumnDragEnd,
 }: Props) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -69,6 +78,9 @@ export function DivulgacaoColumn({
 
   const handleDragOverColumn = (e: React.DragEvent) => {
     e.preventDefault();
+
+    if (draggingColunaId) return;
+
     setIsDragOver(true);
     if (items.length === 0) setDragOverIndex(0);
   };
@@ -87,6 +99,11 @@ export function DivulgacaoColumn({
     e.preventDefault();
     setIsDragOver(false);
 
+    if (draggingColunaId) {
+      onColumnDrop?.(coluna.id);
+      return;
+    }
+
     if (!draggingId) return;
 
     const targetIndex = dragOverIndex ?? items.length;
@@ -100,17 +117,52 @@ export function DivulgacaoColumn({
     setIsDragOver(false);
     setDragOverIndex(null);
 
+    if (draggingColunaId) {
+      onColumnDrop?.(coluna.id);
+      return;
+    }
+
     if (!draggingId) return;
 
     onDropCard(draggingId, coluna.id, targetIndex);
   };
 
   return (
-    <div className="flex flex-col w-[320px] min-w-[320px] max-w-[320px] shrink-0">
-      <div className={`flex items-center justify-between mb-3 px-1 pb-2 border-b-2 ${corBorder}`}>
-        <div className="flex items-center gap-2">
+    <motion.div
+      layout
+      layoutId={`coluna-${coluna.id}`}
+      transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
+      className={`flex flex-col w-[320px] min-w-[320px] max-w-[320px] shrink-0 transition-opacity ${
+        draggingColunaId === coluna.id ? "opacity-50" : ""
+      }`}
+      onDragOver={(e) => {
+        if (!draggingColunaId) return;
+        e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (!draggingColunaId) return;
+        e.preventDefault();
+        onColumnDrop?.(coluna.id);
+      }}
+    >
+      <motion.div layout="position" className={`flex items-center justify-between mb-3 px-1 pb-2 border-b-2 ${corBorder}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            draggable
+            onDragStart={(e) => {
+              e.stopPropagation();
+              e.dataTransfer.effectAllowed = "move";
+              onColumnDragStart?.(coluna.id);
+            }}
+            onDragEnd={onColumnDragEnd}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+            title="Mover coluna"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
           <span className="text-base">{coluna.icone}</span>
-          <h3 className={`text-sm font-semibold ${corText}`}>{coluna.nome}</h3>
+          <h3 className={`text-sm font-semibold truncate ${corText}`}>{coluna.nome}</h3>
           <span className="text-xs bg-secondary text-muted-foreground rounded-full px-2 py-0.5 min-w-[20px] text-center">
             {items.length}
           </span>
@@ -147,9 +199,10 @@ export function DivulgacaoColumn({
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
-      </div>
+      </motion.div>
 
-      <div
+      <motion.div
+        layout
         className={`flex-1 space-y-2 min-h-[200px] rounded-xl p-2 border transition-colors ${
           isDragOver
             ? "bg-primary/5 border-primary/40 border-dashed"
@@ -159,13 +212,23 @@ export function DivulgacaoColumn({
         onDragLeave={handleDragLeaveColumn}
         onDrop={handleDropColumn}
       >
-        {items.map((item, index) => (
-          <div key={item.id}>
+        <AnimatePresence initial={false}>
+          {items.map((item, index) => (
+          <motion.div
+            key={item.id}
+            layout
+            layoutId={`card-wrapper-${item.id}`}
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 430, damping: 32, mass: 0.75 }}
+          >
             {dragOverIndex === index && draggingId !== item.id && (
               <div className="h-2 rounded-full bg-primary/50 my-1" />
             )}
 
-            <div
+            <motion.div
+              layout="position"
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
@@ -183,6 +246,7 @@ export function DivulgacaoColumn({
               }}
               onDrop={(e) => handleDropOnCard(e, index)}
               className="cursor-grab active:cursor-grabbing"
+              whileTap={{ scale: 0.985 }}
             >
               <DivulgacaoCard
                 item={item}
@@ -192,9 +256,10 @@ export function DivulgacaoColumn({
                 onToggleAtivo={onToggleAtivo}
                 isDragging={draggingId === item.id}
               />
-            </div>
-          </div>
-        ))}
+            </motion.div>
+          </motion.div>
+          ))}
+        </AnimatePresence>
 
         {items.length > 0 && dragOverIndex === items.length && (
           <div className="h-2 rounded-full bg-primary/50 my-1" />
@@ -212,7 +277,7 @@ export function DivulgacaoColumn({
             {!isDragOver && <span className="opacity-60">Clique para adicionar</span>}
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
