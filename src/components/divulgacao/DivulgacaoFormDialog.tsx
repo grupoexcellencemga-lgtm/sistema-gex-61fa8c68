@@ -258,13 +258,18 @@ export function DivulgacaoFormDialog({
         }
       }
 
-      setForm((f) => ({
-        ...f,
-        arquivo_url: urlData.publicUrl,
-        arquivo_tipo: isVideo ? "video" : isPdf ? "pdf" : isPpt ? "ppt" : "image",
-        arquivo_nome: file.name,
-        imagem_url: isPdf && capaPdfUrl ? capaPdfUrl : isImage ? urlData.publicUrl : f.imagem_url,
-      }));
+      setForm((f) => {
+        const arquivoTipo = isVideo ? "video" : isPdf ? "pdf" : isPpt ? "ppt" : "image";
+
+        return {
+          ...f,
+          arquivo_url: urlData.publicUrl,
+          arquivo_tipo: arquivoTipo,
+          arquivo_nome: file.name,
+          // Correção: imagem enviada depois também vira capa do card na listagem externa.
+          imagem_url: isPdf && capaPdfUrl ? capaPdfUrl : isImage ? urlData.publicUrl : f.imagem_url,
+        };
+      });
 
       toast.success(
         isPdf && capaPdfUrl
@@ -324,9 +329,19 @@ export function DivulgacaoFormDialog({
       }))
       .filter((l) => l.url);
 
+    // Correção: quando o card foi criado sem foto e a imagem é adicionada depois,
+    // garante que a capa externa seja salva em imagem_url.
+    const imagemCapa =
+      form.imagem_url ||
+      (form.arquivo_tipo === "image" && form.arquivo_url ? form.arquivo_url : "");
+
     setLoading(true);
     try {
-      await onSave({ ...form, links: linksValidos });
+      await onSave({
+        ...form,
+        imagem_url: imagemCapa,
+        links: linksValidos,
+      });
       onClose();
     } finally {
       setLoading(false);
