@@ -261,13 +261,18 @@ export function DivulgacaoFormDialog({
       setForm((f) => {
         const arquivoTipo = isVideo ? "video" : isPdf ? "pdf" : isPpt ? "ppt" : "image";
 
+        // Sempre substitui a capa antiga.
+        // Imagem nova vira capa.
+        // PDF novo usa a capa gerada.
+        // Vídeo/PPT sem capa limpam a imagem antiga para não continuar aparecendo a arte anterior.
+        const novaCapaUrl = isImage ? urlData.publicUrl : isPdf && capaPdfUrl ? capaPdfUrl : "";
+
         return {
           ...f,
           arquivo_url: urlData.publicUrl,
           arquivo_tipo: arquivoTipo,
           arquivo_nome: file.name,
-          // Correção: imagem enviada depois também vira capa do card na listagem externa.
-          imagem_url: isPdf && capaPdfUrl ? capaPdfUrl : isImage ? urlData.publicUrl : f.imagem_url,
+          imagem_url: novaCapaUrl,
         };
       });
 
