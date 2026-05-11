@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,6 +26,8 @@ export const TabFechamento = () => {
   const [extratoMes, setExtratoMes] = useState(String(getBrazilNow().getMonth()));
   const [extratoAno, setExtratoAno] = useState(String(getBrazilNow().getFullYear()));
   const [fechamentoLoading, setFechamentoLoading] = useState<string | null>(null);
+  const autoFechamentoRodouRef = useRef(false);
+  const [autoFechamentoLoading, setAutoFechamentoLoading] = useState(false);
 
   const { data: contas = [], isLoading } = useQuery({
     queryKey: ["contas_bancarias_all"],
@@ -605,6 +607,91 @@ export const TabFechamento = () => {
     return fechamentos.find((f: any) => f.conta_bancaria_id === contaId && f.mes === mes && f.ano === ano) || null;
   };
 
+
+  const getPeriodoAnterior = () => {
+    const brNow = getBrazilNow();
+    const mesAtual = brNow.getMonth();
+    const anoAtual = brNow.getFullYear();
+
+    if (mesAtual === 0) {
+      return { mes: 11, ano: anoAtual - 1 };
+    }
+
+    return { mes: mesAtual - 1, ano: anoAtual };
+  };
+
+  const calcularSaldoFinalPeriodo = (contaId: string, mes: number, ano: number) => {
+    const saldoInicial = getSaldoInicialPeriodo(contaId, mes, ano);
+    const txs = buildTransactionsPeriodo(contaId, mes, ano);
+    const totalEntradas = txs
+      .filter((tx) => tx.tipo === "entrada")
+      .reduce((s, tx) => s + Number(tx.valor || 0), 0);
+    const totalSaidas = txs
+      .filter((tx) => tx.tipo === "saida")
+      .reduce((s, tx) => s + Number(tx.valor || 0), 0);
+
+    return saldoInicial + totalEntradas - totalSaidas;
+  };
+
+  const sincronizarFechamentoAutomatico = async (mostrarToast = false) => {
+    if (!contas.length) return;
+
+    const { mes, ano } = getPeriodoAnterior();
+    setAutoFechamentoLoading(true);
+
+    try {
+      for (const conta of contas.filter((c: any) => c.ativo !== false)) {
+        const saldoFechamento = calcularSaldoFinalPeriodo(conta.id, mes, ano);
+        const fechamentoExistente = getFechamentoPeriodo(conta.id, mes, ano);
+
+        if (fechamentoExistente) {
+          const { error } = await supabase
+            .from("fechamentos_mensais")
+            .update({ saldo_fechamento: saldoFechamento })
+            .eq("id", fechamentoExistente.id);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("fechamentos_mensais")
+            .upsert(
+              {
+                conta_bancaria_id: conta.id,
+                mes,
+                ano,
+                saldo_fechamento: saldoFechamento,
+              },
+              { onConflict: "conta_bancaria_id,mes,ano" }
+            );
+
+          if (error) throw error;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["fechamentos_mensais"] });
+
+      if (mostrarToast) {
+        toast({ title: `Fechamento ${monthNamesShort[mes]}/${ano} sincronizado` });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Erro no fechamento automático",
+        description: err?.message || "Não foi possível sincronizar as contas.",
+        variant: "destructive",
+      });
+    } finally {
+      setAutoFechamentoLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (autoFechamentoRodouRef.current) return;
+    if (isLoading || !contas.length) return;
+
+    autoFechamentoRodouRef.current = true;
+    sincronizarFechamentoAutomatico(false);
+  }, [isLoading, contas.length]);
+
   const getExtratoSelecionado = () => {
     const conta = contas.find((c: any) => c.id === extratoContaId) || null;
     const mes = Number(extratoMes);
@@ -797,12 +884,17 @@ export const TabFechamento = () => {
         const { error } = await supabase.from("fechamentos_mensais").update({ saldo_fechamento: saldoAtual }).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("fechamentos_mensais").insert({
-          conta_bancaria_id: contaId,
-          mes: mesAtual,
-          ano: anoAtual,
-          saldo_fechamento: saldoAtual,
-        });
+        const { error } = await supabase
+          .from("fechamentos_mensais")
+          .upsert(
+            {
+              conta_bancaria_id: contaId,
+              mes: mesAtual,
+              ano: anoAtual,
+              saldo_fechamento: saldoAtual,
+            },
+            { onConflict: "conta_bancaria_id,mes,ano" }
+          );
         if (error) throw error;
       }
       queryClient.invalidateQueries({ queryKey: ["fechamentos_mensais"] });
@@ -834,6 +926,15 @@ export const TabFechamento = () => {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">Contas Bancárias</CardTitle>
             <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={autoFechamentoLoading}
+                onClick={() => sincronizarFechamentoAutomatico(true)}
+              >
+                {autoFechamentoLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                Sincronizar mês anterior
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setExtratosOpen(true)}>
                 <History className="h-4 w-4 mr-1" /> Extratos anteriores
               </Button>
