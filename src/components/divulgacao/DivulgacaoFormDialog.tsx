@@ -26,12 +26,14 @@ import {
   FileText,
   Plus,
   Link as LinkIcon,
+  Paperclip,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { Divulgacao, DivulgacaoLink } from "./DivulgacaoCard";
+import type { Divulgacao, DivulgacaoArquivo, DivulgacaoLink } from "./DivulgacaoCard";
+import { normalizeArquivos } from "./DivulgacaoCard";
 import type { DivulgacaoColuna } from "./DivulgacaoColunaDialog";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -47,6 +49,7 @@ type FormData = {
   arquivo_url: string;
   arquivo_tipo: string;
   arquivo_nome: string;
+  arquivos: DivulgacaoArquivo[];
   links: DivulgacaoLink[];
 };
 
@@ -61,6 +64,7 @@ const EMPTY: FormData = {
   arquivo_url: "",
   arquivo_tipo: "",
   arquivo_nome: "",
+  arquivos: [],
   links: [],
 };
 
@@ -124,28 +128,49 @@ const gerarCapaPdf = async (file: File): Promise<Blob> => {
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
 
-  await page.render({
-    canvasContext: context,
-    viewport,
-  }).promise;
+  await page.render({ canvasContext: context, viewport }).promise;
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
+  return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (result) => {
         if (!result) {
           reject(new Error("Não foi possível converter a capa do PDF em imagem."));
           return;
         }
-
         resolve(result);
       },
       "image/png",
       0.92
     );
   });
-
-  return blob;
 };
+
+const getTipoArquivo = (file: File): DivulgacaoArquivo["tipo"] => {
+  const name = file.name.toLowerCase();
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (isPowerPointFile(file)) return "ppt";
+  return "file";
+};
+
+const getMainFields = (arquivos: DivulgacaoArquivo[]) => {
+  const first = arquivos[0];
+
+  return {
+    arquivo_url: first?.url || "",
+    arquivo_tipo: first?.tipo || "",
+    arquivo_nome: first?.nome || "",
+    imagem_url:
+      first?.capa_url ||
+      (first?.tipo === "image" ? first.url : "") ||
+      arquivos.find((arquivo) => arquivo.capa_url)?.capa_url ||
+      arquivos.find((arquivo) => arquivo.tipo === "image")?.url ||
+      "",
+  };
+};
+
+const versionedUrl = (url: string) => `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
 
 export function DivulgacaoFormDialog({
   open,
@@ -158,32 +183,32 @@ export function DivulgacaoFormDialog({
   const [form, setForm] = useState<FormData>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) {
-      if (initialData) {
-        setForm({
-          titulo: initialData.titulo ?? "",
-          descricao: initialData.descricao ?? "",
-          categoria: initialData.categoria ?? "Comunicado",
-          coluna_id: initialData.coluna_id ?? defaultColunaId ?? colunas[0]?.id ?? "",
-          imagem_url: initialData.imagem_url ?? "",
-          responsavel_iniciais: initialData.responsavel_iniciais ?? "",
-          data: initialData.data ?? "",
-          arquivo_url: initialData.arquivo_url ?? "",
-          arquivo_tipo: initialData.arquivo_tipo ?? "",
-          arquivo_nome: initialData.arquivo_nome ?? "",
-          links: normalizeLinks(initialData.links),
-        });
-      } else {
-        setForm({
-          ...EMPTY,
-          coluna_id: defaultColunaId ?? colunas[0]?.id ?? "",
-        });
-      }
-      setUploadProgress(0);
+    if (!open) return;
+
+    if (initialData) {
+      const arquivos = normalizeArquivos(initialData.arquivos, initialData);
+      setForm({
+        titulo: initialData.titulo ?? "",
+        descricao: initialData.descricao ?? "",
+        categoria: initialData.categoria ?? "Comunicado",
+        coluna_id: initialData.coluna_id ?? defaultColunaId ?? colunas[0]?.id ?? "",
+        imagem_url: initialData.imagem_url ?? "",
+        responsavel_iniciais: initialData.responsavel_iniciais ?? "",
+        data: initialData.data ?? "",
+        arquivo_url: initialData.arquivo_url ?? arquivos[0]?.url ?? "",
+        arquivo_tipo: initialData.arquivo_tipo ?? arquivos[0]?.tipo ?? "",
+        arquivo_nome: initialData.arquivo_nome ?? arquivos[0]?.nome ?? "",
+        arquivos,
+        links: normalizeLinks(initialData.links),
+      });
+    } else {
+      setForm({
+        ...EMPTY,
+        coluna_id: defaultColunaId ?? colunas[0]?.id ?? "",
+      });
     }
   }, [open, initialData, defaultColunaId, colunas]);
 
@@ -192,135 +217,147 @@ export function DivulgacaoFormDialog({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadOneFile = async (file: File): Promise<DivulgacaoArquivo> => {
     if (file.size > MAX_SIZE_BYTES) {
-      toast.error("Arquivo muito grande. Máximo permitido: 500 MB");
-      return;
+      throw new Error(`${file.name}: arquivo muito grande. Máximo permitido: 500 MB`);
     }
 
-    const isVideo = file.type.startsWith("video/");
-    const isImage = file.type.startsWith("image/");
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const isPpt = isPowerPointFile(file);
+    const tipo = getTipoArquivo(file);
 
-    if (!isVideo && !isImage && !isPdf && !isPpt) {
-      toast.error("Apenas imagens, vídeos, PDFs e PowerPoints são permitidos");
-      return;
+    if (!['image', 'video', 'pdf', 'ppt'].includes(tipo)) {
+      throw new Error(`${file.name}: apenas imagens, vídeos, PDFs e PowerPoints são permitidos`);
     }
+
+    const ext = file.name.split(".").pop();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("divulgacoes")
+      .upload(path, file, { cacheControl: "0", upsert: false });
+
+    if (error) throw error;
+
+    const { data: urlData } = supabase.storage.from("divulgacoes").getPublicUrl(data.path);
+
+    let capaUrl: string | null = tipo === "image" ? urlData.publicUrl : null;
+
+    if (tipo === "pdf") {
+      try {
+        const capaBlob = await gerarCapaPdf(file);
+        const capaPath = `${Date.now()}-${Math.random().toString(36).slice(2)}-capa.png`;
+
+        const { data: capaData, error: capaError } = await supabase.storage
+          .from("divulgacoes")
+          .upload(capaPath, capaBlob, {
+            contentType: "image/png",
+            cacheControl: "0",
+            upsert: false,
+          });
+
+        if (capaError) throw capaError;
+
+        const { data: capaUrlData } = supabase.storage
+          .from("divulgacoes")
+          .getPublicUrl(capaData.path);
+
+        capaUrl = capaUrlData.publicUrl;
+      } catch (capaError: any) {
+        toast.error(
+          `${file.name} enviado, mas não foi possível gerar a capa do PDF: ${capaError?.message ?? ""}`
+        );
+      }
+    }
+
+    return {
+      url: urlData.publicUrl,
+      tipo,
+      nome: file.name,
+      capa_url: capaUrl,
+      uploaded_at: new Date().toISOString(),
+    };
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
 
     setUploading(true);
-    setUploadProgress(0);
 
     try {
-      const ext = file.name.split(".").pop();
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const novosArquivos: DivulgacaoArquivo[] = [];
 
-      const { data, error } = await supabase.storage
-        .from("divulgacoes")
-        .upload(path, file, { cacheControl: "0", upsert: false });
-
-      if (error) throw error;
-
-      const { data: urlData } = supabase.storage
-        .from("divulgacoes")
-        .getPublicUrl(data.path);
-
-      let capaPdfUrl = "";
-
-      if (isPdf) {
-        try {
-          const capaBlob = await gerarCapaPdf(file);
-          const capaPath = `${Date.now()}-${Math.random().toString(36).slice(2)}-capa.png`;
-
-          const { data: capaData, error: capaError } = await supabase.storage
-            .from("divulgacoes")
-            .upload(capaPath, capaBlob, {
-              contentType: "image/png",
-              cacheControl: "0",
-              upsert: false,
-            });
-
-          if (capaError) throw capaError;
-
-          const { data: capaUrlData } = supabase.storage
-            .from("divulgacoes")
-            .getPublicUrl(capaData.path);
-
-          capaPdfUrl = capaUrlData.publicUrl;
-        } catch (capaError: any) {
-          toast.error(
-            "PDF enviado, mas não foi possível gerar a capa automaticamente: " +
-              (capaError?.message ?? "")
-          );
-        }
+      for (const file of files) {
+        novosArquivos.push(await uploadOneFile(file));
       }
 
       setForm((f) => {
-        const arquivoTipo = isVideo ? "video" : isPdf ? "pdf" : isPpt ? "ppt" : "image";
-
-        // Sempre substitui a capa antiga.
-        // Imagem nova vira capa.
-        // PDF novo usa a capa gerada.
-        // Vídeo/PPT sem capa limpam a imagem antiga para não continuar aparecendo a arte anterior.
-        const novaCapaUrl = isImage ? urlData.publicUrl : isPdf && capaPdfUrl ? capaPdfUrl : "";
-
+        const arquivos = [...f.arquivos, ...novosArquivos];
         return {
           ...f,
-          arquivo_url: urlData.publicUrl,
-          arquivo_tipo: arquivoTipo,
-          arquivo_nome: file.name,
-          imagem_url: novaCapaUrl,
+          arquivos,
+          ...getMainFields(arquivos),
         };
       });
 
       toast.success(
-        isPdf && capaPdfUrl
-          ? "PDF enviado e capa gerada com sucesso!"
-          : "Arquivo enviado com sucesso!"
+        novosArquivos.length === 1
+          ? "Arquivo adicionado ao card!"
+          : `${novosArquivos.length} arquivos adicionados ao card!`
       );
     } catch (err: any) {
       toast.error("Erro ao enviar arquivo: " + (err.message ?? ""));
     } finally {
       setUploading(false);
-      setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const removeArquivo = () => {
-    setForm((f) => ({
-      ...f,
-      imagem_url: "",
-      arquivo_url: "",
-      arquivo_tipo: "",
-      arquivo_nome: "",
-    }));
+  const removeArquivo = (index: number) => {
+    setForm((f) => {
+      const arquivos = f.arquivos.filter((_, i) => i !== index);
+      return {
+        ...f,
+        arquivos,
+        ...getMainFields(arquivos),
+      };
+    });
+  };
+
+  const setArquivoComoCapa = (index: number) => {
+    setForm((f) => {
+      const arquivo = f.arquivos[index];
+      if (!arquivo) return f;
+
+      if (!arquivo.capa_url && arquivo.tipo !== "image") {
+        toast.error("Este arquivo não possui imagem de capa.");
+        return f;
+      }
+
+      const arquivos = [...f.arquivos];
+      arquivos.splice(index, 1);
+      arquivos.unshift(arquivo);
+
+      return {
+        ...f,
+        arquivos,
+        ...getMainFields(arquivos),
+      };
+    });
   };
 
   const addLink = () => {
-    setForm((f) => ({
-      ...f,
-      links: [...f.links, { titulo: "", url: "" }],
-    }));
+    setForm((f) => ({ ...f, links: [...f.links, { titulo: "", url: "" }] }));
   };
 
   const updateLink = (index: number, field: keyof DivulgacaoLink, value: string) => {
     setForm((f) => ({
       ...f,
-      links: f.links.map((link, i) =>
-        i === index ? { ...link, [field]: value } : link
-      ),
+      links: f.links.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
     }));
   };
 
   const removeLink = (index: number) => {
-    setForm((f) => ({
-      ...f,
-      links: f.links.filter((_, i) => i !== index),
-    }));
+    setForm((f) => ({ ...f, links: f.links.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -328,23 +365,16 @@ export function DivulgacaoFormDialog({
     if (!form.titulo.trim()) return;
 
     const linksValidos = form.links
-      .map((l) => ({
-        titulo: l.titulo?.trim() || "",
-        url: l.url?.trim() || "",
-      }))
+      .map((l) => ({ titulo: l.titulo?.trim() || "", url: l.url?.trim() || "" }))
       .filter((l) => l.url);
 
-    // Correção: quando o card foi criado sem foto e a imagem é adicionada depois,
-    // garante que a capa externa seja salva em imagem_url.
-    const imagemCapa =
-      form.imagem_url ||
-      (form.arquivo_tipo === "image" && form.arquivo_url ? form.arquivo_url : "");
+    const mainFields = getMainFields(form.arquivos);
 
     setLoading(true);
     try {
       await onSave({
         ...form,
-        imagem_url: imagemCapa,
+        ...mainFields,
         links: linksValidos,
       });
       onClose();
@@ -353,10 +383,27 @@ export function DivulgacaoFormDialog({
     }
   };
 
-  const isVideo = form.arquivo_tipo === "video";
-  const isImageArq = form.arquivo_tipo === "image";
-  const isPdf = form.arquivo_tipo === "pdf";
-  const isPpt = form.arquivo_tipo === "ppt";
+  const renderArquivoPreview = (arquivo: DivulgacaoArquivo) => {
+    const preview = arquivo.capa_url || (arquivo.tipo === "image" ? arquivo.url : "");
+
+    if (preview) {
+      return <img src={versionedUrl(preview)} alt={arquivo.nome} className="h-16 w-20 rounded-md object-cover border" />;
+    }
+
+    if (arquivo.tipo === "video") {
+      return (
+        <div className="h-16 w-20 rounded-md bg-black/80 flex items-center justify-center border">
+          <Video className="h-6 w-6 text-white/70" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-16 w-20 rounded-md bg-muted flex items-center justify-center border">
+        <FileText className={`h-6 w-6 ${arquivo.tipo === "ppt" ? "text-purple-500" : arquivo.tipo === "pdf" ? "text-red-500" : "text-muted-foreground"}`} />
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -368,38 +415,19 @@ export function DivulgacaoFormDialog({
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
           <div className="space-y-1">
             <Label htmlFor="titulo">Título *</Label>
-            <Input
-              id="titulo"
-              value={form.titulo}
-              onChange={set("titulo")}
-              placeholder="Nome da divulgação"
-              required
-              autoFocus
-            />
+            <Input id="titulo" value={form.titulo} onChange={set("titulo")} placeholder="Nome da divulgação" required autoFocus />
           </div>
 
           <div className="space-y-1">
             <Label htmlFor="descricao">Descrição</Label>
-            <Textarea
-              id="descricao"
-              value={form.descricao}
-              onChange={set("descricao")}
-              placeholder="Detalhes da divulgação..."
-              rows={4}
-              className="resize-none"
-            />
+            <Textarea id="descricao" value={form.descricao} onChange={set("descricao")} placeholder="Detalhes da divulgação..." rows={4} className="resize-none" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Categoria *</Label>
-              <Select
-                value={form.categoria}
-                onValueChange={(v) => setForm((f) => ({ ...f, categoria: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.categoria} onValueChange={(v) => setForm((f) => ({ ...f, categoria: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Comunicado">Comunicado</SelectItem>
                   <SelectItem value="Campanha">Campanha</SelectItem>
@@ -411,18 +439,11 @@ export function DivulgacaoFormDialog({
 
             <div className="space-y-1">
               <Label>Quadro (coluna) *</Label>
-              <Select
-                value={form.coluna_id}
-                onValueChange={(v) => setForm((f) => ({ ...f, coluna_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
+              <Select value={form.coluna_id} onValueChange={(v) => setForm((f) => ({ ...f, coluna_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {colunas.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.icone} {c.nome}
-                    </SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.icone} {c.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -436,70 +457,35 @@ export function DivulgacaoFormDialog({
             </div>
             <div className="space-y-1">
               <Label htmlFor="responsavel_iniciais">Responsável (iniciais)</Label>
-              <Input
-                id="responsavel_iniciais"
-                value={form.responsavel_iniciais}
-                onChange={set("responsavel_iniciais")}
-                placeholder="Ex: AG, JP..."
-                maxLength={5}
-              />
+              <Input id="responsavel_iniciais" value={form.responsavel_iniciais} onChange={set("responsavel_iniciais")} placeholder="Ex: AG, JP..." maxLength={5} />
             </div>
           </div>
 
-          <div className="space-y-2 rounded-lg border p-3">
-            <Label>Arte/arquivo do card</Label>
-
-            {form.arquivo_url && (
-              <div className="relative rounded-lg overflow-hidden border bg-muted/30">
-                {isImageArq && (
-                  <img
-                    src={form.arquivo_url}
-                    alt="preview"
-                    className="w-full h-40 object-cover"
-                  />
-                )}
-                {isVideo && (
-                  <div className="w-full h-40 bg-black/80 flex flex-col items-center justify-center gap-1">
-                    <Video className="h-8 w-8 text-white/70" />
-                    <span className="text-white/60 text-xs">{form.arquivo_nome}</span>
-                  </div>
-                )}
-                {isPdf && form.imagem_url && (
-                  <img
-                    src={form.imagem_url}
-                    alt="Capa do PDF"
-                    className="w-full h-40 object-cover"
-                  />
-                )}
-                {isPdf && !form.imagem_url && (
-                  <div className="w-full h-40 bg-red-50 dark:bg-red-950/30 flex flex-col items-center justify-center gap-1">
-                    <FileText className="h-8 w-8 text-red-500" />
-                    <span className="text-red-600 dark:text-red-300 text-xs font-medium">
-                      {form.arquivo_nome || "PDF anexado"}
-                    </span>
-                  </div>
-                )}
-                {isPpt && (
-                  <div className="w-full h-40 bg-purple-50 dark:bg-purple-950/30 flex flex-col items-center justify-center gap-1 px-4 text-center">
-                    <FileText className="h-8 w-8 text-purple-500" />
-                    <span className="text-purple-700 dark:text-purple-300 text-xs font-medium break-all">
-                      {form.arquivo_nome || "PowerPoint anexado"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2 h-7 w-7"
-                  onClick={removeArquivo}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Arquivos do card
+                </Label>
+                <p className="text-xs text-muted-foreground">Adicione mais de uma arte, PDF, vídeo ou PPT no mesmo card.</p>
               </div>
-            )}
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                Adicionar
+              </Button>
+            </div>
 
-            {!form.arquivo_url && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*,application/pdf,.pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            {form.arquivos.length === 0 ? (
               <div
                 className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center gap-2 cursor-pointer hover:bg-muted/40 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
@@ -512,51 +498,41 @@ export function DivulgacaoFormDialog({
                 ) : (
                   <>
                     <Upload className="h-8 w-8 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      Clique para enviar imagem, vídeo, PDF ou PPT
-                    </span>
-                    <span className="text-xs text-muted-foreground/60">
-                      JPG, PNG, GIF, WebP, MP4, WebM, PDF, PPT, PPTX — máx. 500 MB
-                    </span>
+                    <span className="text-sm text-muted-foreground">Clique para enviar um ou mais arquivos</span>
+                    <span className="text-xs text-muted-foreground/60">JPG, PNG, GIF, WebP, MP4, WebM, PDF, PPT, PPTX — máx. 500 MB cada</span>
                   </>
                 )}
               </div>
+            ) : (
+              <div className="space-y-2">
+                {form.arquivos.map((arquivo, index) => (
+                  <div key={`${arquivo.url}-${index}`} className="flex items-center gap-3 rounded-lg border bg-muted/20 p-2">
+                    {renderArquivoPreview(arquivo)}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{arquivo.nome}</p>
+                      <p className="text-xs text-muted-foreground uppercase">{arquivo.tipo}{index === 0 ? " • capa principal" : ""}</p>
+                    </div>
+                    {index !== 0 && (arquivo.capa_url || arquivo.tipo === "image") && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setArquivoComoCapa(index)}>
+                        Usar capa
+                      </Button>
+                    )}
+                    <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeArquivo(index)} title="Remover arquivo">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*,application/pdf,.pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="imagem_url">URL de imagem externa (opcional)</Label>
-            <Input
-              id="imagem_url"
-              value={form.imagem_url}
-              onChange={set("imagem_url")}
-              placeholder="https://..."
-              type="url"
-            />
+            <Label htmlFor="imagem_url">URL de imagem externa/capa (opcional)</Label>
+            <Input id="imagem_url" value={form.imagem_url} onChange={set("imagem_url")} placeholder="https://..." type="url" />
             {form.imagem_url && (
               <div className="mt-1 relative h-20 w-full overflow-hidden rounded-md border">
-                <img
-                  src={`${form.imagem_url}${form.imagem_url.includes("?") ? "&" : "?"}v=${Date.now()}`}
-                  alt="preview"
-                  className="h-full w-full object-cover"
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2 h-7 w-7"
-                  onClick={() => setForm((f) => ({ ...f, imagem_url: "" }))}
-                  title="Remover imagem"
-                >
+                <img src={versionedUrl(form.imagem_url)} alt="preview" className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+                <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7" onClick={() => setForm((f) => ({ ...f, imagem_url: "" }))} title="Remover imagem">
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -566,48 +542,21 @@ export function DivulgacaoFormDialog({
           <div className="space-y-3 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <Label className="flex items-center gap-1.5">
-                  <LinkIcon className="h-3.5 w-3.5" />
-                  Links do card
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Adicione um ou mais links para copiar/abrir no popup do card.
-                </p>
+                <Label className="flex items-center gap-1.5"><LinkIcon className="h-3.5 w-3.5" />Links do card</Label>
+                <p className="text-xs text-muted-foreground">Adicione um ou mais links para copiar/abrir no popup do card.</p>
               </div>
-
-              <Button type="button" variant="outline" size="sm" onClick={addLink}>
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Link
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={addLink}><Plus className="h-3.5 w-3.5 mr-1" />Link</Button>
             </div>
 
             {form.links.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Nenhum link adicionado.
-              </p>
+              <p className="text-xs text-muted-foreground">Nenhum link adicionado.</p>
             ) : (
               <div className="space-y-2">
                 {form.links.map((link, index) => (
                   <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2">
-                    <Input
-                      value={link.titulo || ""}
-                      onChange={(e) => updateLink(index, "titulo", e.target.value)}
-                      placeholder="Nome do link"
-                    />
-                    <Input
-                      value={link.url || ""}
-                      onChange={(e) => updateLink(index, "url", e.target.value)}
-                      placeholder="https://..."
-                      type="url"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive"
-                      onClick={() => removeLink(index)}
-                      title="Remover link"
-                    >
+                    <Input value={link.titulo || ""} onChange={(e) => updateLink(index, "titulo", e.target.value)} placeholder="Nome do link" />
+                    <Input value={link.url || ""} onChange={(e) => updateLink(index, "url", e.target.value)} placeholder="https://..." type="url" />
+                    <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeLink(index)} title="Remover link">
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -617,9 +566,7 @@ export function DivulgacaoFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading || uploading}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading || uploading}>Cancelar</Button>
             <Button type="submit" disabled={loading || uploading || !form.titulo.trim()}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {initialData ? "Salvar" : "Criar"}

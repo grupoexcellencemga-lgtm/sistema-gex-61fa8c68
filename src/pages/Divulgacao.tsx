@@ -495,6 +495,7 @@ const DivulgacaoPage = () => {
       arquivo_url: formData.arquivo_url || null,
       arquivo_tipo: formData.arquivo_tipo || null,
       arquivo_nome: formData.arquivo_nome || null,
+      arquivos: formData.arquivos || [],
       links: formData.links || [],
       updated_at: new Date().toISOString(),
     };

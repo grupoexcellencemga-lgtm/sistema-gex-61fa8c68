@@ -9,12 +9,21 @@ import {
   FileText,
   GripVertical,
   Link as LinkIcon,
+  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export type DivulgacaoLink = {
   titulo?: string;
   url: string;
+};
+
+export type DivulgacaoArquivo = {
+  url: string;
+  tipo: "image" | "video" | "pdf" | "ppt" | "file";
+  nome: string;
+  capa_url?: string | null;
+  uploaded_at?: string;
 };
 
 export interface Divulgacao {
@@ -25,10 +34,12 @@ export interface Divulgacao {
   status: string;
   coluna_id?: string | null;
   ordem?: number | null;
+  quadro_id?: string | null;
   imagem_url?: string | null;
   arquivo_url?: string | null;
   arquivo_tipo?: string | null;
   arquivo_nome?: string | null;
+  arquivos?: DivulgacaoArquivo[] | string | null;
   responsavel_iniciais?: string | null;
   data?: string | null;
   ativo?: boolean;
@@ -53,13 +64,9 @@ interface Props {
   isDragging?: boolean;
 }
 
-const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
+export const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
   if (!links) return [];
-
-  if (Array.isArray(links)) {
-    return links.filter((l) => l?.url);
-  }
-
+  if (Array.isArray(links)) return links.filter((l) => l?.url);
   if (typeof links === "string") {
     try {
       const parsed = JSON.parse(links);
@@ -68,9 +75,40 @@ const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
       return links.trim() ? [{ titulo: "Link", url: links.trim() }] : [];
     }
   }
-
   return [];
 };
+
+export const normalizeArquivos = (arquivos: Divulgacao["arquivos"], item?: Divulgacao | null): DivulgacaoArquivo[] => {
+  let lista: DivulgacaoArquivo[] = [];
+
+  if (Array.isArray(arquivos)) {
+    lista = arquivos.filter((a) => a?.url);
+  } else if (typeof arquivos === "string" && arquivos.trim()) {
+    try {
+      const parsed = JSON.parse(arquivos);
+      lista = Array.isArray(parsed) ? parsed.filter((a) => a?.url) : [];
+    } catch {
+      lista = [];
+    }
+  }
+
+  if (lista.length === 0 && item?.arquivo_url) {
+    lista = [
+      {
+        url: item.arquivo_url,
+        tipo: (item.arquivo_tipo as DivulgacaoArquivo["tipo"]) || "file",
+        nome: item.arquivo_nome || item.titulo || "Arquivo",
+        capa_url: item.imagem_url || null,
+        uploaded_at: item.updated_at || item.created_at,
+      },
+    ];
+  }
+
+  return lista;
+};
+
+const versionedUrl = (url: string, version?: string) =>
+  `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(version || String(Date.now()))}`;
 
 export function DivulgacaoCard({
   item,
@@ -80,14 +118,18 @@ export function DivulgacaoCard({
   onToggleAtivo,
   isDragging,
 }: Props) {
-  const arquivoUrl = item.arquivo_url;
-  const isVideo = item.arquivo_tipo === "video";
-  const isPdf = item.arquivo_tipo === "pdf";
-  const isPpt = item.arquivo_tipo === "ppt";
-  const isImageArquivo = item.arquivo_tipo === "image";
-  const previewUrlBase = item.imagem_url || (isImageArquivo ? arquivoUrl : null);
+  const arquivos = normalizeArquivos(item.arquivos, item);
+  const arquivoPrincipal = arquivos[0] || null;
+  const arquivoUrl = arquivoPrincipal?.url || item.arquivo_url;
+  const arquivoTipo = arquivoPrincipal?.tipo || item.arquivo_tipo;
+  const isVideo = arquivoTipo === "video";
+  const isPdf = arquivoTipo === "pdf";
+  const isPpt = arquivoTipo === "ppt";
+  const isImageArquivo = arquivoTipo === "image";
+  const previewUrlBase =
+    item.imagem_url || arquivoPrincipal?.capa_url || (isImageArquivo ? arquivoUrl : null);
   const previewUrl = previewUrlBase
-    ? `${previewUrlBase}${previewUrlBase.includes("?") ? "&" : "?"}v=${encodeURIComponent(item.updated_at || item.created_at || item.id)}`
+    ? versionedUrl(previewUrlBase, item.updated_at || item.created_at || item.id)
     : null;
   const ativo = item.ativo !== false;
   const links = normalizeLinks(item.links);
@@ -134,18 +176,14 @@ export function DivulgacaoCard({
       {!previewUrl && isPdf && arquivoUrl && (
         <div className="w-full h-32 rounded-t-xl overflow-hidden bg-red-50 dark:bg-red-950/30 flex flex-col items-center justify-center hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors gap-1">
           <FileText className="h-8 w-8 text-red-500" />
-          <span className="text-red-600 dark:text-red-300 text-[10px] font-medium">
-            PDF anexado
-          </span>
+          <span className="text-red-600 dark:text-red-300 text-[10px] font-medium">PDF anexado</span>
         </div>
       )}
 
       {!previewUrl && isPpt && arquivoUrl && (
         <div className="w-full h-32 rounded-t-xl overflow-hidden bg-purple-50 dark:bg-purple-950/30 flex flex-col items-center justify-center hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors gap-1">
           <FileText className="h-8 w-8 text-purple-500" />
-          <span className="text-purple-700 dark:text-purple-300 text-[10px] font-medium">
-            PPT anexado
-          </span>
+          <span className="text-purple-700 dark:text-purple-300 text-[10px] font-medium">PPT anexado</span>
         </div>
       )}
 
@@ -167,9 +205,7 @@ export function DivulgacaoCard({
               variant="ghost"
               size="icon"
               className={`h-6 w-6 ${
-                ativo
-                  ? "text-muted-foreground hover:text-amber-500"
-                  : "text-amber-500 hover:text-green-500"
+                ativo ? "text-muted-foreground hover:text-amber-500" : "text-amber-500 hover:text-green-500"
               }`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -209,31 +245,30 @@ export function DivulgacaoCard({
         </div>
 
         {item.descricao && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-            {item.descricao}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.descricao}</p>
         )}
 
         <div className="flex flex-wrap gap-1 mt-2">
-          <span
-            className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              CATEGORIA_COLORS[item.categoria] ?? "bg-muted text-muted-foreground"
-            }`}
-          >
+          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${CATEGORIA_COLORS[item.categoria] ?? "bg-muted text-muted-foreground"}`}>
             {item.categoria}
           </span>
 
+          {arquivos.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+              <Paperclip className="h-2.5 w-2.5" />
+              {arquivos.length} arquivo{arquivos.length > 1 ? "s" : ""}
+            </span>
+          )}
+
           {isPdf && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-              <FileText className="h-2.5 w-2.5" />
-              PDF
+              <FileText className="h-2.5 w-2.5" /> PDF
             </span>
           )}
 
           {isPpt && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-              <FileText className="h-2.5 w-2.5" />
-              PPT
+              <FileText className="h-2.5 w-2.5" /> PPT
             </span>
           )}
 
@@ -272,13 +307,7 @@ export function DivulgacaoCard({
               }}
               title="Abrir card"
             >
-              {isVideo ? (
-                <Video className="h-3.5 w-3.5" />
-              ) : isPdf || isPpt ? (
-                <FileText className="h-3.5 w-3.5" />
-              ) : (
-                <ImageIcon className="h-3.5 w-3.5" />
-              )}
+              {isVideo ? <Video className="h-3.5 w-3.5" /> : isPdf || isPpt ? <FileText className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
             </Button>
           )}
         </div>
