@@ -297,6 +297,42 @@ export function ParticipantesSection({
     },
   });
 
+  const normalizarTexto = useCallback(
+    (valor?: string | null) => (valor || "").trim().toLowerCase(),
+    [],
+  );
+
+  const normalizarTelefone = useCallback(
+    (valor?: string | null) => (valor || "").replace(/\D/g, ""),
+    [],
+  );
+
+  const encontrarAlunoDoParticipante = useCallback(
+    (participante: any) => {
+      const email = normalizarTexto(participante?.email);
+      const telefone = normalizarTelefone(participante?.telefone);
+      const nome = normalizarTexto(participante?.nome);
+
+      return alunosCadastrados.find((aluno: any) => {
+        const alunoEmail = normalizarTexto(aluno.email);
+        const alunoTelefone = normalizarTelefone(aluno.telefone);
+        const alunoNome = normalizarTexto(aluno.nome);
+
+        if (email && alunoEmail && email === alunoEmail) return true;
+        if (telefone && alunoTelefone && telefone === alunoTelefone)
+          return true;
+
+        // Quando o participante não tem telefone nem e-mail, evita duplicar pelo nome exato.
+        if (!email && !telefone && nome && alunoNome && nome === alunoNome) {
+          return true;
+        }
+
+        return false;
+      });
+    },
+    [alunosCadastrados, normalizarTexto, normalizarTelefone],
+  );
+
   // Mutations
   const addParticipanteMutation = useMutation({
     mutationFn: async (data: typeof partForm) => {
@@ -397,6 +433,51 @@ export function ParticipantesSection({
       setIsEditingParticipante(false);
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const virarAlunoMutation = useMutation({
+    mutationFn: async (participante: any) => {
+      const alunoExistente = encontrarAlunoDoParticipante(participante);
+
+      if (alunoExistente) {
+        return { criado: false, aluno: alunoExistente };
+      }
+
+      const telefone = normalizarTelefone(participante.telefone) || null;
+      const email = normalizarTexto(participante.email) || null;
+
+      const { data: alunoCriado, error } = await supabase
+        .from("alunos")
+        .insert({
+          nome: participante.nome.trim(),
+          email,
+          telefone,
+        })
+        .select("id, nome, email, telefone")
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("atividades").insert({
+        tipo: "cadastro",
+        descricao: `Aluno criado a partir do evento "${evento.nome}". Participante convertido: ${participante.nome}.`,
+        aluno_id: alunoCriado.id,
+      });
+
+      return { criado: true, aluno: alunoCriado };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["alunos"] });
+      queryClient.invalidateQueries({ queryKey: ["alunos-evento"] });
+
+      if (result.criado) {
+        toast.success("Participante convertido em aluno");
+      } else {
+        toast.info("Este participante já está cadastrado como aluno");
+      }
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao converter participante: " + err.message),
   });
 
   const togglePresencaMutation = useMutation({
@@ -724,7 +805,8 @@ export function ParticipantesSection({
   const total = participantes.length;
   const presentes = participantes.filter((p: any) => !!p.presenca).length;
   const ausentes = Math.max(total - presentes, 0);
-  const percentualPresenca = total > 0 ? Math.round((presentes / total) * 100) : 0;
+  const percentualPresenca =
+    total > 0 ? Math.round((presentes / total) * 100) : 0;
   const pagos = isPago
     ? participantes.filter((p: any) => p.status_pagamento === "pago").length
     : 0;
@@ -1097,107 +1179,133 @@ export function ParticipantesSection({
                         </TableRow>
                       );
 
-                    return filtered.map((p: any) => (
-                      <TableRow
-                        key={p.id}
-                        className="cursor-pointer hover:bg-secondary/50"
-                        onClick={() => openParticipanteDetail(p)}
-                      >
-                        <TableCell
-                          className="text-center"
-                          onClick={(ev) => ev.stopPropagation()}
+                    return filtered.map((p: any) => {
+                      const alunoVinculado = encontrarAlunoDoParticipante(p);
+
+                      return (
+                        <TableRow
+                          key={p.id}
+                          className="cursor-pointer hover:bg-secondary/50"
+                          onClick={() => openParticipanteDetail(p)}
                         >
-                          <div className="flex flex-col items-center gap-0.5">
-                            <Checkbox
-                              checked={!!p.presenca}
-                              onCheckedChange={(checked) =>
-                                togglePresencaMutation.mutate({
-                                  id: p.id,
-                                  presenca: !!checked,
-                                })
-                              }
-                            />
-                            {p.presenca && p.presenca_marcada_em && (
-                              <span className="text-[10px] text-muted-foreground leading-tight">
-                                {new Date(
-                                  p.presenca_marcada_em,
-                                ).toLocaleDateString("pt-BR")}{" "}
-                                {new Date(
-                                  p.presenca_marcada_em,
-                                ).toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                                {p.presenca_marcada_por && (
-                                  <>
-                                    <br />
-                                    por {p.presenca_marcada_por}
-                                  </>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{p.nome}</TableCell>
-                        <TableCell className="text-sm">
-                          {p.email || "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {p.telefone ? formatPhone(p.telefone) : "—"}
-                        </TableCell>
-                        {evento.comunidade && (
-                          <TableCell className="text-sm">
-                            {p.tipo_participante === "comunidade" && (
-                              <Badge variant="secondary">Comunidade</Badge>
-                            )}
-                            {p.tipo_participante === "convidado" && (
-                              <Badge variant="outline">Convidado(a)</Badge>
-                            )}
-                            {p.tipo_participante === "divulgacao" && (
-                              <Badge className="bg-purple-600 text-white">
-                                Divulgação
-                              </Badge>
-                            )}
-                            {!p.tipo_participante && "—"}
+                          <TableCell
+                            className="text-center"
+                            onClick={(ev) => ev.stopPropagation()}
+                          >
+                            <div className="flex flex-col items-center gap-0.5">
+                              <Checkbox
+                                checked={!!p.presenca}
+                                onCheckedChange={(checked) =>
+                                  togglePresencaMutation.mutate({
+                                    id: p.id,
+                                    presenca: !!checked,
+                                  })
+                                }
+                              />
+                              {p.presenca && p.presenca_marcada_em && (
+                                <span className="text-[10px] text-muted-foreground leading-tight">
+                                  {new Date(
+                                    p.presenca_marcada_em,
+                                  ).toLocaleDateString("pt-BR")}{" "}
+                                  {new Date(
+                                    p.presenca_marcada_em,
+                                  ).toLocaleTimeString("pt-BR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                  {p.presenca_marcada_por && (
+                                    <>
+                                      <br />
+                                      por {p.presenca_marcada_por}
+                                    </>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
-                        )}
-                        <TableCell className="text-sm">
-                          {formatCurrency(p.valor)}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(p.status_pagamento)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {p.adicionado_por_nome || "—"}
-                        </TableCell>
-                        <TableCell onClick={(ev) => ev.stopPropagation()}>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => {
-                                openParticipanteDetail(p);
-                                setIsEditingParticipante(true);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => {
-                                if (confirm("Remover este participante?"))
-                                  deleteParticipanteMutation.mutate(p.id);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ));
+                          <TableCell className="font-medium">
+                            {p.nome}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.email || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.telefone ? formatPhone(p.telefone) : "—"}
+                          </TableCell>
+                          {evento.comunidade && (
+                            <TableCell className="text-sm">
+                              {p.tipo_participante === "comunidade" && (
+                                <Badge variant="secondary">Comunidade</Badge>
+                              )}
+                              {p.tipo_participante === "convidado" && (
+                                <Badge variant="outline">Convidado(a)</Badge>
+                              )}
+                              {p.tipo_participante === "divulgacao" && (
+                                <Badge className="bg-purple-600 text-white">
+                                  Divulgação
+                                </Badge>
+                              )}
+                              {!p.tipo_participante && "—"}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-sm">
+                            {formatCurrency(p.valor)}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(p.status_pagamento)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {p.adicionado_por_nome || "—"}
+                          </TableCell>
+                          <TableCell onClick={(ev) => ev.stopPropagation()}>
+                            <div className="flex flex-wrap justify-end gap-1">
+                              <Button
+                                variant={
+                                  alunoVinculado ? "secondary" : "outline"
+                                }
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={
+                                  !!alunoVinculado ||
+                                  virarAlunoMutation.isPending
+                                }
+                                onClick={() => virarAlunoMutation.mutate(p)}
+                              >
+                                {virarAlunoMutation.isPending ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : alunoVinculado ? (
+                                  "Já é aluno"
+                                ) : (
+                                  "Virar aluno"
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  openParticipanteDetail(p);
+                                  setIsEditingParticipante(true);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive"
+                                onClick={() => {
+                                  if (confirm("Remover este participante?"))
+                                    deleteParticipanteMutation.mutate(p.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
                   })()}
                 </TableBody>
               </Table>
@@ -1358,6 +1466,29 @@ export function ParticipantesSection({
                     <span className="text-muted-foreground text-xs">
                       Dados do participante
                     </span>
+                    {(() => {
+                      const alunoVinculado =
+                        encontrarAlunoDoParticipante(selectedParticipante);
+
+                      return (
+                        <Button
+                          variant={alunoVinculado ? "secondary" : "outline"}
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={
+                            !!alunoVinculado || virarAlunoMutation.isPending
+                          }
+                          onClick={() =>
+                            virarAlunoMutation.mutate(selectedParticipante)
+                          }
+                        >
+                          {virarAlunoMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          ) : null}
+                          {alunoVinculado ? "Já é aluno" : "Virar aluno"}
+                        </Button>
+                      );
+                    })()}
                     <Button
                       variant="ghost"
                       size="sm"
