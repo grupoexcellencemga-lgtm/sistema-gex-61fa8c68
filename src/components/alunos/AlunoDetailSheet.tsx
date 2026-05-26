@@ -16,7 +16,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, GraduationCap, Plus, Loader2, Clock, FileText, MessageSquare, Receipt, CheckSquare } from "lucide-react";
+import { Pencil, Trash2, GraduationCap, Plus, Loader2, Clock, FileText, MessageSquare, Receipt, CheckSquare, Paperclip } from "lucide-react";
 import { gerarReciboPagamento } from "@/lib/pdfUtils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -85,6 +85,20 @@ export const AlunoDetailSheet = (props: Props) => {
     editPagamentoDialog, setEditPagamentoDialog, editPagForm, setEditPagForm, onSavePagamento, updatePagamentoIsPending,
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
   } = props;
+
+  const getComprovantesMatricula = (matricula: any) => {
+    const lista = Array.isArray(matricula?.comprovantes_urls)
+      ? matricula.comprovantes_urls
+      : [];
+
+    if (lista.length > 0) return lista;
+
+    if (matricula?.comprovante_url) {
+      return [{ url: matricula.comprovante_url, nome: "Comprovante anexado" }];
+    }
+
+    return [];
+  };
 
   const hoje = new Date().toISOString().split("T")[0];
 
@@ -325,6 +339,24 @@ export const AlunoDetailSheet = (props: Props) => {
                               <span className="font-semibold">Final: {formatCurrency(Number(m.valor_final || 0))}</span>
                             </div>
                             {m.observacoes && <p className="text-xs text-muted-foreground mt-1">{m.observacoes}</p>}
+
+                            {getComprovantesMatricula(m).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {getComprovantesMatricula(m).map((comp: any, index: number) => (
+                                  <Button
+                                    key={`${comp.url}-${index}`}
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => comp.url && window.open(comp.url, "_blank")}
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5 mr-1" />
+                                    {comp.nome || `Comprovante ${index + 1}`}
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

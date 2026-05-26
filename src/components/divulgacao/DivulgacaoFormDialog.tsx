@@ -29,6 +29,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
+import * as tus from "tus-js-client";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -69,6 +70,8 @@ const EMPTY: FormData = {
 };
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024;
+const RESUMABLE_UPLOAD_THRESHOLD = 6 * 1024 * 1024;
+const STORAGE_BUCKET = "divulgacoes";
 
 const isPowerPointFile = (file: File) => {
   const name = file.name.toLowerCase();
@@ -172,6 +175,96 @@ const getMainFields = (arquivos: DivulgacaoArquivo[]) => {
 
 const versionedUrl = (url: string) => `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
 
+const getSupabaseConnection = () => {
+  const client = supabase as any;
+
+  const url =
+    client.supabaseUrl ||
+    client.url ||
+    import.meta.env.VITE_SUPABASE_URL ||
+    import.meta.env.VITE_SUPABASE_PROJECT_URL;
+
+  const anonKey =
+    client.supabaseKey ||
+    client.anonKey ||
+    import.meta.env.VITE_SUPABASE_ANON_KEY ||
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url) {
+    throw new Error("URL do Supabase não encontrada para upload resumido.");
+  }
+
+  return { url: String(url).replace(/\/$/, ""), anonKey: anonKey ? String(anonKey) : "" };
+};
+
+const uploadWithTus = async (
+  file: File | Blob,
+  path: string,
+  contentType: string,
+  onProgress?: (progress: number) => void
+): Promise<{ path: string }> => {
+  const { url, anonKey } = getSupabaseConnection();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token || anonKey;
+
+  if (!token) {
+    throw new Error("Token do Supabase não encontrado para upload resumido.");
+  }
+
+  return await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: `${url}/storage/v1/upload/resumable`,
+      chunkSize: RESUMABLE_UPLOAD_THRESHOLD,
+      retryDelays: [0, 1000, 3000, 5000],
+      removeFingerprintOnSuccess: true,
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: anonKey || token,
+        "x-upsert": "false",
+      },
+      metadata: {
+        bucketName: STORAGE_BUCKET,
+        objectName: path,
+        contentType: contentType || "application/octet-stream",
+        cacheControl: "0",
+      },
+      onError: (error) => reject(error),
+      onProgress: (bytesUploaded, bytesTotal) => {
+        if (!bytesTotal) return;
+        onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
+      },
+      onSuccess: () => resolve({ path }),
+    });
+
+    upload.start();
+  });
+};
+
+const uploadToStorage = async (
+  path: string,
+  file: File | Blob,
+  contentType: string,
+  onProgress?: (progress: number) => void
+): Promise<{ path: string }> => {
+  const size = file.size ?? 0;
+  const shouldUseTus = size >= RESUMABLE_UPLOAD_THRESHOLD || contentType.startsWith("video/");
+
+  if (shouldUseTus) {
+    return uploadWithTus(file, path, contentType, onProgress);
+  }
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, file, {
+      contentType,
+      cacheControl: "0",
+      upsert: false,
+    });
+
+  if (error) throw error;
+  return { path: data.path };
+};
+
 export function DivulgacaoFormDialog({
   open,
   onClose,
@@ -183,6 +276,7 @@ export function DivulgacaoFormDialog({
   const [form, setForm] = useState<FormData>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -217,7 +311,7 @@ export function DivulgacaoFormDialog({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const uploadOneFile = async (file: File): Promise<DivulgacaoArquivo> => {
+  const uploadOneFile = async (file: File, onProgress?: (progress: number) => void): Promise<DivulgacaoArquivo> => {
     if (file.size > MAX_SIZE_BYTES) {
       throw new Error(`${file.name}: arquivo muito grande. Máximo permitido: 500 MB`);
     }
@@ -231,13 +325,9 @@ export function DivulgacaoFormDialog({
     const ext = file.name.split(".").pop();
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-    const { data, error } = await supabase.storage
-      .from("divulgacoes")
-      .upload(path, file, { cacheControl: "0", upsert: false });
+    const data = await uploadToStorage(path, file, file.type || "application/octet-stream", onProgress);
 
-    if (error) throw error;
-
-    const { data: urlData } = supabase.storage.from("divulgacoes").getPublicUrl(data.path);
+    const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
 
     let capaUrl: string | null = tipo === "image" ? urlData.publicUrl : null;
 
@@ -246,18 +336,10 @@ export function DivulgacaoFormDialog({
         const capaBlob = await gerarCapaPdf(file);
         const capaPath = `${Date.now()}-${Math.random().toString(36).slice(2)}-capa.png`;
 
-        const { data: capaData, error: capaError } = await supabase.storage
-          .from("divulgacoes")
-          .upload(capaPath, capaBlob, {
-            contentType: "image/png",
-            cacheControl: "0",
-            upsert: false,
-          });
-
-        if (capaError) throw capaError;
+        const capaData = await uploadToStorage(capaPath, capaBlob, "image/png");
 
         const { data: capaUrlData } = supabase.storage
-          .from("divulgacoes")
+          .from(STORAGE_BUCKET)
           .getPublicUrl(capaData.path);
 
         capaUrl = capaUrlData.publicUrl;
@@ -286,8 +368,13 @@ export function DivulgacaoFormDialog({
     try {
       const novosArquivos: DivulgacaoArquivo[] = [];
 
-      for (const file of files) {
-        novosArquivos.push(await uploadOneFile(file));
+      for (const [index, file] of files.entries()) {
+        novosArquivos.push(
+          await uploadOneFile(file, (progress) => {
+            const totalProgress = Math.round(((index + progress / 100) / files.length) * 100);
+            setUploadProgress(totalProgress);
+          })
+        );
       }
 
       setForm((f) => {
@@ -308,6 +395,7 @@ export function DivulgacaoFormDialog({
       toast.error("Erro ao enviar arquivo: " + (err.message ?? ""));
     } finally {
       setUploading(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -472,7 +560,7 @@ export function DivulgacaoFormDialog({
               </div>
               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                 {uploading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
-                Adicionar
+                Adicionar{uploadProgress !== null ? ` ${uploadProgress}%` : ""}
               </Button>
             </div>
 
@@ -493,7 +581,7 @@ export function DivulgacaoFormDialog({
                 {uploading ? (
                   <>
                     <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-                    <span className="text-xs text-muted-foreground">Enviando arquivo...</span>
+                    <span className="text-xs text-muted-foreground">Enviando arquivo{uploadProgress !== null ? `... ${uploadProgress}%` : "..."}</span>
                   </>
                 ) : (
                   <>

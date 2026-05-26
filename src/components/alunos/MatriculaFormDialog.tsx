@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, FileText } from "lucide-react";
+import { Loader2, FileText, Paperclip, X, ExternalLink } from "lucide-react";
 import { gerarContratoMatricula } from "@/lib/pdfUtils";
 import { formatCurrency, formatDate } from "./alunosUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo } from "react";
+import { useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
 interface Props {
@@ -186,6 +186,46 @@ export const MatriculaFormDialog = ({
         ["credito", "cartao", "cartao_credito", "link", "boleto"].includes(v)
           ? p.parcelas || "1"
           : "1",
+    }));
+  };
+
+  const comprovanteInputRef = useRef<HTMLInputElement>(null);
+
+  const comprovantesAtuais = Array.isArray(matriculaForm.comprovantes_urls)
+    ? matriculaForm.comprovantes_urls
+    : [];
+
+  const comprovantesNovos = Array.isArray(matriculaForm.comprovantes_files)
+    ? matriculaForm.comprovantes_files
+    : [];
+
+  const handleComprovantesChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setMatriculaForm((p: any) => ({
+      ...p,
+      comprovantes_files: [...(Array.isArray(p.comprovantes_files) ? p.comprovantes_files : []), ...files],
+    }));
+
+    if (comprovanteInputRef.current) comprovanteInputRef.current.value = "";
+  };
+
+  const removerComprovanteNovo = (indexToRemove: number) => {
+    setMatriculaForm((p: any) => ({
+      ...p,
+      comprovantes_files: (Array.isArray(p.comprovantes_files) ? p.comprovantes_files : []).filter(
+        (_: File, index: number) => index !== indexToRemove
+      ),
+    }));
+  };
+
+  const removerComprovanteAtual = (indexToRemove: number) => {
+    setMatriculaForm((p: any) => ({
+      ...p,
+      comprovantes_urls: (Array.isArray(p.comprovantes_urls) ? p.comprovantes_urls : []).filter(
+        (_: any, index: number) => index !== indexToRemove
+      ),
     }));
   };
 
@@ -595,6 +635,104 @@ export const MatriculaFormDialog = ({
               }
               placeholder="Observações opcionais"
             />
+          </div>
+
+          <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label>Comprovante da matrícula</Label>
+                <p className="text-xs text-muted-foreground">
+                  Anexe um ou mais comprovantes de pagamento, contrato ou documento relacionado à matrícula.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => comprovanteInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4 mr-2" />
+                Anexar comprovante
+              </Button>
+            </div>
+
+            <Input
+              ref={comprovanteInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+              onChange={handleComprovantesChange}
+            />
+
+            {(comprovantesAtuais.length > 0 || comprovantesNovos.length > 0) ? (
+              <div className="space-y-2">
+                {comprovantesAtuais.map((comp: any, index: number) => (
+                  <div
+                    key={`${comp.url}-${index}`}
+                    className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {comp.nome || `Comprovante ${index + 1}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Arquivo já anexado</p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {comp.url && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => window.open(comp.url, "_blank")}
+                          title="Abrir comprovante"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removerComprovanteAtual(index)}
+                        title="Remover comprovante"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {comprovantesNovos.map((file: File, index: number) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-dashed bg-background px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">Novo anexo para enviar ao salvar</p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removerComprovanteNovo(index)}
+                      title="Remover anexo"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Nenhum comprovante anexado ainda.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2">

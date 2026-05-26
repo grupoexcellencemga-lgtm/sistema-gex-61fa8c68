@@ -274,6 +274,66 @@ const Alunos = () => {
     onError: (err: any) => toast.error("Erro ao excluir aluno: " + err.message),
   });
 
+  const getMatriculaComprovantes = (matricula: any) => {
+    const lista = Array.isArray(matricula?.comprovantes_urls)
+      ? matricula.comprovantes_urls
+      : [];
+
+    if (lista.length > 0) return lista;
+
+    if (matricula?.comprovante_url) {
+      return [{ url: matricula.comprovante_url, nome: "Comprovante anexado" }];
+    }
+
+    return [];
+  };
+
+  const salvarComprovantesMatricula = async (matriculaId: string) => {
+    const comprovantesAtuais = Array.isArray(matriculaForm.comprovantes_urls)
+      ? matriculaForm.comprovantes_urls
+      : [];
+
+    const arquivos = Array.isArray(matriculaForm.comprovantes_files)
+      ? matriculaForm.comprovantes_files
+      : [];
+
+    const novosComprovantes: Array<{ url: string; nome: string }> = [];
+
+    for (const file of arquivos) {
+      const ext = file.name.split(".").pop();
+      const filePath = `${selectedAluno?.id || "aluno"}/${matriculaId}/${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("comprovantes_matriculas")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("comprovantes_matriculas")
+        .getPublicUrl(filePath);
+
+      novosComprovantes.push({ url: urlData.publicUrl, nome: file.name });
+    }
+
+    const comprovantes_urls = [...comprovantesAtuais, ...novosComprovantes];
+    const primeiroComprovante = comprovantes_urls[0] || null;
+
+    const { error } = await (supabase as any)
+      .from("matriculas")
+      .update({
+        comprovante_url: primeiroComprovante?.url || null,
+        comprovantes_urls,
+      })
+      .eq("id", matriculaId);
+
+    if (error) throw error;
+
+    return comprovantes_urls;
+  };
+
 
   const insertMatricula = useMutation({
     mutationFn: async () => {
@@ -334,6 +394,8 @@ const Alunos = () => {
         .single();
 
       if (matErr) throw matErr;
+
+      await salvarComprovantesMatricula(mat.id);
 
       if (valorFinal > 0) {
         const isCartao = ["credito", "cartao_credito", "cartao"].includes(
@@ -748,6 +810,8 @@ const Alunos = () => {
 
     if (matError) throw matError;
 
+    await salvarComprovantesMatricula(editingMatriculaId);
+
     const { data: pagamentosExistentes, error: pagamentosError } =
       await supabase
         .from("pagamentos")
@@ -941,6 +1005,9 @@ const Alunos = () => {
         : "",
 
     repassar_taxa: false,
+    comprovante_url: m.comprovante_url || "",
+    comprovantes_urls: getMatriculaComprovantes(m),
+    comprovantes_files: [],
   });
 
   setMatriculaDialogOpen(true);

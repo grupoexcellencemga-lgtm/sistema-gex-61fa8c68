@@ -14,6 +14,7 @@ export const emptyMatriculaForm = {
   produto_id: "", turma_id: "", data_inicio: "", data_fim: "", status: "ativo", observacoes: "",
   valor_total: "", desconto: "", parcelas: "1", forma_pagamento: "", data_vencimento: "", conta_bancaria_id: "",
   comercial_id: "", percentual_comissao: "5", taxa_cartao: "", repassar_taxa: false,
+  comprovante_url: "", comprovantes_urls: [] as Array<{ url: string; nome: string }>, comprovantes_files: [] as File[],
 };
 
 // Re-export from centralized formatters
