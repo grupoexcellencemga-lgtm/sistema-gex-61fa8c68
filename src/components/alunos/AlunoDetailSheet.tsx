@@ -21,7 +21,7 @@ import { gerarReciboPagamento } from "@/lib/pdfUtils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatPhone, formatCPF } from "@/lib/utils";
-import { formatDate, formatCurrency, calcMultaJuros } from "./alunosUtils";
+import { formatDate, formatCurrency } from "./alunosUtils";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
@@ -103,9 +103,22 @@ export const AlunoDetailSheet = (props: Props) => {
   const getFormaLabel = (codigo: string | null | undefined) => getFormaPagamentoLabel(codigo, formasPagamento);
   const getFormaConfig = (codigo: string | null | undefined) => formasPagamento.find((f) => f.codigo === codigo);
 
-  const openConfirmPagamentoDialog = (p: any, fees: any) => {
+  const formasComTaxa = ["credito", "cartao", "cartao_credito", "recorrencia_cartao", "debito", "link", "boleto"];
+
+  const getValorTaxaMaquina = (p: any) => {
+    const taxa = Number(p?.taxa_cartao) || 0;
+    const valor = Number(p?.valor) || 0;
+
+    if (!formasComTaxa.includes(p?.forma_pagamento) || taxa <= 0 || valor <= 0) {
+      return 0;
+    }
+
+    return Math.round(valor * (taxa / 100) * 100) / 100;
+  };
+
+  const openConfirmPagamentoDialog = (p: any, _fees: any) => {
     setConfirmingPagamento(p);
-    setConfirmingFees(fees);
+    setConfirmingFees({ multa: 0, juros: 0, total: Number(p.valor) || 0 });
 
     setConfirmPagamentoForm({
       data_pagamento: p.data_pagamento || hoje,
@@ -135,12 +148,18 @@ export const AlunoDetailSheet = (props: Props) => {
   const novoIsCartaoCredito =
     novoTipoForma === "credito" ||
     ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+  const novoIsDebito = novoTipoForma === "debito" || novoPagForm.forma_pagamento === "debito";
   const novoIsLink = novoTipoForma === "link" || novoPagForm.forma_pagamento === "link";
   const novoIsBoleto = novoTipoForma === "boleto" || novoPagForm.forma_pagamento === "boleto";
-  const novoShowTaxa = Boolean(novoFormaConfig?.abre_taxa) || novoIsCartaoCredito || novoIsLink || novoIsBoleto;
+  const novoShowTaxa = Boolean(novoFormaConfig?.abre_taxa) || novoIsCartaoCredito || novoIsDebito || novoIsLink || novoIsBoleto;
 
   const novoTaxaAutoCalc = useMemo(() => {
     if (!novoShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
+
+    if (novoIsDebito) {
+      const found = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Débito" };
+    }
 
     if (novoIsCartaoCredito) {
       const nome = novoParcelasCalc === 1 ? "Crédito 1x" : `Crédito ${novoParcelasCalc}x`;
@@ -155,11 +174,16 @@ export const AlunoDetailSheet = (props: Props) => {
     }
 
     return { percentual: 0, nome: "" };
-  }, [novoShowTaxa, novoIsCartaoCredito, novoIsLink, novoIsBoleto, novoParcelasCalc, taxasSistema]);
+  }, [novoShowTaxa, novoIsDebito, novoIsCartaoCredito, novoIsLink, novoIsBoleto, novoParcelasCalc, taxasSistema]);
 
   const novoTaxaPercentual = novoTaxaAutoCalc.percentual;
   const novoValorTaxa = novoValorBase > 0 ? Math.round(novoValorBase * novoTaxaPercentual) / 100 : 0;
-  const novoValorComTaxa = novoPagForm.repassar_taxa && novoShowTaxa ? novoValorBase + novoValorTaxa : novoValorBase;
+  const novoValorComTaxa =
+    novoShowTaxa && novoTaxaPercentual > 0
+      ? novoPagForm.repassar_taxa
+        ? novoValorBase + novoValorTaxa
+        : Math.max(novoValorBase - novoValorTaxa, 0)
+      : novoValorBase;
 
   useEffect(() => {
     if (novoShowTaxa && novoTaxaPercentual > 0) {
@@ -401,7 +425,7 @@ export const AlunoDetailSheet = (props: Props) => {
                             }
 
                             const p = item.data;
-                            const fees = calcMultaJuros(p);
+                            const valorTaxaMaquina = getValorTaxaMaquina(p);
 
                             return (
                               <div key={p.id} className="rounded-lg border p-3 text-sm flex items-center justify-between">
@@ -410,17 +434,19 @@ export const AlunoDetailSheet = (props: Props) => {
                                     {formatCurrency(Number(p.valor))}
                                     {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
                                     {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
-                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
+                                    {formasComTaxa.includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
                                   </p>
                                   <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
                                   <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}</p>
-                                  {fees.multa > 0 && (
-                                    <p className="text-xs text-destructive">+{formatCurrency(fees.multa + fees.juros)} multa/juros</p>
+                                  {valorTaxaMaquina > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Taxa da máquina: {formatCurrency(valorTaxaMaquina)}
+                                    </p>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {p.status === "pendente" && (
-                                    <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, fees)}>
+                                    <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}>
                                       Confirmar
                                     </Button>
                                   )}
@@ -506,7 +532,7 @@ export const AlunoDetailSheet = (props: Props) => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Valor original</p>
+                    <p className="text-xs text-muted-foreground">Valor da parcela</p>
                     <p className="font-semibold">{formatCurrency(Number(confirmingPagamento.valor))}</p>
                   </div>
 
@@ -530,9 +556,9 @@ export const AlunoDetailSheet = (props: Props) => {
                   </div>
                 </div>
 
-                {confirmingFees?.multa > 0 && (
-                  <p className="text-xs text-destructive">
-                    Multa/Juros: {formatCurrency(confirmingFees.multa + confirmingFees.juros)}
+                {getValorTaxaMaquina(confirmingPagamento) > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Taxa da máquina: {formatCurrency(getValorTaxaMaquina(confirmingPagamento))}
                   </p>
                 )}
               </div>
@@ -672,7 +698,7 @@ export const AlunoDetailSheet = (props: Props) => {
           </DialogHeader>
           <div className="space-y-2 mt-2 max-h-[60vh] overflow-y-auto">
             {selectedParcelas.map((p: any) => {
-              const fees = calcMultaJuros(p);
+              const valorTaxaMaquina = getValorTaxaMaquina(p);
               return (
                 <div key={p.id} className="rounded-lg border p-3 text-sm">
                   <div className="flex items-center justify-between">
@@ -682,16 +708,15 @@ export const AlunoDetailSheet = (props: Props) => {
                         Venc: {formatDate(p.data_vencimento)}
                         {p.data_pagamento ? ` · Pago: ${formatDate(p.data_pagamento)}` : ""}
                       </p>
-                      {fees.multa > 0 && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          Multa: {formatCurrency(fees.multa)} + Juros: {formatCurrency(fees.juros)} = Total: {formatCurrency(fees.total)}
-                          <span className="text-muted-foreground"> ({fees.diasAtraso} dias)</span>
+                      {valorTaxaMaquina > 0 && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Taxa da máquina: {formatCurrency(valorTaxaMaquina)}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       {p.status === "pendente" && (
-                        <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, fees)}>
+                        <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}>
                           Confirmar
                         </Button>
                       )}
@@ -867,9 +892,14 @@ export const AlunoDetailSheet = (props: Props) => {
                       <Label className="text-sm cursor-pointer">Repassar taxa para o cliente</Label>
                     </div>
 
-                    {novoPagForm.repassar_taxa && (
+                    {novoPagForm.repassar_taxa ? (
                       <div className="text-sm bg-background rounded p-2">
                         <span className="text-muted-foreground">Cliente pagará: </span>
+                        <span className="font-semibold">{formatCurrency(novoValorComTaxa)}</span>
+                      </div>
+                    ) : (
+                      <div className="text-sm bg-background rounded p-2">
+                        <span className="text-muted-foreground">Líquido lançado: </span>
                         <span className="font-semibold">{formatCurrency(novoValorComTaxa)}</span>
                       </div>
                     )}

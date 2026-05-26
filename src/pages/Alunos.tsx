@@ -339,21 +339,27 @@ const Alunos = () => {
         const isCartao = ["credito", "cartao_credito", "cartao"].includes(
           matriculaForm.forma_pagamento
         );
+        const isDebito = matriculaForm.forma_pagamento === "debito";
         const isLinkBoleto = ["link", "boleto"].includes(
           matriculaForm.forma_pagamento
         );
-        const numParcelas = isCartao ? 1 : parseInt(matriculaForm.parcelas) || 1;
+        const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
+        const numParcelas = isCartao || isDebito ? 1 : parseInt(matriculaForm.parcelas) || 1;
         const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
-        const taxaCartao =
-          isCartao || isLinkBoleto
-            ? parseFloat(matriculaForm.taxa_cartao) || 0
+        const taxaCartao = temTaxaMaquina
+          ? parseFloat(matriculaForm.taxa_cartao) || 0
+          : 0;
+
+        const valorTaxa =
+          taxaCartao > 0
+            ? Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
             : 0;
 
         const valorBase =
-          matriculaForm.repassar_taxa &&
-          (isCartao || isLinkBoleto) &&
-          taxaCartao > 0
-            ? valorFinal + Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
+          temTaxaMaquina && taxaCartao > 0
+            ? matriculaForm.repassar_taxa
+              ? valorFinal + valorTaxa
+              : Math.max(valorFinal - valorTaxa, 0)
             : valorFinal;
 
         const valorParcela = valorBase / numParcelas;
@@ -369,8 +375,8 @@ const Alunos = () => {
             matricula_id: mat.id,
             valor: Math.round(valorParcela * 100) / 100,
             forma_pagamento: matriculaForm.forma_pagamento || null,
-            parcelas: isCartao ? 1 : numParcelas,
-            parcela_atual: isCartao ? 1 : i + 1,
+            parcelas: isCartao || isDebito ? 1 : numParcelas,
+            parcela_atual: isCartao || isDebito ? 1 : i + 1,
             parcelas_cartao: isCartao ? parcelasCliente : null,
             taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
             data_vencimento: d.toISOString().split("T")[0],
@@ -598,14 +604,19 @@ const Alunos = () => {
       if (valor <= 0) throw new Error("Valor deve ser maior que zero");
       if (!novoPagForm.data_vencimento) throw new Error("Data de vencimento é obrigatória");
 
-      const isCartao = ["cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+      const isCartao = ["credito", "cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
+      const isDebito = novoPagForm.forma_pagamento === "debito";
       const isLinkBoleto = ["link", "boleto"].includes(novoPagForm.forma_pagamento);
-      const taxaCartao = isCartao || isLinkBoleto ? parseFloat(novoPagForm.taxa_cartao) || 0 : 0;
+      const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
+      const taxaCartao = temTaxaMaquina ? parseFloat(novoPagForm.taxa_cartao) || 0 : 0;
       const parcelasCartao = isCartao || isLinkBoleto ? parseInt(novoPagForm.parcelas_cartao) || 1 : null;
+      const valorTaxa = taxaCartao > 0 ? Math.round(valor * (taxaCartao / 100) * 100) / 100 : 0;
 
       const valorCobrado =
-        novoPagForm.repassar_taxa && taxaCartao > 0
-          ? valor + Math.round(valor * taxaCartao) / 100
+        temTaxaMaquina && taxaCartao > 0
+          ? novoPagForm.repassar_taxa
+            ? valor + valorTaxa
+            : Math.max(valor - valorTaxa, 0)
           : valor;
 
       const { error } = await supabase.from("pagamentos").insert({
@@ -703,15 +714,17 @@ const Alunos = () => {
     const isCartao = ["credito", "cartao_credito", "cartao"].includes(
       matriculaForm.forma_pagamento
     );
+    const isDebito = matriculaForm.forma_pagamento === "debito";
 
     const isLinkBoleto = ["link", "boleto"].includes(
       matriculaForm.forma_pagamento
     );
 
-    const taxaCartao =
-      isCartao || isLinkBoleto
-        ? parseFloat(matriculaForm.taxa_cartao) || 0
-        : 0;
+    const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
+
+    const taxaCartao = temTaxaMaquina
+      ? parseFloat(matriculaForm.taxa_cartao) || 0
+      : 0;
 
     const dataPagamentoOuVencimento = matriculaForm.data_vencimento || null;
 
@@ -750,15 +763,17 @@ const Alunos = () => {
     if (pagamentosDaMatricula.length > 0) {
       const quantidadePagamentos = pagamentosDaMatricula.length;
 
+      const valorTaxa = taxaCartao > 0 ? Math.round(valorFinal * (taxaCartao / 100) * 100) / 100 : 0;
+
       const valorBase =
-        matriculaForm.repassar_taxa &&
-        (isCartao || isLinkBoleto) &&
-        taxaCartao > 0
-          ? valorFinal + Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
+        temTaxaMaquina && taxaCartao > 0
+          ? matriculaForm.repassar_taxa
+            ? valorFinal + valorTaxa
+            : Math.max(valorFinal - valorTaxa, 0)
           : valorFinal;
 
       const valorPorRegistro =
-        isCartao || quantidadePagamentos === 1
+        isCartao || isDebito || quantidadePagamentos === 1
           ? valorBase
           : Math.round((valorBase / quantidadePagamentos) * 100) / 100;
 
@@ -767,7 +782,7 @@ const Alunos = () => {
 
         let dataVencimento = dataPagamentoOuVencimento;
 
-        if (!isCartao && dataPagamentoOuVencimento) {
+        if (!isCartao && !isDebito && dataPagamentoOuVencimento) {
           const data = new Date(dataPagamentoOuVencimento + "T12:00:00");
           data.setMonth(data.getMonth() + index);
           dataVencimento = data.toISOString().split("T")[0];
@@ -779,8 +794,8 @@ const Alunos = () => {
           forma_pagamento: formaPagamento,
           conta_bancaria_id: matriculaForm.conta_bancaria_id || null,
           data_vencimento: dataVencimento,
-          parcelas: isCartao ? 1 : quantidadePagamentos,
-          parcela_atual: isCartao ? 1 : index + 1,
+          parcelas: isCartao || isDebito ? 1 : quantidadePagamentos,
+          parcela_atual: isCartao || isDebito ? 1 : index + 1,
           parcelas_cartao: isCartao ? parcelasInformadas : null,
           taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
         };

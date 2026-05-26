@@ -144,8 +144,10 @@ export const MatriculaFormDialog = ({
       : 0;
 
   const valorCobradoCalc =
-    matriculaForm.repassar_taxa && showTaxa && taxaPercentual > 0
-      ? valorFinalCalc + valorTaxa
+    showTaxa && taxaPercentual > 0
+      ? matriculaForm.repassar_taxa
+        ? valorFinalCalc + valorTaxa
+        : Math.max(valorFinalCalc - valorTaxa, 0)
       : valorFinalCalc;
 
   const valorParcelaCalc =
@@ -480,6 +482,13 @@ export const MatriculaFormDialog = ({
                     <p className="text-xs text-primary font-medium">
                       O cliente pagará{" "}
                       {formatCurrency(valorFinalCalc + valorTaxa)} (valor + taxa)
+                    </p>
+                  )}
+
+                {!matriculaForm.repassar_taxa &&
+                  (isCredito || isLink || isBoleto || isDebito) && (
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Líquido lançado: {formatCurrency(Math.max(valorFinalCalc - valorTaxa, 0))}
                     </p>
                   )}
               </div>
