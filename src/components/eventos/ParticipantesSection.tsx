@@ -722,6 +722,9 @@ export function ParticipantesSection({
 
   const isPago = evento.pago;
   const total = participantes.length;
+  const presentes = participantes.filter((p: any) => !!p.presenca).length;
+  const ausentes = Math.max(total - presentes, 0);
+  const percentualPresenca = total > 0 ? Math.round((presentes / total) * 100) : 0;
   const pagos = isPago
     ? participantes.filter((p: any) => p.status_pagamento === "pago").length
     : 0;
@@ -857,6 +860,63 @@ export function ParticipantesSection({
             <UserPlus className="h-4 w-4 mr-1" /> Adicionar
           </Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card className="border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Já chegaram
+                </p>
+                <p className="mt-1 text-3xl font-bold text-emerald-700 dark:text-emerald-300">
+                  {presentes}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  participante(s) com presença marcada
+                </p>
+              </div>
+              <CheckCircle2 className="h-9 w-9 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                  Ainda não vieram
+                </p>
+                <p className="mt-1 text-3xl font-bold text-amber-700 dark:text-amber-300">
+                  {ausentes}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  participante(s) sem presença marcada
+                </p>
+              </div>
+              <Users className="h-9 w-9 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Presença geral
+                </p>
+                <p className="mt-1 text-3xl font-bold">{percentualPresenca}%</p>
+                <p className="text-xs text-muted-foreground">
+                  {presentes} de {total} participante(s)
+                </p>
+              </div>
+              <BarChart3 className="h-9 w-9 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {importFile && (
