@@ -23,6 +23,7 @@ import {
   Route,
   Search,
   UserCheck,
+  UserPlus,
   Users,
 } from "lucide-react";
 
@@ -69,6 +70,7 @@ const getEntryDate = (entry: any) => entry.dataInicio || entry.data || entry.cre
 const Jornada = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+  const [filterVinculo, setFilterVinculo] = useState("all");
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterProduto, setFilterProduto] = useState("all");
   const [filterTurma, setFilterTurma] = useState("all");
@@ -159,14 +161,14 @@ const Jornada = () => {
     return map;
   }, [pagamentosProcesso]);
 
-  const alunosWithJourney = useMemo(() => {
-    const alunoMap: Record<string, any> = {};
+  const pessoasWithJourney = useMemo(() => {
+    const pessoaMap: Record<string, any> = {};
     const emailMap: Record<string, string> = {};
     const phoneMap: Record<string, string> = {};
     const nameMap: Record<string, string> = {};
 
     alunos.forEach((aluno: any) => {
-      alunoMap[aluno.id] = { ...aluno, jornada: [] };
+      pessoaMap[aluno.id] = { ...aluno, tipoPessoa: "aluno", vinculo: "aluno", jornada: [] };
 
       const email = normalizeEmail(aluno.email);
       const phone = onlyDigits(aluno.telefone);
@@ -188,8 +190,72 @@ const Jornada = () => {
       return null;
     };
 
+    const getLeadKey = (item: any) => {
+      const email = normalizeEmail(item.email);
+      const phone = onlyDigits(item.telefone);
+      const name = normalizeText(item.nome);
+      if (email) return `lead-email-${email}`;
+      if (phone) return `lead-phone-${phone}`;
+      if (name) return `lead-name-${name}`;
+      return `lead-sem-contato-${item.id}`;
+    };
+
+    const getOrCreateLead = (item: any) => {
+      const key = getLeadKey(item);
+      if (!pessoaMap[key]) {
+        pessoaMap[key] = {
+          id: key,
+          nome: item.nome || "Lead sem nome",
+          email: item.email || null,
+          telefone: item.telefone || null,
+          cpf: item.cpf || null,
+          tipoPessoa: "lead",
+          vinculo: "lead",
+          origem: "Evento / Workshop",
+          created_at: item.created_at,
+          jornada: [],
+        };
+      }
+      return pessoaMap[key];
+    };
+
+    const addEventoNaJornada = (pessoa: any, item: any, source: "participante" | "inscricao") => {
+      const evento = item.eventos;
+      const eventoData = evento?.data || item.created_at;
+      const alreadyAdded = pessoa.jornada.some((entry: any) =>
+        entry.tipo === "evento" && entry.titulo === (evento?.nome || "Evento") && entry.dataInicio === eventoData
+      );
+      if (alreadyAdded) return;
+
+      const status = source === "participante"
+        ? item.presenca ? "presente" : "inscrito"
+        : "inscrito";
+
+      pessoa.jornada.push({
+        id: `${source}-evento-${item.id}`,
+        tipo: "evento",
+        categoria: getEventoLabel(evento?.tipo),
+        titulo: evento?.nome || "Evento",
+        subtitulo: source === "participante"
+          ? item.presenca ? "Presença confirmada" : "Inscrito no evento"
+          : "Inscrição realizada no evento",
+        cidade: evento?.local || "—",
+        dataInicio: eventoData,
+        dataFim: null,
+        status,
+        eventoTipo: normalizeTipo(evento?.tipo),
+        pagamento: Number(item.valor || 0) > 0 ? {
+          total: Number(item.valor || 0),
+          pago: item.status_pagamento === "pago" ? Number(item.valor || 0) : 0,
+          parcelas: 1,
+          parcelasPagas: item.status_pagamento === "pago" ? 1 : 0,
+          status: item.status_pagamento || "pendente",
+        } : null,
+      });
+    };
+
     matriculas.forEach((m: any) => {
-      if (!alunoMap[m.aluno_id]) return;
+      if (!pessoaMap[m.aluno_id]) return;
 
       const matPagamentos = pagamentos.filter((p: any) => p.matricula_id === m.id || (p.aluno_id === m.aluno_id && p.produto_id === m.produto_id));
       const totalPago = matPagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
@@ -197,7 +263,7 @@ const Jornada = () => {
       const parcelasPagas = matPagamentos.filter((p: any) => p.status === "pago").length;
       const totalParcelas = matPagamentos.length;
 
-      alunoMap[m.aluno_id].jornada.push({
+      pessoaMap[m.aluno_id].jornada.push({
         id: `matricula-${m.id}`,
         tipo: "matricula",
         categoria: "Curso / Turma",
@@ -219,12 +285,12 @@ const Jornada = () => {
     });
 
     processos.forEach((p: any) => {
-      if (!p.aluno_id || !alunoMap[p.aluno_id]) return;
+      if (!p.aluno_id || !pessoaMap[p.aluno_id]) return;
 
       const recebido = pgtoProcessoMap[p.id] || 0;
       const total = Number(p.valor_total || 0);
 
-      alunoMap[p.aluno_id].jornada.push({
+      pessoaMap[p.aluno_id].jornada.push({
         id: `processo-${p.id}`,
         tipo: "processo",
         categoria: "Processo Individual",
@@ -248,84 +314,46 @@ const Jornada = () => {
 
     participantesEventos.forEach((participante: any) => {
       const alunoId = findAlunoIdByContato(participante);
-      if (!alunoId || !alunoMap[alunoId]) return;
-
-      const evento = participante.eventos;
-      const status = participante.presenca ? "presente" : "inscrito";
-
-      alunoMap[alunoId].jornada.push({
-        id: `participante-evento-${participante.id}`,
-        tipo: "evento",
-        categoria: getEventoLabel(evento?.tipo),
-        titulo: evento?.nome || "Evento",
-        subtitulo: participante.presenca ? "Presença confirmada" : "Inscrito no evento",
-        cidade: evento?.local || "—",
-        dataInicio: evento?.data || participante.created_at,
-        dataFim: null,
-        status,
-        eventoTipo: normalizeTipo(evento?.tipo),
-        pagamento: Number(participante.valor || 0) > 0 ? {
-          total: Number(participante.valor || 0),
-          pago: participante.status_pagamento === "pago" ? Number(participante.valor || 0) : 0,
-          parcelas: 1,
-          parcelasPagas: participante.status_pagamento === "pago" ? 1 : 0,
-          status: participante.status_pagamento || "pendente",
-        } : null,
-      });
+      const pessoa = alunoId && pessoaMap[alunoId] ? pessoaMap[alunoId] : getOrCreateLead(participante);
+      addEventoNaJornada(pessoa, participante, "participante");
     });
 
     inscricoesEventos.forEach((inscricao: any) => {
-      if (!inscricao.aluno_id || !alunoMap[inscricao.aluno_id]) return;
-
-      const evento = inscricao.eventos;
-      const alreadyAdded = alunoMap[inscricao.aluno_id].jornada.some((item: any) =>
-        item.tipo === "evento" && item.titulo === evento?.nome && item.dataInicio === evento?.data
-      );
-      if (alreadyAdded) return;
-
-      alunoMap[inscricao.aluno_id].jornada.push({
-        id: `inscricao-evento-${inscricao.id}`,
-        tipo: "evento",
-        categoria: getEventoLabel(evento?.tipo),
-        titulo: evento?.nome || "Evento",
-        subtitulo: "Inscrição vinculada ao aluno",
-        cidade: evento?.local || "—",
-        dataInicio: evento?.data || inscricao.created_at,
-        dataFim: null,
-        status: "inscrito",
-        eventoTipo: normalizeTipo(evento?.tipo),
-        pagamento: null,
-      });
+      const alunoId = inscricao.aluno_id && pessoaMap[inscricao.aluno_id]
+        ? inscricao.aluno_id
+        : findAlunoIdByContato(inscricao);
+      const pessoa = alunoId && pessoaMap[alunoId] ? pessoaMap[alunoId] : getOrCreateLead(inscricao);
+      addEventoNaJornada(pessoa, inscricao, "inscricao");
     });
 
-    return Object.values(alunoMap).map((aluno: any) => ({
-      ...aluno,
-      jornada: aluno.jornada.sort((a: any, b: any) => String(getEntryDate(b)).localeCompare(String(getEntryDate(a)))),
+    return Object.values(pessoaMap).map((pessoa: any) => ({
+      ...pessoa,
+      jornada: pessoa.jornada.sort((a: any, b: any) => String(getEntryDate(b)).localeCompare(String(getEntryDate(a)))),
     }));
   }, [alunos, matriculas, pagamentos, processos, pgtoProcessoMap, participantesEventos, inscricoesEventos]);
 
   const allProdutos = useMemo(() => {
     const set = new Set<string>();
-    alunosWithJourney.forEach((aluno: any) => {
+    pessoasWithJourney.forEach((aluno: any) => {
       aluno.jornada.forEach((item: any) => {
         if (item.tipo === "matricula" || item.tipo === "processo") set.add(item.titulo);
       });
     });
     return Array.from(set).sort();
-  }, [alunosWithJourney]);
+  }, [pessoasWithJourney]);
 
   const allTurmas = useMemo(() => {
     const set = new Set<string>();
-    alunosWithJourney.forEach((aluno: any) => {
+    pessoasWithJourney.forEach((aluno: any) => {
       aluno.jornada.forEach((item: any) => {
         if (item.tipo === "matricula" && item.subtitulo && item.subtitulo !== "Sem turma vinculada") set.add(item.subtitulo);
       });
     });
     return Array.from(set).sort();
-  }, [alunosWithJourney]);
+  }, [pessoasWithJourney]);
 
   const filtered = useMemo(() => {
-    return alunosWithJourney.filter((aluno: any) => {
+    return pessoasWithJourney.filter((aluno: any) => {
       const termo = debouncedSearch.toLowerCase();
       const matchesSearch = !termo
         || normalizeText(aluno.nome).includes(termo)
@@ -333,13 +361,14 @@ const Jornada = () => {
         || onlyDigits(aluno.telefone).includes(onlyDigits(termo));
       if (!matchesSearch) return false;
 
+      if (filterVinculo !== "all" && aluno.vinculo !== filterVinculo) return false;
       if (filterTipo !== "all" && !aluno.jornada.some((item: any) => item.tipo === filterTipo)) return false;
       if (filterProduto !== "all" && !aluno.jornada.some((item: any) => item.titulo === filterProduto)) return false;
       if (filterTurma !== "all" && !aluno.jornada.some((item: any) => item.subtitulo === filterTurma)) return false;
 
       return true;
     });
-  }, [alunosWithJourney, debouncedSearch, filterTipo, filterProduto, filterTurma]);
+  }, [pessoasWithJourney, debouncedSearch, filterVinculo, filterTipo, filterProduto, filterTurma]);
 
   const getFilteredJornada = (aluno: any) => {
     let jornada = [...aluno.jornada];
@@ -350,13 +379,14 @@ const Jornada = () => {
   };
 
   const metrics = useMemo(() => {
-    const totalAlunos = alunosWithJourney.length;
-    const comJornada = alunosWithJourney.filter((a: any) => a.jornada.length > 0).length;
-    const totalEventos = alunosWithJourney.reduce((sum: number, a: any) => sum + a.jornada.filter((i: any) => i.tipo === "evento").length, 0);
-    const totalMatriculas = alunosWithJourney.reduce((sum: number, a: any) => sum + a.jornada.filter((i: any) => i.tipo === "matricula").length, 0);
+    const totalPessoas = pessoasWithJourney.length;
+    const totalAlunos = pessoasWithJourney.filter((p: any) => p.vinculo === "aluno").length;
+    const totalLeads = pessoasWithJourney.filter((p: any) => p.vinculo === "lead").length;
+    const totalEventos = pessoasWithJourney.reduce((sum: number, p: any) => sum + p.jornada.filter((i: any) => i.tipo === "evento").length, 0);
+    const totalMatriculas = pessoasWithJourney.reduce((sum: number, p: any) => sum + p.jornada.filter((i: any) => i.tipo === "matricula").length, 0);
 
-    return { totalAlunos, comJornada, totalEventos, totalMatriculas };
-  }, [alunosWithJourney]);
+    return { totalPessoas, totalAlunos, totalLeads, totalEventos, totalMatriculas };
+  }, [pessoasWithJourney]);
 
   const getEntryIcon = (tipo: string, certificado?: boolean) => {
     if (certificado) return <Award className="h-4 w-4 text-success" />;
@@ -374,15 +404,15 @@ const Jornada = () => {
   return (
     <div>
       <PageHeader
-        title="Jornada do Aluno"
-        description="Veja todos os alunos e tudo que cada um já viveu na Excellence: eventos, workshops, cursos, turmas e processos."
+        title="Jornada da Pessoa"
+        description="Veja alunos e leads de eventos em uma única linha do tempo: eventos, workshops, cursos, turmas e processos."
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Pessoas</p><p className="text-2xl font-bold">{metrics.totalPessoas}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Alunos</p><p className="text-2xl font-bold">{metrics.totalAlunos}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Com jornada</p><p className="text-2xl font-bold">{metrics.comJornada}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Eventos / workshops</p><p className="text-2xl font-bold">{metrics.totalEventos}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Matrículas</p><p className="text-2xl font-bold">{metrics.totalMatriculas}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Leads de eventos</p><p className="text-2xl font-bold">{metrics.totalLeads}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Eventos / matrículas</p><p className="text-2xl font-bold">{metrics.totalEventos + metrics.totalMatriculas}</p></CardContent></Card>
       </div>
 
       <Card className="mb-6">
@@ -391,12 +421,20 @@ const Jornada = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, email ou telefone..."
+                placeholder="Buscar pessoa por nome, email ou telefone..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
             </div>
+            <Select value={filterVinculo} onValueChange={(value) => { setFilterVinculo(value); setPage(1); }}>
+              <SelectTrigger className="w-full xl:w-44"><SelectValue placeholder="Vínculo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="aluno">Alunos</SelectItem>
+                <SelectItem value="lead">Leads</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filterTipo} onValueChange={(value) => { setFilterTipo(value); setPage(1); }}>
               <SelectTrigger className="w-full xl:w-44"><SelectValue placeholder="Tipo" /></SelectTrigger>
               <SelectContent>
@@ -445,10 +483,15 @@ const Jornada = () => {
                   >
                     <div className="flex items-center gap-4 min-w-0">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                        <Users className="h-5 w-5 text-primary" />
+                        {aluno.vinculo === "lead" ? <UserPlus className="h-5 w-5 text-primary" /> : <Users className="h-5 w-5 text-primary" />}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{aluno.nome}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm truncate">{aluno.nome}</p>
+                          <Badge variant={aluno.vinculo === "lead" ? "outline" : "secondary"} className="text-[10px] h-5">
+                            {aluno.vinculo === "lead" ? "Lead" : "Aluno"}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">
                           {aluno.email || "Sem email"}{aluno.telefone ? ` · ${formatPhone(aluno.telefone)}` : ""}{aluno.cpf ? ` · ${formatCPF(aluno.cpf)}` : ""}
                         </p>
@@ -470,8 +513,8 @@ const Jornada = () => {
                       {jornada.length === 0 ? (
                         <div className="rounded-lg border border-dashed p-6 text-center">
                           <Route className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                          <p className="text-sm font-medium">Este aluno ainda não tem registros na jornada.</p>
-                          <p className="text-xs text-muted-foreground mt-1">Quando ele participar de eventos, workshops, cursos ou processos, tudo aparecerá aqui.</p>
+                          <p className="text-sm font-medium">Esta pessoa ainda não tem registros na jornada.</p>
+                          <p className="text-xs text-muted-foreground mt-1">Quando ela participar de eventos, workshops, cursos ou processos, tudo aparecerá aqui.</p>
                         </div>
                       ) : (
                         <div className="space-y-0">
@@ -564,7 +607,7 @@ const Jornada = () => {
             <Card>
               <CardContent className="py-12 text-center">
                 <GraduationCap className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>
+                <p className="text-sm text-muted-foreground">Nenhuma pessoa encontrada</p>
               </CardContent>
             </Card>
           )}
