@@ -33,3 +33,4 @@ node.zip
 .env.*
 !.env.example
 src.zip
+.vercel
