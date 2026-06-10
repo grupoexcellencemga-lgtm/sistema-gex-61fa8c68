@@ -67,6 +67,7 @@ import { EventoMetricsDialog } from "./EventoMetricsDialog";
 import { EventoDespesasTab } from "./EventoDespesasTab";
 import { EventoImport } from "./EventoImport";
 import { toast } from "sonner";
+import { abrirComprovante } from "@/lib/comprovantes";
 import {
   useFormasPagamento,
   getFormaPagamentoLabel,
@@ -1696,16 +1697,10 @@ export function ParticipantesSection({
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 shrink-0"
-                              asChild
+                              onClick={() => abrirComprovante(comp.url)}
+                              title="Abrir comprovante"
                             >
-                              <a
-                                href={comp.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Abrir comprovante"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                              </a>
+                              <Download className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"

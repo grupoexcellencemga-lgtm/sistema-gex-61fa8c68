@@ -52,6 +52,7 @@ import {
 } from "recharts";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
+import { abrirComprovante } from "@/lib/comprovantes";
 import {
   useFormasPagamento,
   getFormaPagamentoLabel,
@@ -688,8 +689,10 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                                   <File className="h-4 w-4 text-primary shrink-0" />
                                   <a
                                     href={nota.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      abrirComprovante(nota.url);
+                                    }}
                                     className="text-sm text-primary underline truncate flex-1"
                                   >
                                     {nota.nome || `Comprovante ${index + 1}`}
@@ -699,16 +702,10 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                                     size="icon"
                                     variant="ghost"
                                     className="h-6 w-6"
-                                    asChild
+                                    onClick={() => abrirComprovante(nota.url)}
+                                    title="Abrir comprovante"
                                   >
-                                    <a
-                                      href={nota.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      title="Abrir comprovante"
-                                    >
-                                      <Download className="h-3 w-3" />
-                                    </a>
+                                    <Download className="h-3 w-3" />
                                   </Button>
                                 </div>
                               ),
@@ -949,8 +946,10 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                               <a
                                 key={`${nota.url}-${index}`}
                                 href={nota.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  abrirComprovante(nota.url);
+                                }}
                                 title={nota.nome || `Comprovante ${index + 1}`}
                                 className="inline-flex items-center text-primary hover:underline"
                               >

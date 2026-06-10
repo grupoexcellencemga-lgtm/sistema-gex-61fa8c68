@@ -49,6 +49,7 @@ import { PaginationControls, paginate } from "@/components/Pagination";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { isInMonth } from "@/components/MonthFilter";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
+import { abrirComprovante } from "@/lib/comprovantes";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
   pago: "default",
@@ -590,8 +591,10 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
                                 <a
                                   key={`${comp.url}-${index}`}
                                   href={comp.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    abrirComprovante(comp.url);
+                                  }}
                                   title={
                                     comp.nome || `Ver comprovante ${index + 1}`
                                   }
@@ -785,8 +788,10 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
                         <File className="h-4 w-4 text-primary shrink-0" />
                         <a
                           href={comp.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            abrirComprovante(comp.url);
+                          }}
                           className="text-sm text-primary underline truncate flex-1"
                         >
                           {comp.nome || `Comprovante ${index + 1}`}
@@ -796,16 +801,10 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
                           size="icon"
                           variant="ghost"
                           className="h-6 w-6"
-                          asChild
+                          onClick={() => abrirComprovante(comp.url)}
+                          title="Abrir comprovante"
                         >
-                          <a
-                            href={comp.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Abrir comprovante"
-                          >
-                            <Download className="h-3 w-3" />
-                          </a>
+                          <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     ),

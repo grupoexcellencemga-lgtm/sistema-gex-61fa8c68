@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatPhone, formatCPF } from "@/lib/utils";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
+import { abrirComprovante } from "@/lib/comprovantes";
 import { formatDate, formatCurrency } from "./alunosUtils";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
@@ -354,7 +355,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                     variant="outline"
                                     size="sm"
                                     className="h-7 text-xs"
-                                    onClick={() => comp.url && window.open(comp.url, "_blank")}
+                                    onClick={() => abrirComprovante(comp.url)}
                                   >
                                     <Paperclip className="h-3.5 w-3.5 mr-1" />
                                     {comp.nome || `Comprovante ${index + 1}`}

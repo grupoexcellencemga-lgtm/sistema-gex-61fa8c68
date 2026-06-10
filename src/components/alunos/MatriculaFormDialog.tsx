@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
+import { abrirComprovante } from "@/lib/comprovantes";
 
 interface Props {
   open: boolean;
@@ -688,7 +689,7 @@ export const MatriculaFormDialog = ({
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => window.open(comp.url, "_blank")}
+                          onClick={() => abrirComprovante(comp.url)}
                           title="Abrir comprovante"
                         >
                           <ExternalLink className="h-4 w-4" />
