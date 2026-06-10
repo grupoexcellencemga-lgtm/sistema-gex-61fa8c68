@@ -21,6 +21,7 @@ import { gerarReciboPagamento } from "@/lib/pdfUtils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatPhone, formatCPF } from "@/lib/utils";
+import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { formatDate, formatCurrency } from "./alunosUtils";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
@@ -191,13 +192,17 @@ export const AlunoDetailSheet = (props: Props) => {
   }, [novoShowTaxa, novoIsDebito, novoIsCartaoCredito, novoIsLink, novoIsBoleto, novoParcelasCalc, taxasSistema]);
 
   const novoTaxaPercentual = novoTaxaAutoCalc.percentual;
-  const novoValorTaxa = novoValorBase > 0 ? Math.round(novoValorBase * novoTaxaPercentual) / 100 : 0;
-  const novoValorComTaxa =
-    novoShowTaxa && novoTaxaPercentual > 0
-      ? novoPagForm.repassar_taxa
-        ? novoValorBase + novoValorTaxa
-        : Math.max(novoValorBase - novoValorTaxa, 0)
-      : novoValorBase;
+
+  const novoTaxaCalc = calcTaxaMaquina(
+    novoValorBase,
+    novoShowTaxa ? novoTaxaPercentual : 0,
+    !!novoPagForm.repassar_taxa
+  );
+
+  const novoValorTaxa = novoTaxaCalc.valorTaxa;
+  const novoValorComTaxa = novoPagForm.repassar_taxa
+    ? novoTaxaCalc.valorCobrado
+    : novoTaxaCalc.valorLiquido;
 
   useEffect(() => {
     if (novoShowTaxa && novoTaxaPercentual > 0) {

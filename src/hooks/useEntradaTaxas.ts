@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 
 export interface TaxaCalc {
   taxaNome: string;
@@ -115,20 +116,21 @@ export function useEntradaTaxas(
       }
     }
 
-    const valorTaxa =
-      valorBruto > 0 ? Math.round(valorBruto * taxaPercentual) / 100 : 0;
+    const taxaCalc = calcTaxaMaquina(
+      valorBruto,
+      showTaxa ? taxaPercentual : 0,
+      repassarTaxa
+    );
+
+    const valorTaxa = taxaCalc.valorTaxa;
+    const valorCobradoCliente = taxaCalc.valorCobrado;
 
     const impostoPercentual = impostoManual;
 
     const valorImposto =
       valorBruto > 0 ? Math.round(valorBruto * impostoPercentual) / 100 : 0;
 
-    const valorCobradoCliente =
-      repassarTaxa && showTaxa ? valorBruto + valorTaxa : valorBruto;
-
-    const valorLiquido = repassarTaxa
-      ? valorBruto - valorImposto
-      : valorBruto - valorTaxa - valorImposto;
+    const valorLiquido = taxaCalc.valorLiquido - valorImposto;
 
     return {
       taxaNome,

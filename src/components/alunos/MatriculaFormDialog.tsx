@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
+import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 
 interface Props {
   open: boolean;
@@ -138,17 +139,18 @@ export const MatriculaFormDialog = ({
   ]);
 
   const taxaPercentual = taxaAutoCalc.percentual;
-  const valorTaxa =
-    valorFinalCalc > 0
-      ? Math.round(valorFinalCalc * (taxaPercentual / 100) * 100) / 100
-      : 0;
 
-  const valorCobradoCalc =
-    showTaxa && taxaPercentual > 0
-      ? matriculaForm.repassar_taxa
-        ? valorFinalCalc + valorTaxa
-        : Math.max(valorFinalCalc - valorTaxa, 0)
-      : valorFinalCalc;
+  const taxaCalc = calcTaxaMaquina(
+    valorFinalCalc,
+    showTaxa ? taxaPercentual : 0,
+    !!matriculaForm.repassar_taxa
+  );
+
+  const valorTaxa = taxaCalc.valorTaxa;
+
+  const valorCobradoCalc = matriculaForm.repassar_taxa
+    ? taxaCalc.valorCobrado
+    : taxaCalc.valorLiquido;
 
   const valorParcelaCalc =
     numParcelasCalc > 0
@@ -521,14 +523,14 @@ export const MatriculaFormDialog = ({
                   (isCredito || isLink || isBoleto || isDebito) && (
                     <p className="text-xs text-primary font-medium">
                       O cliente pagará{" "}
-                      {formatCurrency(valorFinalCalc + valorTaxa)} (valor + taxa)
+                      {formatCurrency(taxaCalc.valorCobrado)} (valor + taxa)
                     </p>
                   )}
 
                 {!matriculaForm.repassar_taxa &&
                   (isCredito || isLink || isBoleto || isDebito) && (
                     <p className="text-xs text-muted-foreground font-medium">
-                      Líquido lançado: {formatCurrency(Math.max(valorFinalCalc - valorTaxa, 0))}
+                      Líquido lançado: {formatCurrency(taxaCalc.valorLiquido)}
                     </p>
                   )}
               </div>

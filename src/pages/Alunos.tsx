@@ -3,6 +3,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { maskPhone, maskCPF, formatPhone, formatCPF, validateCPF, exportToCSV } from "@/lib/utils";
+import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -412,17 +413,15 @@ const Alunos = () => {
           ? parseFloat(matriculaForm.taxa_cartao) || 0
           : 0;
 
-        const valorTaxa =
-          taxaCartao > 0
-            ? Math.round(valorFinal * (taxaCartao / 100) * 100) / 100
-            : 0;
+        const taxaCalc = calcTaxaMaquina(
+          valorFinal,
+          temTaxaMaquina ? taxaCartao : 0,
+          !!matriculaForm.repassar_taxa
+        );
 
-        const valorBase =
-          temTaxaMaquina && taxaCartao > 0
-            ? matriculaForm.repassar_taxa
-              ? valorFinal + valorTaxa
-              : Math.max(valorFinal - valorTaxa, 0)
-            : valorFinal;
+        const valorBase = matriculaForm.repassar_taxa
+          ? taxaCalc.valorCobrado
+          : taxaCalc.valorLiquido;
 
         const valorParcela = valorBase / numParcelas;
 
@@ -672,14 +671,15 @@ const Alunos = () => {
       const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
       const taxaCartao = temTaxaMaquina ? parseFloat(novoPagForm.taxa_cartao) || 0 : 0;
       const parcelasCartao = isCartao || isLinkBoleto ? parseInt(novoPagForm.parcelas_cartao) || 1 : null;
-      const valorTaxa = taxaCartao > 0 ? Math.round(valor * (taxaCartao / 100) * 100) / 100 : 0;
+      const taxaCalc = calcTaxaMaquina(
+        valor,
+        temTaxaMaquina ? taxaCartao : 0,
+        !!novoPagForm.repassar_taxa
+      );
 
-      const valorCobrado =
-        temTaxaMaquina && taxaCartao > 0
-          ? novoPagForm.repassar_taxa
-            ? valor + valorTaxa
-            : Math.max(valor - valorTaxa, 0)
-          : valor;
+      const valorCobrado = novoPagForm.repassar_taxa
+        ? taxaCalc.valorCobrado
+        : taxaCalc.valorLiquido;
 
       const { error } = await supabase.from("pagamentos").insert({
         aluno_id: selectedAluno.id,
@@ -827,14 +827,15 @@ const Alunos = () => {
     if (pagamentosDaMatricula.length > 0) {
       const quantidadePagamentos = pagamentosDaMatricula.length;
 
-      const valorTaxa = taxaCartao > 0 ? Math.round(valorFinal * (taxaCartao / 100) * 100) / 100 : 0;
+      const taxaCalc = calcTaxaMaquina(
+        valorFinal,
+        temTaxaMaquina ? taxaCartao : 0,
+        !!matriculaForm.repassar_taxa
+      );
 
-      const valorBase =
-        temTaxaMaquina && taxaCartao > 0
-          ? matriculaForm.repassar_taxa
-            ? valorFinal + valorTaxa
-            : Math.max(valorFinal - valorTaxa, 0)
-          : valorFinal;
+      const valorBase = matriculaForm.repassar_taxa
+        ? taxaCalc.valorCobrado
+        : taxaCalc.valorLiquido;
 
       const valorPorRegistro =
         isCartao || isDebito || quantidadePagamentos === 1
