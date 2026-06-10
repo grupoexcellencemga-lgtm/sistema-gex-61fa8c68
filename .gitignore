@@ -27,3 +27,9 @@ dist-ssr
 .bun
 bun.zip
 node.zip
+
+# Variáveis de ambiente e backups locais
+.env
+.env.*
+!.env.example
+src.zip
