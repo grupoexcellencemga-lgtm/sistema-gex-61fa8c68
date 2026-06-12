@@ -403,11 +403,13 @@ const Alunos = () => {
           matriculaForm.forma_pagamento
         );
         const isDebito = matriculaForm.forma_pagamento === "debito";
-        const isLinkBoleto = ["link", "boleto"].includes(
-          matriculaForm.forma_pagamento
-        );
-        const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
-        const numParcelas = isCartao || isDebito ? 1 : parseInt(matriculaForm.parcelas) || 1;
+        const isLink = matriculaForm.forma_pagamento === "link";
+        const isBoleto = matriculaForm.forma_pagamento === "boleto";
+        const temTaxaMaquina = isCartao || isDebito || isLink || isBoleto;
+        // Cartão, débito e link entram integralmente: um único lançamento.
+        // Boleto é recebido parcela a parcela: um lançamento por mês.
+        const recebeIntegral = isCartao || isDebito || isLink;
+        const numParcelas = recebeIntegral ? 1 : parseInt(matriculaForm.parcelas) || 1;
         const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
         const taxaCartao = temTaxaMaquina
           ? parseFloat(matriculaForm.taxa_cartao) || 0
@@ -428,7 +430,7 @@ const Alunos = () => {
         const rows = Array.from({ length: numParcelas }, (_, i) => {
           const d = new Date(dataVencimentoResolvida + "T12:00:00");
 
-          if (!isCartao) d.setMonth(d.getMonth() + i);
+          if (!recebeIntegral) d.setMonth(d.getMonth() + i);
 
           return {
             aluno_id: selectedAluno.id,
@@ -436,9 +438,9 @@ const Alunos = () => {
             matricula_id: mat.id,
             valor: Math.round(valorParcela * 100) / 100,
             forma_pagamento: matriculaForm.forma_pagamento || null,
-            parcelas: isCartao || isDebito ? 1 : numParcelas,
-            parcela_atual: isCartao || isDebito ? 1 : i + 1,
-            parcelas_cartao: isCartao ? parcelasCliente : null,
+            parcelas: recebeIntegral ? 1 : numParcelas,
+            parcela_atual: recebeIntegral ? 1 : i + 1,
+            parcelas_cartao: isCartao || isLink ? parcelasCliente : null,
             taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
             data_vencimento: d.toISOString().split("T")[0],
             status: "pendente",
@@ -777,6 +779,7 @@ const Alunos = () => {
       matriculaForm.forma_pagamento
     );
     const isDebito = matriculaForm.forma_pagamento === "debito";
+    const isLink = matriculaForm.forma_pagamento === "link";
 
     const isLinkBoleto = ["link", "boleto"].includes(
       matriculaForm.forma_pagamento
@@ -861,7 +864,7 @@ const Alunos = () => {
           data_vencimento: dataVencimento,
           parcelas: isCartao || isDebito ? 1 : quantidadePagamentos,
           parcela_atual: isCartao || isDebito ? 1 : index + 1,
-          parcelas_cartao: isCartao ? parcelasInformadas : null,
+          parcelas_cartao: isCartao || isLink ? parcelasInformadas : null,
           taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
         };
 

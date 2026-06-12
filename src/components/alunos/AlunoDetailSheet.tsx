@@ -472,6 +472,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                     {formatCurrency(Number(p.valor))}
                                     {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
                                     {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
+                                    {p.forma_pagamento === "link" && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no link`}
                                     {formasComTaxa.includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
                                   </p>
                                   <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
@@ -741,7 +742,10 @@ export const AlunoDetailSheet = (props: Props) => {
                 <div key={p.id} className="rounded-lg border p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Parcela {p.parcela_atual}/{p.parcelas} — {formatCurrency(Number(p.valor))}</p>
+                      <p className="font-medium">
+                        Parcela {p.parcela_atual}/{p.parcelas} — {formatCurrency(Number(p.valor))}
+                        {p.forma_pagamento === "link" && p.parcelas_cartao ? ` · ${p.parcelas_cartao}x no link` : ""}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Venc: {formatDate(p.data_vencimento)}
                         {p.data_pagamento ? ` · Pago: ${formatDate(p.data_pagamento)}` : ""}
