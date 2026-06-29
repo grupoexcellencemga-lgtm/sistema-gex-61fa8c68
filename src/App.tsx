@@ -37,6 +37,7 @@ const MindMap = lazy(() => import("./pages/MindMap"));
 const Metas = lazy(() => import("./pages/Metas"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Tarefas = lazy(() => import("./pages/Tarefas"));
+const Checklist = lazy(() => import("./pages/Checklist"));
 const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -97,6 +98,7 @@ const AppRoutes = () => {
           <Route path="/mindmap" element={<PR path="/mindmap"><MindMap /></PR>} />
           <Route path="/auditoria" element={<PR path="/auditoria"><Auditoria /></PR>} />
           <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
+          <Route path="/checklist" element={<PR path="/checklist"><Checklist /></PR>} />
                     <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />

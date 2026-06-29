@@ -93,6 +93,8 @@ export interface ProcessoEmpresarialWithRelations extends ProcessoEmpresarialRow
 
 // ─── Additional composite types ───
 export type TarefaRow = Database["public"]["Tables"]["tarefas"]["Row"];
+export type ChecklistItemRow = Database["public"]["Tables"]["checklist_itens"]["Row"];
+export type ChecklistExecucaoRow = Database["public"]["Tables"]["checklist_execucoes"]["Row"];
 export type TaxaSistemaRow = Database["public"]["Tables"]["taxas_sistema"]["Row"];
 export type WhatsappTemplateRow = Database["public"]["Tables"]["whatsapp_templates"]["Row"];
 

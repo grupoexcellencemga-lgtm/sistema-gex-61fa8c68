@@ -161,6 +161,86 @@ export type Database = {
         }
         Relationships: []
       }
+      checklist_execucoes: {
+        Row: {
+          concluido: boolean
+          concluido_em: string | null
+          concluido_por: string | null
+          created_at: string
+          data: string
+          id: string
+          item_id: string
+        }
+        Insert: {
+          concluido?: boolean
+          concluido_em?: string | null
+          concluido_por?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          item_id: string
+        }
+        Update: {
+          concluido?: boolean
+          concluido_em?: string | null
+          concluido_por?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_execucoes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_itens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_itens: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string
+          data_alvo: string | null
+          descricao: string | null
+          id: string
+          ordem: number
+          tipo: string
+          titulo: string
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by: string
+          data_alvo?: string | null
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          tipo?: string
+          titulo: string
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string
+          data_alvo?: string | null
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       comerciais: {
         Row: {
           agencia: string | null
