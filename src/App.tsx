@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -61,6 +61,7 @@ const PR = ({ path, children }: { path: string; children: React.ReactNode }) => 
 
 const AppRoutes = () => {
   const { user, isReady } = useAuth();
+  const location = useLocation();
 
   if (!isReady) {
     return <LoadingScreen />;
@@ -77,8 +78,9 @@ const AppRoutes = () => {
 
   return (
     <AppLayout>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
+      <ErrorBoundary inline resetKey={location.pathname}>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
           <Route path="/" element={<PR path="/"><Dashboard /></PR>} />
           <Route path="/alunos" element={<PR path="/alunos"><Alunos /></PR>} />
           <Route path="/jornada" element={<PR path="/jornada"><Jornada /></PR>} />
@@ -102,8 +104,9 @@ const AppRoutes = () => {
           <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </AppLayout>
   );
 };
