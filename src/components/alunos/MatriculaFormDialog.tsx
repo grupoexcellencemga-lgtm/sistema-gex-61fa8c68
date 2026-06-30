@@ -10,7 +10,7 @@ import { gerarContratoMatricula } from "@/lib/pdfUtils";
 import { formatCurrency, formatDate } from "./alunosUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useRef, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { abrirComprovante } from "@/lib/comprovantes";
@@ -158,7 +158,7 @@ export const MatriculaFormDialog = ({
       ? Math.round((valorCobradoCalc / numParcelasCalc) * 100) / 100
       : 0;
 
-  useMemo(() => {
+  useEffect(() => {
     if (showTaxa && taxaPercentual > 0) {
       const current = parseFloat(matriculaForm.taxa_cartao);
 

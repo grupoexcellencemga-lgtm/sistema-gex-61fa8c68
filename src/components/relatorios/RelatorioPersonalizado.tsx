@@ -178,8 +178,11 @@ export function RelatorioPersonalizado() {
             evento_nome: "",
             vendedor_nome: vendNome,
             valor: Number(p.valor || 0),
-            taxa_cartao: Number(p.taxa_cartao || 0),
-            valor_liquido: Number(p.valor || 0) - Number(p.taxa_cartao || 0),
+            // taxa_cartao é PERCENTUAL; converte para valor em R$ aplicando sobre o pagamento.
+            taxa_cartao: Number(p.valor || 0) * (Number(p.taxa_cartao || 0) / 100),
+            valor_liquido:
+              Number(p.valor || 0) -
+              Number(p.valor || 0) * (Number(p.taxa_cartao || 0) / 100),
             forma_pagamento: p.forma_pagamento || "—",
             parcela_info: p.parcelas ? `${p.parcela_atual}/${p.parcelas}` : "—",
             status: p.status || "—",

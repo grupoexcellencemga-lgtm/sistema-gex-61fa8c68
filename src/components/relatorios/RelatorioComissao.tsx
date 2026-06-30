@@ -161,14 +161,13 @@ export function RelatorioComissao() {
         const turmaNome = c.turmas?.nome || "—";
         const forma = c.matriculas?.forma_pagamento || c.forma_pagamento || "—";
         const valorBruto = Number(c.valor_matricula || 0);
-        const taxaCartao = Number(c.matriculas?.valor_total || 0) > 0 
-          ? Number(c.matriculas.valor_total) - Number(c.matriculas.valor_final || c.matriculas.valor_total)
-          : 0;
-        
-        // Calculate tax from pagamentos if available
+
+        // taxa_cartao é um PERCENTUAL (ex.: 16.66), não um valor.
+        // Aplica o percentual sobre o valor bruto para obter a taxa em R$.
         const pags = pagMap.get(c.matricula_id) || [];
-        const totalTaxa = pags.reduce((s: number, p: any) => s + Number(p.taxa_cartao || 0), 0) || taxaCartao;
-        
+        const taxaPercent = pags.length ? Number(pags[0].taxa_cartao || 0) : 0;
+        const totalTaxa = valorBruto * (taxaPercent / 100);
+
         const imposto = valorBruto * (impostoDefault / 100);
         const valorLiquido = valorBruto - totalTaxa - imposto;
 

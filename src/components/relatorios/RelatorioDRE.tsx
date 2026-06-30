@@ -164,8 +164,12 @@ export function RelatorioDRE() {
     const receitaAvulsas = filteredRA.reduce((s: number, r: any) => s + Number(r.valor || 0), 0);
     const receitaBruta = receitaPagamentos + receitaEventos + receitaAvulsas;
 
-    // 2. TAXAS (from pagamentos taxa_cartao)
-    const totalTaxas = filteredPag.reduce((s: number, p: any) => s + Number(p.taxa_cartao || 0), 0);
+    // 2. TAXAS — taxa_cartao é PERCENTUAL; aplica sobre o valor de cada pagamento.
+    const totalTaxas = filteredPag.reduce((s: number, p: any) => {
+      const valor = Number(p.valor_pago || p.valor || 0);
+      const pct = Number(p.taxa_cartao || 0);
+      return s + valor * (pct / 100);
+    }, 0);
 
     // 3. IMPOSTOS
     const totalImpostos = receitaBruta * (impostoDefault / 100);
