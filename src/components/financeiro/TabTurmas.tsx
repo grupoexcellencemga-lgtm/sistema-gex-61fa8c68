@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, GraduationCap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, GraduationCap, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
+import * as XLSX from "xlsx";
 
 export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
   const [expandedProduto, setExpandedProduto] = useState<string | null>(null);
@@ -155,6 +157,77 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
 
   const turmasPorProduto = (produtoId: string) => turmas.filter((t: any) => t.produto_id === produtoId);
 
+  const exportarTurmaExcel = (
+    produto: any,
+    turma: any,
+    data: ReturnType<typeof getTurmaData>
+  ) => {
+    const wb = XLSX.utils.book_new();
+    const mesAno = `${String(mes).padStart(2, "0")}/${ano}`;
+
+    const resumo = [
+      { Campo: "Produto", Valor: produto.nome },
+      { Campo: "Turma", Valor: turma.nome },
+      { Campo: "Cidade", Valor: turma.cidade || "" },
+      { Campo: "Modalidade", Valor: turma.modalidade || "" },
+      { Campo: "Responsável", Valor: turma.responsavel || "" },
+      { Campo: "Mês/Ano", Valor: mesAno },
+      { Campo: "Entradas no mês", Valor: data.totalEntradas },
+      { Campo: "Total pago (geral)", Valor: data.totalPagoGeral },
+      { Campo: "Despesas da turma", Valor: data.totalDespesas },
+      { Campo: "Líquido", Valor: data.liquido },
+      { Campo: "GEx (50%)", Valor: data.parteGex },
+      {
+        Campo: `${turma.responsavel || "Responsável"} (50%)`,
+        Valor: data.parteResponsavel,
+      },
+      { Campo: "Qtd de alunos", Valor: data.alunoEntries.length },
+    ];
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(resumo),
+      "Resumo"
+    );
+
+    const alunos = data.alunoEntries.map((a) => ({
+      Aluno: a.nome,
+      "Conta/Banco": a.conta,
+      "Pago no mês": a.valorMes,
+      "Total pago": a.valorTotal,
+    }));
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        alunos.length ? alunos : [{ Aluno: "Nenhum aluno nesta turma" }]
+      ),
+      "Alunos"
+    );
+
+    const despesas = data.despesasTurma.map((d: any) => ({
+      Descrição: d.descricao,
+      Data: formatDate(d.data),
+      "Saiu de": d.contas_bancarias?.nome || "—",
+      Valor: Number(d.valor),
+    }));
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        despesas.length
+          ? despesas
+          : [{ Descrição: "Nenhuma despesa nesta turma" }]
+      ),
+      "Despesas"
+    );
+
+    const slug = (turma.nome || "turma")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    XLSX.writeFile(wb, `turma-${slug}-${String(mes).padStart(2, "0")}-${ano}.xlsx`);
+  };
+
   return (
     <div className="space-y-4">
       {isLoading ? (
@@ -206,6 +279,16 @@ export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
 
                           {isTurmaExpanded && data && (
                             <CardContent className="pt-0 space-y-4">
+                              <div className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => exportarTurmaExcel(produto, turma, data)}
+                                >
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Baixar Excel
+                                </Button>
+                              </div>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 <div className="rounded-lg bg-muted/50 p-3">
                                   <p className="text-xs text-muted-foreground">Entradas no mês</p>
