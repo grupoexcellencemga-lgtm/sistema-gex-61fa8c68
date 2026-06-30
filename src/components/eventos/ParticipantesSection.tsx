@@ -73,6 +73,14 @@ import {
   getFormaPagamentoLabel,
 } from "@/hooks/useFormasPagamento";
 
+// Remove acentos e baixa caixa para comparações tolerantes ("joao" acha "João").
+const normalizarBusca = (valor?: string | null) =>
+  (valor || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+
 // ---- Inline filter components ----
 const MultiSelectFilter = ({
   selected,
@@ -96,7 +104,15 @@ const MultiSelectFilter = ({
     );
   const filtered =
     searchable && search
-      ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+      ? options.filter((o) => {
+          const termo = normalizarBusca(search);
+          const digitosTermo = search.replace(/\D/g, "");
+          const digitosOpt = o.replace(/\D/g, "");
+          return (
+            normalizarBusca(o).includes(termo) ||
+            (digitosTermo.length > 0 && digitosOpt.includes(digitosTermo))
+          );
+        })
       : options;
 
   return (
@@ -256,6 +272,8 @@ export function ParticipantesSection({
   });
   const setPartFilter = (key: string, value: any) =>
     setPartFilters((prev) => ({ ...prev, [key]: value }));
+
+  const [partBusca, setPartBusca] = useState("");
 
   // Queries
   const { data: participantes = [] } = useQuery({
@@ -1028,6 +1046,26 @@ export function ParticipantesSection({
         <TabsContent value="participantes">
           <Card>
             <CardContent className="p-0">
+              <div className="p-3 border-b">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome, e-mail ou telefone..."
+                    className="h-9 pl-8 pr-8"
+                    value={partBusca}
+                    onChange={(e) => setPartBusca(e.target.value)}
+                  />
+                  {partBusca && (
+                    <button
+                      type="button"
+                      onClick={() => setPartBusca("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1122,7 +1160,23 @@ export function ParticipantesSection({
                       !filter ||
                       val.toLowerCase().includes(filter.toLowerCase());
 
+                    const buscaTexto = normalizarBusca(partBusca);
+                    const buscaDigitos = partBusca.replace(/\D/g, "");
+
                     const filtered = participantes.filter((p: any) => {
+                      if (buscaTexto || buscaDigitos) {
+                        const nomeN = normalizarBusca(p.nome);
+                        const emailN = normalizarBusca(p.email);
+                        const telDigitos = (p.telefone || "").replace(/\D/g, "");
+                        const achouTexto =
+                          !!buscaTexto &&
+                          (nomeN.includes(buscaTexto) ||
+                            emailN.includes(buscaTexto));
+                        const achouTelefone =
+                          buscaDigitos.length > 0 &&
+                          telDigitos.includes(buscaDigitos);
+                        if (!achouTexto && !achouTelefone) return false;
+                      }
                       if (partFilters.presenca.length > 0) {
                         const presLabel = p.presenca ? "Presente" : "Ausente";
                         if (!partFilters.presenca.includes(presLabel))
