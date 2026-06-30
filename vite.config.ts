@@ -86,22 +86,4 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
-  build: {
-    rollupOptions: {
-      output: {
-        // Separa bibliotecas estáveis em chunks próprios: melhora o cache
-        // (um deploy de código não invalida React/Radix/Supabase) e reduz
-        // o bundle principal carregado em toda visita.
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id))
-            return "react-vendor";
-          if (id.includes("@radix-ui")) return "radix";
-          if (id.includes("@supabase")) return "supabase";
-          if (id.includes("@tanstack")) return "query";
-          if (id.includes("framer-motion")) return "motion";
-        },
-      },
-    },
-  },
 }));
