@@ -431,8 +431,8 @@ function DiffView({ before, after, acao }: { before: Record<string, unknown> | n
             <TableBody>
               {fields.map(([key, value]) => (
                 <TableRow key={key}>
-                  <TableCell className="text-xs font-medium text-muted-foreground py-3">{getFieldLabel(key)}</TableCell>
-                  <TableCell className="text-xs py-3">{formatValue(key, value, nomes)}</TableCell>
+                  <TableCell className="text-xs font-medium text-muted-foreground py-4">{getFieldLabel(key)}</TableCell>
+                  <TableCell className="text-xs py-4">{formatValue(key, value, nomes)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -458,8 +458,8 @@ function DiffView({ before, after, acao }: { before: Record<string, unknown> | n
             <TableBody>
               {fields.map(([key, value]) => (
                 <TableRow key={key}>
-                  <TableCell className="text-xs font-medium text-muted-foreground py-3">{getFieldLabel(key)}</TableCell>
-                  <TableCell className="text-xs py-3">{formatValue(key, value, nomes)}</TableCell>
+                  <TableCell className="text-xs font-medium text-muted-foreground py-4">{getFieldLabel(key)}</TableCell>
+                  <TableCell className="text-xs py-4">{formatValue(key, value, nomes)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -492,13 +492,13 @@ function DiffView({ before, after, acao }: { before: Record<string, unknown> | n
             <TableBody>
               {changes.map((key) => (
                 <TableRow key={key}>
-                  <TableCell className="text-xs font-medium text-muted-foreground py-3">{getFieldLabel(key)}</TableCell>
-                  <TableCell className="text-xs py-3">
+                  <TableCell className="text-xs font-medium text-muted-foreground py-4">{getFieldLabel(key)}</TableCell>
+                  <TableCell className="text-xs py-4">
                     <span className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 px-1.5 py-0.5 rounded">
                       {formatValue(key, before[key], nomes)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-xs py-3">
+                  <TableCell className="text-xs py-4">
                     <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded">
                       {formatValue(key, after[key], nomes)}
                     </span>

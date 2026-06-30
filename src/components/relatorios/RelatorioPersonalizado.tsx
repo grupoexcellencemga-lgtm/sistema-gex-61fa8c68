@@ -595,7 +595,7 @@ export function RelatorioPersonalizado() {
                   {rows.map((row, i) => (
                     <TableRow key={i} className={row.tipo_lancamento === "Saída" ? "bg-destructive/5" : ""}>
                       {visibleCols.map(c => (
-                        <TableCell key={c.key} className="text-xs whitespace-nowrap py-3">{formatCell(row, c)}</TableCell>
+                        <TableCell key={c.key} className="text-xs whitespace-nowrap py-4">{formatCell(row, c)}</TableCell>
                       ))}
                     </TableRow>
                   ))}

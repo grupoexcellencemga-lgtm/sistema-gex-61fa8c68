@@ -452,17 +452,17 @@ export function RelatorioInadimplencia() {
                     <TableBody>
                       {rows.map((r, i) => (
                         <TableRow key={i} className="group">
-                          <TableCell className="text-xs py-3">{r.aluno_nome}</TableCell>
-                          <TableCell className="text-xs py-3"><span className="truncate block max-w-[120px]" title={r.produto_nome}>{r.produto_nome}</span></TableCell>
-                          <TableCell className="text-xs py-3">{r.parcela}</TableCell>
-                          <TableCell className="text-xs py-3 text-right text-destructive font-medium">{formatCurrency(r.valor)}</TableCell>
-                          <TableCell className="text-xs py-3">{formatDate(r.vencimento)}</TableCell>
-                          <TableCell className="text-xs py-3 text-center text-muted-foreground">{r.dias_atraso}d</TableCell>
-                          <TableCell className="text-xs py-3">
+                          <TableCell className="text-xs py-4">{r.aluno_nome}</TableCell>
+                          <TableCell className="text-xs py-4"><span className="truncate block max-w-[120px]" title={r.produto_nome}>{r.produto_nome}</span></TableCell>
+                          <TableCell className="text-xs py-4">{r.parcela}</TableCell>
+                          <TableCell className="text-xs py-4 text-right text-destructive font-medium">{formatCurrency(r.valor)}</TableCell>
+                          <TableCell className="text-xs py-4">{formatDate(r.vencimento)}</TableCell>
+                          <TableCell className="text-xs py-4 text-center text-muted-foreground">{r.dias_atraso}d</TableCell>
+                          <TableCell className="text-xs py-4">
                             <Badge className={`${getBadgeColor(r.faixa)} text-[10px] text-white border-0`}>{r.faixa}</Badge>
                           </TableCell>
-                          <TableCell className="text-xs py-3"><span className="truncate block max-w-[100px]" title={r.vendedor_nome}>{r.vendedor_nome}</span></TableCell>
-                          <TableCell className="text-xs py-3 text-right">
+                          <TableCell className="text-xs py-4"><span className="truncate block max-w-[100px]" title={r.vendedor_nome}>{r.vendedor_nome}</span></TableCell>
+                          <TableCell className="text-xs py-4 text-right">
                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button
                                 variant="outline"

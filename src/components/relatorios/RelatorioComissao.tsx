@@ -515,27 +515,27 @@ export function RelatorioComissao() {
                 <TableBody>
                   {byVendedor.map((v, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-xs font-medium py-3">{v.vendedor}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{v.qtdVendas}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.ticketMedio)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.valorBruto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.taxa)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.imposto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.valorLiquido)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right font-semibold">{formatCurrency(v.comissaoTotal)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(v.comissaoPaga)}</TableCell>
+                      <TableCell className="text-xs font-medium py-4">{v.vendedor}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{v.qtdVendas}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.ticketMedio)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.valorBruto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.taxa)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.imposto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.valorLiquido)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right font-semibold">{formatCurrency(v.comissaoTotal)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(v.comissaoPaga)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="bg-muted/50 font-semibold">
-                    <TableCell className="text-xs py-3">Total</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{totals.qtdVendas}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.qtdVendas > 0 ? totals.valorBruto / totals.qtdVendas : 0)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.valorBruto)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.taxa)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.imposto)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.valorLiquido)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.comissaoTotal)}</TableCell>
-                    <TableCell className="text-xs py-3 text-right">{formatCurrency(totals.comissaoPaga)}</TableCell>
+                    <TableCell className="text-xs py-4">Total</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{totals.qtdVendas}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.qtdVendas > 0 ? totals.valorBruto / totals.qtdVendas : 0)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.valorBruto)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.taxa)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.imposto)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.valorLiquido)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.comissaoTotal)}</TableCell>
+                    <TableCell className="text-xs py-4 text-right">{formatCurrency(totals.comissaoPaga)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -557,13 +557,13 @@ export function RelatorioComissao() {
                 <TableBody>
                   {byProduto.map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-xs font-medium py-3">{p.produto}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{p.qtdVendas}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(p.valorBruto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(p.taxa)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(p.imposto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(p.valorLiquido)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right font-semibold">{formatCurrency(p.comissaoTotal)}</TableCell>
+                      <TableCell className="text-xs font-medium py-4">{p.produto}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{p.qtdVendas}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(p.valorBruto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(p.taxa)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(p.imposto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(p.valorLiquido)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right font-semibold">{formatCurrency(p.comissaoTotal)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -591,22 +591,22 @@ export function RelatorioComissao() {
                 <TableBody>
                   {rows.map((r, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-xs py-3">{r.vendedor}</TableCell>
-                      <TableCell className="text-xs py-3">{r.aluno}</TableCell>
-                      <TableCell className="text-xs py-3">{r.produto}</TableCell>
-                      <TableCell className="text-xs py-3">{r.forma_pagamento_label || r.forma_pagamento}</TableCell>
-                      <TableCell className="text-xs py-3">
+                      <TableCell className="text-xs py-4">{r.vendedor}</TableCell>
+                      <TableCell className="text-xs py-4">{r.aluno}</TableCell>
+                      <TableCell className="text-xs py-4">{r.produto}</TableCell>
+                      <TableCell className="text-xs py-4">{r.forma_pagamento_label || r.forma_pagamento}</TableCell>
+                      <TableCell className="text-xs py-4">
                         <Badge variant={r.status === "pago" ? "default" : r.status === "pendente" ? "secondary" : "destructive"} className="text-[10px]">
                           {r.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(r.valor_bruto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(r.taxa)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(r.imposto)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{formatCurrency(r.valor_liquido)}</TableCell>
-                      <TableCell className="text-xs py-3 text-right">{r.percentual}%</TableCell>
-                      <TableCell className="text-xs py-3 text-right font-semibold">{formatCurrency(r.valor_comissao)}</TableCell>
-                      <TableCell className="text-xs py-3">{formatDate(r.created_at)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(r.valor_bruto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(r.taxa)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(r.imposto)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{formatCurrency(r.valor_liquido)}</TableCell>
+                      <TableCell className="text-xs py-4 text-right">{r.percentual}%</TableCell>
+                      <TableCell className="text-xs py-4 text-right font-semibold">{formatCurrency(r.valor_comissao)}</TableCell>
+                      <TableCell className="text-xs py-4">{formatDate(r.created_at)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
