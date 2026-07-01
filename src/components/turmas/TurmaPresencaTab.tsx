@@ -290,35 +290,6 @@ export function TurmaPresencaTab({ turma }: Props) {
         </Card>
       </div>
 
-      {/* Alunos da turma */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Alunos da Turma</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {alunosMatriculados.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground text-sm">Nenhum aluno matriculado nesta turma.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Aluno</TableHead>
-                  <TableHead>Telefone</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {alunosMatriculados.map((aluno: any) => (
-                  <TableRow key={aluno.id}>
-                    <TableCell className="font-medium">{aluno.nome}</TableCell>
-                    <TableCell className="text-muted-foreground">{aluno.telefone || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Encontros + Presença Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">

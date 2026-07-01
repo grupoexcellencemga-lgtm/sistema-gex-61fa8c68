@@ -12,11 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { TurmaPresencaTab } from "@/components/turmas/TurmaPresencaTab";
+import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { formatDate } from "@/lib/formatters";
 
 interface TurmaForm {
@@ -34,7 +35,7 @@ const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio
 const Turmas = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const turmaIdFromUrl = searchParams.get("turma");
-  const activeTurmaTab = searchParams.get("tab") || "presenca";
+  const activeTurmaTab = searchParams.get("tab") || "alunos";
 
   const setTurmaUrl = (turmaId: string, tab = "presenca") => {
     const next = new URLSearchParams(searchParams);
@@ -238,8 +239,12 @@ const Turmas = () => {
         )}
         <Tabs value={activeTurmaTab} onValueChange={handleTurmaTabChange} className="mt-4">
           <TabsList>
-            <TabsTrigger value="presenca"><ClipboardCheck className="h-4 w-4 mr-1" />Presença / Frequência</TabsTrigger>
+            <TabsTrigger value="alunos"><Users className="h-4 w-4 mr-1" />Alunos</TabsTrigger>
+            <TabsTrigger value="presenca"><ClipboardCheck className="h-4 w-4 mr-1" />Controle de Presença</TabsTrigger>
           </TabsList>
+          <TabsContent value="alunos">
+            <TurmaAlunosTab turma={selectedTurma} />
+          </TabsContent>
           <TabsContent value="presenca">
             <TurmaPresencaTab turma={selectedTurma} />
           </TabsContent>
