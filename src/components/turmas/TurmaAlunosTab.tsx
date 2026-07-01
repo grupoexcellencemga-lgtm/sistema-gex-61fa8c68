@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, X, MessageCircle } from "lucide-react";
+import { Loader2, Search, X, MessageCircle, Users } from "lucide-react";
 
 // Remove acentos para busca tolerante ("joao" acha "João").
 const normalizar = (v?: string | null) =>
@@ -56,6 +56,17 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="h-5 w-5 text-primary" />
+        <span className="text-lg font-semibold">
+          {isLoading
+            ? "Carregando alunos..."
+            : busca && filtrados.length !== alunos.length
+              ? `${filtrados.length} de ${alunos.length} aluno(s) na turma`
+              : `${alunos.length} aluno(s) na turma`}
+        </span>
+      </div>
+
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -126,13 +137,6 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
         </CardContent>
       </Card>
 
-      {alunos.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {filtrados.length === alunos.length
-            ? `${alunos.length} aluno(s) na turma`
-            : `${filtrados.length} de ${alunos.length} aluno(s)`}
-        </p>
-      )}
     </div>
   );
 }
