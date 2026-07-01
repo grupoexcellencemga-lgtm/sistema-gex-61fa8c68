@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { TurmaPresencaTab } from "@/components/turmas/TurmaPresencaTab";
 import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { TurmaFinanceiroTab } from "@/components/turmas/TurmaFinanceiroTab";
+import { TurmaMetricasTab } from "@/components/turmas/TurmaMetricasTab";
 import { formatDate } from "@/lib/formatters";
 
 interface TurmaForm {
@@ -243,6 +244,7 @@ const Turmas = () => {
             <TabsTrigger value="alunos"><Users className="h-4 w-4 mr-1" />Alunos</TabsTrigger>
             <TabsTrigger value="presenca"><ClipboardCheck className="h-4 w-4 mr-1" />Controle de Presença</TabsTrigger>
             <TabsTrigger value="financeiro"><DollarSign className="h-4 w-4 mr-1" />Financeiro</TabsTrigger>
+            <TabsTrigger value="metricas"><TrendingUp className="h-4 w-4 mr-1" />Métricas</TabsTrigger>
           </TabsList>
           <TabsContent value="alunos">
             <TurmaAlunosTab turma={selectedTurma} />
@@ -252,6 +254,9 @@ const Turmas = () => {
           </TabsContent>
           <TabsContent value="financeiro">
             <TurmaFinanceiroTab turma={selectedTurma} />
+          </TabsContent>
+          <TabsContent value="metricas">
+            <TurmaMetricasTab turma={selectedTurma} />
           </TabsContent>
         </Tabs>
       </div>
