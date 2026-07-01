@@ -1069,7 +1069,7 @@ export function ParticipantesSection({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16 text-center">Presença</TableHead>
+                    <TableHead className="w-24 text-center px-2">Presença</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>E-mail</TableHead>
                     <TableHead>Telefone</TableHead>
