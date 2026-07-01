@@ -70,7 +70,7 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
-        .select("aluno_id, matricula_id, produto_id, turma_id, valor, valor_pago")
+        .select("aluno_id, matricula_id, produto_id, valor, valor_pago")
         .eq("status", "pago")
         .is("deleted_at", null)
         .in("aluno_id", alunoIds as string[]);
