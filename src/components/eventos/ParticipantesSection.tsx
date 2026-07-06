@@ -1,186 +1,24 @@
-import { useState, useRef, useMemo, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  ArrowLeft,
-  Users,
-  Pencil,
-  Trash2,
-  Upload,
-  Download,
-  BarChart3,
-  UserPlus,
-  DollarSign,
-  CreditCard,
-  Loader2,
-  MapPin,
-  Paperclip,
-  File,
-  X,
-  Receipt,
-  Filter,
-  Search,
-  CheckCircle2,
-  Package,
-} from "lucide-react";
-import {
-  formatPhone,
-  formatDate,
-  formatCurrencyNullable as formatCurrency,
-} from "@/lib/formatters";
+import { Users, Receipt } from "lucide-react";
+import { formatPhone } from "@/lib/formatters";
+import { toast } from "sonner";
 import { EventoMetricsDialog } from "./EventoMetricsDialog";
 import { EventoDespesasTab } from "./EventoDespesasTab";
 import { EventoImport } from "./EventoImport";
-import { toast } from "sonner";
-import { abrirComprovante } from "@/lib/comprovantes";
+import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import {
-  useFormasPagamento,
-  getFormaPagamentoLabel,
-} from "@/hooks/useFormasPagamento";
-
-// Remove acentos e baixa caixa para comparações tolerantes ("joao" acha "João").
-const normalizarBusca = (valor?: string | null) =>
-  (valor || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-
-// ---- Inline filter components ----
-const MultiSelectFilter = ({
-  selected,
-  onChange,
-  options,
-  label,
-  searchable = false,
-}: {
-  selected: string[];
-  onChange: (v: string[]) => void;
-  options: string[];
-  label: string;
-  searchable?: boolean;
-}) => {
-  const [search, setSearch] = useState("");
-  const toggle = (opt: string) =>
-    onChange(
-      selected.includes(opt)
-        ? selected.filter((s) => s !== opt)
-        : [...selected, opt],
-    );
-  const filtered =
-    searchable && search
-      ? options.filter((o) => {
-          const termo = normalizarBusca(search);
-          const digitosTermo = search.replace(/\D/g, "");
-          const digitosOpt = o.replace(/\D/g, "");
-          return (
-            normalizarBusca(o).includes(termo) ||
-            (digitosTermo.length > 0 && digitosOpt.includes(digitosTermo))
-          );
-        })
-      : options;
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={`h-7 text-xs w-full justify-start gap-1 font-normal ${selected.length > 0 ? "border-primary text-primary" : ""}`}
-        >
-          <Filter className="h-3 w-3" />
-          {selected.length > 0
-            ? `${selected.length} selecionado(s)`
-            : "Filtrar"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-56 p-0"
-        align="start"
-        onOpenAutoFocus={(e) => {
-          if (searchable) e.preventDefault();
-        }}
-      >
-        <div className="p-2 border-b flex items-center justify-between">
-          <span className="text-xs font-medium">{label}</span>
-          {selected.length > 0 && (
-            <button
-              className="text-xs text-destructive hover:underline"
-              onClick={() => onChange([])}
-            >
-              Limpar
-            </button>
-          )}
-        </div>
-        {searchable && (
-          <div className="p-2 border-b">
-            <Input
-              placeholder="Buscar..."
-              className="h-7 text-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        )}
-        <div className="max-h-[200px] overflow-y-auto p-1 space-y-0.5">
-          {filtered.length === 0 && (
-            <p className="text-xs text-muted-foreground px-2 py-2">
-              Nenhum resultado
-            </p>
-          )}
-          {filtered.map((opt) => (
-            <label
-              key={opt}
-              className="flex items-center gap-2 px-2 py-1.5 text-xs rounded-sm hover:bg-accent cursor-pointer"
-            >
-              <Checkbox
-                checked={selected.includes(opt)}
-                onCheckedChange={() => toggle(opt)}
-                className="h-3.5 w-3.5"
-              />
-              <span className="truncate">{opt}</span>
-            </label>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
+  exportParticipantes,
+  normalizarTexto,
+  normalizarTelefone,
+} from "./participantes/participantesUtils";
+import { useParticipantesActions } from "./participantes/useParticipantesActions";
+import { ParticipantesHeader } from "./participantes/ParticipantesHeader";
+import { ParticipantesTable } from "./participantes/ParticipantesTable";
+import { AddParticipanteDialog } from "./participantes/AddParticipanteDialog";
+import { ParticipanteDetailDialog } from "./participantes/ParticipanteDetailDialog";
 
 interface Props {
   evento: any;
@@ -191,6 +29,15 @@ interface Props {
   turmas: any[];
 }
 
+const emptyPartForm = {
+  nome: "",
+  email: "",
+  telefone: "",
+  observacoes: "",
+  tipo_participante: "",
+  convidado_por: "",
+};
+
 export function ParticipantesSection({
   evento,
   onBack,
@@ -199,20 +46,10 @@ export function ParticipantesSection({
   produtos,
   turmas,
 }: Props) {
-  const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: formasPagamento = [] } = useFormasPagamento();
-  const comprovanteInputRef = useRef<HTMLInputElement>(null);
 
   const [addParticipanteOpen, setAddParticipanteOpen] = useState(false);
-  const [partForm, setPartForm] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    observacoes: "",
-    tipo_participante: "",
-    convidado_por: "",
-  });
+  const [partForm, setPartForm] = useState({ ...emptyPartForm });
   const [alunoSearch, setAlunoSearch] = useState("");
   const [selectedAlunoId, setSelectedAlunoId] = useState<string | null>(null);
 
@@ -225,55 +62,11 @@ export function ParticipantesSection({
     valor: "",
     conta_bancaria_id: "",
   });
-  const [editPartForm, setEditPartForm] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    observacoes: "",
-    tipo_participante: "",
-    convidado_por: "",
-  });
+  const [editPartForm, setEditPartForm] = useState({ ...emptyPartForm });
   const [isEditingParticipante, setIsEditingParticipante] = useState(false);
 
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [uploadingComprovante, setUploadingComprovante] = useState(false);
-
-  const getComprovantesParticipante = (participante: any) => {
-    const lista = Array.isArray(participante?.comprovantes_urls)
-      ? participante.comprovantes_urls
-      : [];
-    if (lista.length > 0) return lista;
-    if (participante?.comprovante_url)
-      return [
-        { url: participante.comprovante_url, nome: "Comprovante anexado" },
-      ];
-    return [];
-  };
-
-  const [partFilters, setPartFilters] = useState<{
-    presenca: string[];
-    nome: string[];
-    email: string[];
-    telefone: string[];
-    tipo: string[];
-    pagamento: string[];
-    adicionado: string[];
-    valor: string;
-  }>({
-    presenca: [],
-    nome: [],
-    email: [],
-    telefone: [],
-    tipo: [],
-    pagamento: [],
-    adicionado: [],
-    valor: "",
-  });
-  const setPartFilter = (key: string, value: any) =>
-    setPartFilters((prev) => ({ ...prev, [key]: value }));
-
-  const [partBusca, setPartBusca] = useState("");
 
   // Queries
   const { data: participantes = [] } = useQuery({
@@ -316,16 +109,6 @@ export function ParticipantesSection({
     },
   });
 
-  const normalizarTexto = useCallback(
-    (valor?: string | null) => (valor || "").trim().toLowerCase(),
-    [],
-  );
-
-  const normalizarTelefone = useCallback(
-    (valor?: string | null) => (valor || "").replace(/\D/g, ""),
-    [],
-  );
-
   const encontrarAlunoDoParticipante = useCallback(
     (participante: any) => {
       const email = normalizarTexto(participante?.email);
@@ -349,267 +132,30 @@ export function ParticipantesSection({
         return false;
       });
     },
-    [alunosCadastrados, normalizarTexto, normalizarTelefone],
+    [alunosCadastrados],
   );
 
-  // Mutations
-  const addParticipanteMutation = useMutation({
-    mutationFn: async (data: typeof partForm) => {
-      const { error } = await supabase.from("participantes_eventos").insert({
-        evento_id: evento.id,
-        nome: data.nome.trim(),
-        email: data.email.trim() || null,
-        telefone: data.telefone.replace(/\D/g, "") || null,
-        observacoes: data.observacoes.trim() || null,
-        valor: evento.pago ? evento.valor || 0 : 0,
-        status_pagamento: evento.pago ? "pendente" : "gratuito",
-        tipo_participante: data.tipo_participante || null,
-        convidado_por:
-          data.tipo_participante === "convidado"
-            ? data.convidado_por.trim() || null
-            : null,
-        adicionado_por_nome: currentUserName,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      queryClient.invalidateQueries({
-        queryKey: ["all_participantes_eventos"],
-      });
-      toast.success("Participante adicionado");
-      setAddParticipanteOpen(false);
-      setPartForm({
-        nome: "",
-        email: "",
-        telefone: "",
-        observacoes: "",
-        tipo_participante: "",
-        convidado_por: "",
-      });
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
+  const {
+    addParticipanteMutation,
+    deleteParticipanteMutation,
+    updatePaymentMutation,
+    updateParticipanteMutation,
+    virarAlunoMutation,
+    togglePresencaMutation,
+    uploadingComprovante,
+    uploadComprovantes,
+    deleteComprovante,
+  } = useParticipantesActions({
+    evento,
+    currentUserName,
+    encontrarAlunoDoParticipante,
+    selectedParticipante,
+    setSelectedParticipante,
+    setPartDetailOpen,
+    setIsEditingParticipante,
+    setAddParticipanteOpen,
+    resetPartForm: () => setPartForm({ ...emptyPartForm }),
   });
-
-  const deleteParticipanteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("participantes_eventos")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      queryClient.invalidateQueries({
-        queryKey: ["all_participantes_eventos"],
-      });
-      toast.success("Participante removido");
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const updatePaymentMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const { error } = await supabase
-        .from("participantes_eventos")
-        .update({
-          status_pagamento: data.status_pagamento,
-          forma_pagamento: data.forma_pagamento || null,
-          data_pagamento: data.data_pagamento || null,
-          valor: data.valor,
-          conta_bancaria_id: data.conta_bancaria_id || null,
-        })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      toast.success("Pagamento atualizado");
-      setPartDetailOpen(false);
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const updateParticipanteMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const { error } = await supabase
-        .from("participantes_eventos")
-        .update({
-          nome: data.nome,
-          email: data.email,
-          telefone: data.telefone,
-          observacoes: data.observacoes,
-          tipo_participante: data.tipo_participante,
-          convidado_por: data.convidado_por,
-        })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      toast.success("Participante atualizado");
-      setIsEditingParticipante(false);
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const virarAlunoMutation = useMutation({
-    mutationFn: async (participante: any) => {
-      const alunoExistente = encontrarAlunoDoParticipante(participante);
-
-      if (alunoExistente) {
-        return { criado: false, aluno: alunoExistente };
-      }
-
-      const telefone = normalizarTelefone(participante.telefone) || null;
-      const email = normalizarTexto(participante.email) || null;
-
-      const { data: alunoCriado, error } = await supabase
-        .from("alunos")
-        .insert({
-          nome: participante.nome.trim(),
-          email,
-          telefone,
-        })
-        .select("id, nome, email, telefone")
-        .single();
-
-      if (error) throw error;
-
-      await supabase.from("atividades").insert({
-        tipo: "cadastro",
-        descricao: `Aluno criado a partir do evento "${evento.nome}". Participante convertido: ${participante.nome}.`,
-        aluno_id: alunoCriado.id,
-      });
-
-      return { criado: true, aluno: alunoCriado };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["alunos"] });
-      queryClient.invalidateQueries({ queryKey: ["alunos-evento"] });
-
-      if (result.criado) {
-        toast.success("Participante convertido em aluno");
-      } else {
-        toast.info("Este participante já está cadastrado como aluno");
-      }
-    },
-    onError: (err: any) =>
-      toast.error("Erro ao converter participante: " + err.message),
-  });
-
-  const togglePresencaMutation = useMutation({
-    mutationFn: async ({ id, presenca }: { id: string; presenca: boolean }) => {
-      const { error } = await supabase
-        .from("participantes_eventos")
-        .update({
-          presenca,
-          presenca_marcada_em: presenca ? new Date().toISOString() : null,
-          presenca_marcada_por: presenca ? currentUserName : null,
-        })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] }),
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  // Comprovante
-  const handleComprovanteUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length || !selectedParticipante) return;
-
-    setUploadingComprovante(true);
-
-    try {
-      const comprovantesAtuais =
-        getComprovantesParticipante(selectedParticipante);
-      const novosComprovantes: Array<{ url: string; nome: string }> = [];
-
-      for (const file of files) {
-        const ext = file.name.split(".").pop();
-        const filePath = `${selectedParticipante.id}/${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2)}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("comprovantes_eventos")
-          .upload(filePath, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("comprovantes_eventos")
-          .getPublicUrl(filePath);
-
-        novosComprovantes.push({ url: urlData.publicUrl, nome: file.name });
-      }
-
-      const comprovantes_urls = [...comprovantesAtuais, ...novosComprovantes];
-      const primeiroComprovante = comprovantes_urls[0] || null;
-
-      const { error: updateError } = await (supabase as any)
-        .from("participantes_eventos")
-        .update({
-          comprovante_url: primeiroComprovante?.url || null,
-          comprovantes_urls,
-        })
-        .eq("id", selectedParticipante.id);
-
-      if (updateError) throw updateError;
-
-      setSelectedParticipante((prev: any) => ({
-        ...prev,
-        comprovante_url: primeiroComprovante?.url || null,
-        comprovantes_urls,
-      }));
-
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      toast.success("Comprovante(s) anexado(s)!");
-    } catch (err: any) {
-      toast.error("Erro ao enviar comprovante: " + err.message);
-    } finally {
-      setUploadingComprovante(false);
-      if (comprovanteInputRef.current) comprovanteInputRef.current.value = "";
-    }
-  };
-
-  const handleComprovanteDelete = async (indexToRemove?: number) => {
-    if (!selectedParticipante) return;
-
-    try {
-      const atuais = getComprovantesParticipante(selectedParticipante);
-      const comprovantes_urls =
-        typeof indexToRemove === "number"
-          ? atuais.filter((_: any, index: number) => index !== indexToRemove)
-          : [];
-
-      const primeiroComprovante = comprovantes_urls[0] || null;
-
-      await (supabase as any)
-        .from("participantes_eventos")
-        .update({
-          comprovante_url: primeiroComprovante?.url || null,
-          comprovantes_urls,
-        })
-        .eq("id", selectedParticipante.id);
-
-      setSelectedParticipante((prev: any) => ({
-        ...prev,
-        comprovante_url: primeiroComprovante?.url || null,
-        comprovantes_urls,
-      }));
-
-      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
-      toast.success("Comprovante removido");
-    } catch (err: any) {
-      toast.error("Erro ao remover: " + err.message);
-    }
-  };
 
   // Helpers
   const openParticipanteDetail = (p: any) => {
@@ -676,355 +222,35 @@ export function ParticipantesSection({
     addParticipanteMutation.mutate(partForm);
   };
 
-  const handleExportParticipantes = () => {
-    if (participantes.length === 0) {
-      toast.error("Nenhum participante para exportar.");
-      return;
-    }
-    import("xlsx").then((XLSX) => {
-      const statusLabel = (s: string) =>
-        s === "pago"
-          ? "Pago"
-          : s === "gratuito"
-            ? "Gratuito"
-            : s === "permuta"
-              ? "Permuta"
-              : "Pendente";
-      const wsData = [
-        [
-          "Nome",
-          "Email",
-          "Telefone",
-          "Tipo",
-          "Presença",
-          "Status Pagamento",
-          "Forma Pagamento",
-          "Valor",
-          "Convidado por",
-          "Adicionado por",
-          "Observações",
-        ],
-        ...participantes.map((p: any) => [
-          p.nome || "",
-          p.email || "",
-          p.telefone || "",
-          p.tipo_participante || "",
-          p.presenca ? "Presente" : "Ausente",
-          statusLabel(p.status_pagamento),
-          getFormaPagamentoLabel(p.forma_pagamento, formasPagamento),
-          p.valor ?? 0,
-          p.convidado_por || "",
-          p.adicionado_por_nome || "",
-          p.observacoes || "",
-        ]),
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Participantes");
-      XLSX.writeFile(
-        wb,
-        `participantes_${evento.nome.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30)}.xlsx`,
-      );
-      toast.success("Planilha exportada com sucesso!");
-    });
+  const openAdd = () => {
+    setPartForm({ ...emptyPartForm });
+    setAlunoSearch("");
+    setSelectedAlunoId(null);
+    setAddParticipanteOpen(true);
   };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pago":
-        return <Badge className="bg-emerald-600 text-white">Pago</Badge>;
-      case "pendente":
-        return <Badge variant="destructive">Pendente</Badge>;
-      case "gratuito":
-        return <Badge variant="secondary">Gratuito</Badge>;
-      case "permuta":
-        return <Badge className="bg-amber-600 text-white">Permuta</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const tipoLabelFn = (t: string | null) =>
-    t === "comunidade"
-      ? "Comunidade"
-      : t === "convidado"
-        ? "Convidado(a)"
-        : t === "divulgacao"
-          ? "Divulgação"
-          : "";
-  const statusLabelFn = (s: string) =>
-    s === "pago"
-      ? "Pago"
-      : s === "pendente"
-        ? "Pendente"
-        : s === "gratuito"
-          ? "Gratuito"
-          : s === "isento"
-            ? "Isento"
-            : s === "permuta"
-              ? "Permuta"
-              : s;
-
-  const uniqueNomes = useMemo(
-    () =>
-      [
-        ...new Set(participantes.map((p: any) => p.nome).filter(Boolean)),
-      ].sort(),
-    [participantes],
-  );
-  const uniqueEmails = useMemo(
-    () =>
-      [
-        ...new Set(participantes.map((p: any) => p.email).filter(Boolean)),
-      ].sort(),
-    [participantes],
-  );
-  const uniqueTelefones = useMemo(
-    () =>
-      [
-        ...new Set(
-          participantes
-            .map((p: any) => (p.telefone ? formatPhone(p.telefone) : null))
-            .filter(Boolean),
-        ),
-      ].sort() as string[],
-    [participantes],
-  );
-  const uniqueTipos = useMemo(
-    () =>
-      [
-        ...new Set(
-          participantes
-            .map((p: any) => tipoLabelFn(p.tipo_participante))
-            .filter(Boolean),
-        ),
-      ].sort(),
-    [participantes],
-  );
-  const uniquePagamentos = useMemo(
-    () =>
-      [
-        ...new Set(
-          participantes
-            .map((p: any) => statusLabelFn(p.status_pagamento))
-            .filter(Boolean),
-        ),
-      ].sort(),
-    [participantes],
-  );
-  const uniqueAdicionados = useMemo(
-    () =>
-      [
-        ...new Set(participantes.map((p: any) => p.adicionado_por_nome || "—")),
-      ].sort(),
-    [participantes],
-  );
-
-  const isPago = evento.pago;
-  const total = participantes.length;
-  const presentes = participantes.filter((p: any) => !!p.presenca).length;
-  const ausentes = Math.max(total - presentes, 0);
-  const percentualPresenca =
-    total > 0 ? Math.round((presentes / total) * 100) : 0;
-  const pagos = isPago
-    ? participantes.filter((p: any) => p.status_pagamento === "pago").length
-    : 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{evento.nome}</h1>
-            {isPago && (
-              <Badge className="bg-amber-600 text-white gap-1">
-                <DollarSign className="h-3 w-3" />
-                {formatCurrency(evento.valor)}
-              </Badge>
-            )}
-            {!isPago && <Badge variant="secondary">Gratuito</Badge>}
-            {evento.comunidade && (
-              <Badge className="bg-blue-600 text-white">Comunidade</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
-            {evento.data && <span>{formatDate(evento.data)}</span>}
-            {evento.local && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {evento.local}
-              </span>
-            )}
-            {evento.tipo && <Badge variant="outline">{evento.tipo}</Badge>}
-            {evento.responsavel && <span>Resp: {evento.responsavel}</span>}
-            {evento.produto_id && (
-              <Badge variant="outline" className="gap-1">
-                <Package className="h-3 w-3" />
-                {produtos.find((p: any) => p.id === evento.produto_id)?.nome ||
-                  "Produto"}
-                {evento.turma_id &&
-                  ` / ${turmas.find((t: any) => t.id === evento.turma_id)?.nome || "Turma"}`}
-              </Badge>
-            )}
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onEditEvento(evento)}
-        >
-          <Pencil className="h-4 w-4 mr-1" /> Editar Evento
-        </Button>
-      </div>
-
-      {evento.descricao && (
-        <p className="text-sm text-muted-foreground">{evento.descricao}</p>
-      )}
-
-      {/* Stats & Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <span className="font-semibold">
-              {total} participante(s)
-              {evento.limite_participantes
-                ? ` / ${evento.limite_participantes} vagas`
-                : ""}
-            </span>
-          </div>
-          {isPago && total > 0 && (
-            <span className="text-sm text-muted-foreground">
-              {pagos}/{total} pagos •{" "}
-              {formatCurrency(
-                participantes
-                  .filter((p: any) => p.status_pagamento === "pago")
-                  .reduce((sum: number, p: any) => sum + (p.valor || 0), 0),
-              )}{" "}
-              recebido
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) setImportFile(file);
-              if (fileInputRef.current) fileInputRef.current.value = "";
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4 mr-1" /> Importar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportParticipantes}
-          >
-            <Download className="h-4 w-4 mr-1" /> Exportar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMetricsOpen(true)}
-          >
-            <BarChart3 className="h-4 w-4 mr-1" /> Métricas
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setPartForm({
-                nome: "",
-                email: "",
-                telefone: "",
-                observacoes: "",
-                tipo_participante: "",
-                convidado_por: "",
-              });
-              setAlunoSearch("");
-              setSelectedAlunoId(null);
-              setAddParticipanteOpen(true);
-            }}
-          >
-            <UserPlus className="h-4 w-4 mr-1" /> Adicionar
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <Card className="border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                  Já chegaram
-                </p>
-                <p className="mt-1 text-3xl font-bold text-emerald-700 dark:text-emerald-300">
-                  {presentes}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  participante(s) com presença marcada
-                </p>
-              </div>
-              <CheckCircle2 className="h-9 w-9 text-emerald-600 dark:text-emerald-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                  Ainda não vieram
-                </p>
-                <p className="mt-1 text-3xl font-bold text-amber-700 dark:text-amber-300">
-                  {ausentes}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  participante(s) sem presença marcada
-                </p>
-              </div>
-              <Users className="h-9 w-9 text-amber-600 dark:text-amber-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Presença geral
-                </p>
-                <p className="mt-1 text-3xl font-bold">{percentualPresenca}%</p>
-                <p className="text-xs text-muted-foreground">
-                  {presentes} de {total} participante(s)
-                </p>
-              </div>
-              <BarChart3 className="h-9 w-9 text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <ParticipantesHeader
+        evento={evento}
+        participantes={participantes}
+        produtos={produtos}
+        turmas={turmas}
+        onBack={onBack}
+        onEditEvento={onEditEvento}
+        onImportFile={setImportFile}
+        onExport={() =>
+          exportParticipantes(participantes, evento, formasPagamento)
+        }
+        onOpenMetrics={() => setMetricsOpen(true)}
+        onOpenAdd={openAdd}
+      />
 
       {importFile && (
         <EventoImport
           eventoId={evento.id}
           eventoNome={evento.nome}
-          isPago={isPago}
+          isPago={evento.pago}
           valorEvento={evento.valor}
           currentUserName={currentUserName}
           file={importFile}
@@ -1044,328 +270,22 @@ export function ParticipantesSection({
         </TabsList>
 
         <TabsContent value="participantes">
-          <Card>
-            <CardContent className="p-0">
-              <div className="p-3 border-b">
-                <div className="relative max-w-sm">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nome, e-mail ou telefone..."
-                    className="h-9 pl-8 pr-8"
-                    value={partBusca}
-                    onChange={(e) => setPartBusca(e.target.value)}
-                  />
-                  {partBusca && (
-                    <button
-                      type="button"
-                      onClick={() => setPartBusca("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-24 text-center px-2">Presença</TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>E-mail</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    {evento.comunidade && <TableHead>Tipo</TableHead>}
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Pagamento</TableHead>
-                    <TableHead>Adicionado por</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                  <TableRow>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.presenca}
-                        onChange={(v) => setPartFilter("presenca", v)}
-                        options={["Presente", "Ausente"]}
-                        label="Presença"
-                      />
-                    </TableHead>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.nome}
-                        onChange={(v) => setPartFilter("nome", v)}
-                        options={uniqueNomes}
-                        label="Nome"
-                        searchable
-                      />
-                    </TableHead>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.email}
-                        onChange={(v) => setPartFilter("email", v)}
-                        options={uniqueEmails}
-                        label="Email"
-                        searchable
-                      />
-                    </TableHead>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.telefone}
-                        onChange={(v) => setPartFilter("telefone", v)}
-                        options={uniqueTelefones}
-                        label="Telefone"
-                        searchable
-                      />
-                    </TableHead>
-                    {evento.comunidade && (
-                      <TableHead className="p-1">
-                        <MultiSelectFilter
-                          selected={partFilters.tipo}
-                          onChange={(v) => setPartFilter("tipo", v)}
-                          options={uniqueTipos}
-                          label="Tipo"
-                        />
-                      </TableHead>
-                    )}
-                    <TableHead className="p-1">
-                      <Input
-                        placeholder="Filtrar..."
-                        className="h-7 text-xs"
-                        value={partFilters.valor}
-                        onChange={(e) => setPartFilter("valor", e.target.value)}
-                      />
-                    </TableHead>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.pagamento}
-                        onChange={(v) => setPartFilter("pagamento", v)}
-                        options={uniquePagamentos}
-                        label="Pagamento"
-                      />
-                    </TableHead>
-                    <TableHead className="p-1">
-                      <MultiSelectFilter
-                        selected={partFilters.adicionado}
-                        onChange={(v) => setPartFilter("adicionado", v)}
-                        options={uniqueAdicionados}
-                        label="Adicionado"
-                      />
-                    </TableHead>
-                    <TableHead className="p-1" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(() => {
-                    const matchMulti = (val: string, filter: string[]) =>
-                      filter.length === 0 || filter.includes(val);
-                    const match = (val: string, filter: string) =>
-                      !filter ||
-                      val.toLowerCase().includes(filter.toLowerCase());
-
-                    const buscaTexto = normalizarBusca(partBusca);
-                    const buscaDigitos = partBusca.replace(/\D/g, "");
-
-                    const filtered = participantes.filter((p: any) => {
-                      if (buscaTexto || buscaDigitos) {
-                        const nomeN = normalizarBusca(p.nome);
-                        const emailN = normalizarBusca(p.email);
-                        const telDigitos = (p.telefone || "").replace(/\D/g, "");
-                        const achouTexto =
-                          !!buscaTexto &&
-                          (nomeN.includes(buscaTexto) ||
-                            emailN.includes(buscaTexto));
-                        const achouTelefone =
-                          buscaDigitos.length > 0 &&
-                          telDigitos.includes(buscaDigitos);
-                        if (!achouTexto && !achouTelefone) return false;
-                      }
-                      if (partFilters.presenca.length > 0) {
-                        const presLabel = p.presenca ? "Presente" : "Ausente";
-                        if (!partFilters.presenca.includes(presLabel))
-                          return false;
-                      }
-                      if (!matchMulti(p.nome || "", partFilters.nome))
-                        return false;
-                      if (!matchMulti(p.email || "", partFilters.email))
-                        return false;
-                      if (
-                        !matchMulti(
-                          p.telefone ? formatPhone(p.telefone) : "",
-                          partFilters.telefone,
-                        )
-                      )
-                        return false;
-                      if (
-                        evento.comunidade &&
-                        !matchMulti(
-                          tipoLabelFn(p.tipo_participante),
-                          partFilters.tipo,
-                        )
-                      )
-                        return false;
-                      if (!match(formatCurrency(p.valor), partFilters.valor))
-                        return false;
-                      if (
-                        !matchMulti(
-                          statusLabelFn(p.status_pagamento),
-                          partFilters.pagamento,
-                        )
-                      )
-                        return false;
-                      if (
-                        !matchMulti(
-                          p.adicionado_por_nome || "—",
-                          partFilters.adicionado,
-                        )
-                      )
-                        return false;
-                      return true;
-                    });
-
-                    if (filtered.length === 0)
-                      return (
-                        <TableRow>
-                          <TableCell
-                            colSpan={evento.comunidade ? 9 : 8}
-                            className="text-center py-8 text-muted-foreground"
-                          >
-                            {participantes.length === 0
-                              ? 'Nenhum participante cadastrado. Use "Importar Planilha" ou "Adicionar" para incluir participantes.'
-                              : "Nenhum participante encontrado com os filtros aplicados."}
-                          </TableCell>
-                        </TableRow>
-                      );
-
-                    return filtered.map((p: any) => {
-                      const alunoVinculado = encontrarAlunoDoParticipante(p);
-
-                      return (
-                        <TableRow
-                          key={p.id}
-                          className="cursor-pointer hover:bg-secondary/50"
-                          onClick={() => openParticipanteDetail(p)}
-                        >
-                          <TableCell
-                            className="text-center"
-                            onClick={(ev) => ev.stopPropagation()}
-                          >
-                            <div className="flex flex-col items-center gap-0.5">
-                              <Checkbox
-                                checked={!!p.presenca}
-                                onCheckedChange={(checked) =>
-                                  togglePresencaMutation.mutate({
-                                    id: p.id,
-                                    presenca: !!checked,
-                                  })
-                                }
-                              />
-                              {p.presenca && p.presenca_marcada_em && (
-                                <span className="text-[10px] text-muted-foreground leading-tight">
-                                  {new Date(
-                                    p.presenca_marcada_em,
-                                  ).toLocaleDateString("pt-BR")}{" "}
-                                  {new Date(
-                                    p.presenca_marcada_em,
-                                  ).toLocaleTimeString("pt-BR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                  {p.presenca_marcada_por && (
-                                    <>
-                                      <br />
-                                      por {p.presenca_marcada_por}
-                                    </>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {p.nome}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {p.email || "—"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {p.telefone ? formatPhone(p.telefone) : "—"}
-                          </TableCell>
-                          {evento.comunidade && (
-                            <TableCell className="text-sm">
-                              {p.tipo_participante === "comunidade" && (
-                                <Badge variant="secondary">Comunidade</Badge>
-                              )}
-                              {p.tipo_participante === "convidado" && (
-                                <Badge variant="outline">Convidado(a)</Badge>
-                              )}
-                              {p.tipo_participante === "divulgacao" && (
-                                <Badge className="bg-purple-600 text-white">
-                                  Divulgação
-                                </Badge>
-                              )}
-                              {!p.tipo_participante && "—"}
-                            </TableCell>
-                          )}
-                          <TableCell className="text-sm">
-                            {formatCurrency(p.valor)}
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(p.status_pagamento)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {p.adicionado_por_nome || "—"}
-                          </TableCell>
-                          <TableCell onClick={(ev) => ev.stopPropagation()}>
-                            <div className="flex flex-wrap justify-end gap-1">
-                              <Button
-                                variant={
-                                  alunoVinculado ? "secondary" : "outline"
-                                }
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                disabled={
-                                  !!alunoVinculado ||
-                                  virarAlunoMutation.isPending
-                                }
-                                onClick={() => virarAlunoMutation.mutate(p)}
-                              >
-                                {virarAlunoMutation.isPending ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : alunoVinculado ? (
-                                  "Já é aluno"
-                                ) : (
-                                  "Virar aluno"
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => {
-                                  openParticipanteDetail(p);
-                                  setIsEditingParticipante(true);
-                                }}
-                              >
-                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
-                                onClick={() => {
-                                  if (confirm("Remover este participante?"))
-                                    deleteParticipanteMutation.mutate(p.id);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    });
-                  })()}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <ParticipantesTable
+            evento={evento}
+            participantes={participantes}
+            encontrarAlunoDoParticipante={encontrarAlunoDoParticipante}
+            virarAlunoPending={virarAlunoMutation.isPending}
+            onOpenDetail={openParticipanteDetail}
+            onEdit={(p) => {
+              openParticipanteDetail(p);
+              setIsEditingParticipante(true);
+            }}
+            onDelete={(id) => deleteParticipanteMutation.mutate(id)}
+            onVirarAluno={(p) => virarAlunoMutation.mutate(p)}
+            onTogglePresenca={(id, presenca) =>
+              togglePresencaMutation.mutate({ id, presenca })
+            }
+          />
         </TabsContent>
 
         <TabsContent value="despesas">
@@ -1377,623 +297,52 @@ export function ParticipantesSection({
         </TabsContent>
       </Tabs>
 
-      {/* Participant Detail / Payment Dialog */}
-      <Dialog
+      <ParticipanteDetailDialog
         open={partDetailOpen}
         onOpenChange={(o) => {
           setPartDetailOpen(o);
           if (!o) setIsEditingParticipante(false);
         }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" /> {selectedParticipante?.nome}
-            </DialogTitle>
-            <DialogDescription>
-              Informações do participante e pagamento
-            </DialogDescription>
-          </DialogHeader>
-          {selectedParticipante && (
-            <div className="space-y-4">
-              {isEditingParticipante ? (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label>Nome *</Label>
-                    <Input
-                      value={editPartForm.nome}
-                      onChange={(e) =>
-                        setEditPartForm((f) => ({ ...f, nome: e.target.value }))
-                      }
-                      placeholder="Nome completo"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>E-mail</Label>
-                    <Input
-                      type="email"
-                      value={editPartForm.email}
-                      onChange={(e) =>
-                        setEditPartForm((f) => ({
-                          ...f,
-                          email: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Telefone</Label>
-                    <Input
-                      value={editPartForm.telefone}
-                      onChange={(e) =>
-                        setEditPartForm((f) => ({
-                          ...f,
-                          telefone: formatPhone(e.target.value),
-                        }))
-                      }
-                      placeholder="(00) 00000-0000"
-                      maxLength={15}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Observações</Label>
-                    <Input
-                      value={editPartForm.observacoes}
-                      onChange={(e) =>
-                        setEditPartForm((f) => ({
-                          ...f,
-                          observacoes: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  {evento.comunidade && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Tipo de participante</Label>
-                        <Select
-                          value={editPartForm.tipo_participante}
-                          onValueChange={(v) =>
-                            setEditPartForm((f) => ({
-                              ...f,
-                              tipo_participante: v,
-                              convidado_por:
-                                v !== "convidado" ? "" : f.convidado_por,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="comunidade">
-                              Comunidade
-                            </SelectItem>
-                            <SelectItem value="convidado">
-                              Convidado(a)
-                            </SelectItem>
-                            <SelectItem value="divulgacao">
-                              Divulgação
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {editPartForm.tipo_participante === "convidado" && (
-                        <div className="space-y-2">
-                          <Label>Convidado(a) por</Label>
-                          <Input
-                            value={editPartForm.convidado_por}
-                            onChange={(e) =>
-                              setEditPartForm((f) => ({
-                                ...f,
-                                convidado_por: e.target.value,
-                              }))
-                            }
-                            placeholder="Nome de quem convidou"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => setIsEditingParticipante(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={saveParticipanteEdit}
-                      disabled={updateParticipanteMutation.isPending}
-                    >
-                      {updateParticipanteMutation.isPending && (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      )}
-                      Salvar Dados
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-xs">
-                      Dados do participante
-                    </span>
-                    {(() => {
-                      const alunoVinculado =
-                        encontrarAlunoDoParticipante(selectedParticipante);
+        evento={evento}
+        participante={selectedParticipante}
+        isEditing={isEditingParticipante}
+        setIsEditing={setIsEditingParticipante}
+        editPartForm={editPartForm}
+        setEditPartForm={setEditPartForm}
+        payForm={payForm}
+        setPayForm={setPayForm}
+        formasPagamento={formasPagamento}
+        contasBancarias={contasBancarias}
+        alunoVinculado={
+          selectedParticipante
+            ? encontrarAlunoDoParticipante(selectedParticipante)
+            : null
+        }
+        onVirarAluno={(p) => virarAlunoMutation.mutate(p)}
+        virarAlunoPending={virarAlunoMutation.isPending}
+        onSaveEdit={saveParticipanteEdit}
+        savingEdit={updateParticipanteMutation.isPending}
+        onSavePayment={savePayment}
+        savingPayment={updatePaymentMutation.isPending}
+        uploadingComprovante={uploadingComprovante}
+        onUploadComprovantes={uploadComprovantes}
+        onDeleteComprovante={deleteComprovante}
+      />
 
-                      return (
-                        <Button
-                          variant={alunoVinculado ? "secondary" : "outline"}
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={
-                            !!alunoVinculado || virarAlunoMutation.isPending
-                          }
-                          onClick={() =>
-                            virarAlunoMutation.mutate(selectedParticipante)
-                          }
-                        >
-                          {virarAlunoMutation.isPending ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                          ) : null}
-                          {alunoVinculado ? "Já é aluno" : "Virar aluno"}
-                        </Button>
-                      );
-                    })()}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1"
-                      onClick={() => setIsEditingParticipante(true)}
-                    >
-                      <Pencil className="h-3 w-3" /> Editar
-                    </Button>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">E-mail:</span>
-                    <p className="font-medium break-all">
-                      {selectedParticipante.email || "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Telefone:</span>
-                    <p className="font-medium">
-                      {selectedParticipante.telefone
-                        ? formatPhone(selectedParticipante.telefone)
-                        : "—"}
-                    </p>
-                  </div>
-                  {evento.comunidade && (
-                    <div>
-                      <span className="text-muted-foreground">Tipo:</span>
-                      <p className="font-medium">
-                        {selectedParticipante.tipo_participante === "comunidade"
-                          ? "Comunidade"
-                          : selectedParticipante.tipo_participante ===
-                              "convidado"
-                            ? "Convidado(a)"
-                            : selectedParticipante.tipo_participante ===
-                                "divulgacao"
-                              ? "Divulgação"
-                              : "—"}
-                      </p>
-                    </div>
-                  )}
-                  {evento.comunidade &&
-                    selectedParticipante.tipo_participante === "convidado" &&
-                    selectedParticipante.convidado_por && (
-                      <div>
-                        <span className="text-muted-foreground">
-                          Convidado(a) por:
-                        </span>
-                        <p className="font-medium">
-                          {selectedParticipante.convidado_por}
-                        </p>
-                      </div>
-                    )}
-                  {selectedParticipante.observacoes && (
-                    <div>
-                      <span className="text-muted-foreground">
-                        Observações:
-                      </span>
-                      <p className="font-medium">
-                        {selectedParticipante.observacoes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="border-t pt-4 space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Informações de Pagamento
-                </h3>
-                <div className="space-y-2">
-                  <Label>Valor (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={payForm.valor}
-                    onChange={(e) =>
-                      setPayForm((f) => ({ ...f, valor: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Status do pagamento</Label>
-                  <Select
-                    value={payForm.status_pagamento}
-                    onValueChange={(v) =>
-                      setPayForm((f) => ({ ...f, status_pagamento: v }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="pago">Pago</SelectItem>
-                      <SelectItem value="gratuito">Gratuito</SelectItem>
-                      <SelectItem value="permuta">Permuta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {payForm.status_pagamento === "pago" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Forma de pagamento</Label>
-                      <Select
-                        value={payForm.forma_pagamento}
-                        onValueChange={(v) =>
-                          setPayForm((f) => ({ ...f, forma_pagamento: v }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecionar..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {formasPagamento.length === 0 ? (
-                            <SelectItem
-                              value="nenhuma_forma_pagamento"
-                              disabled
-                            >
-                              Nenhuma forma cadastrada
-                            </SelectItem>
-                          ) : (
-                            formasPagamento.map((forma) => (
-                              <SelectItem key={forma.id} value={forma.codigo}>
-                                {forma.nome}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Data do pagamento</Label>
-                      <Input
-                        type="date"
-                        value={payForm.data_pagamento}
-                        onChange={(e) =>
-                          setPayForm((f) => ({
-                            ...f,
-                            data_pagamento: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Conta Bancária</Label>
-                      <Select
-                        value={payForm.conta_bancaria_id}
-                        onValueChange={(v) =>
-                          setPayForm((f) => ({ ...f, conta_bancaria_id: v }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecionar banco..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {contasBancarias.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-              </div>
-              <Button
-                className="w-full"
-                onClick={savePayment}
-                disabled={updatePaymentMutation.isPending}
-              >
-                {updatePaymentMutation.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                )}
-                Salvar Pagamento
-              </Button>
-
-              {isPago && (
-                <div className="border-t pt-4 space-y-3">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" /> Comprovante de Pagamento
-                  </h3>
-                  <input
-                    ref={comprovanteInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.webp"
-                    className="hidden"
-                    onChange={handleComprovanteUpload}
-                  />
-                  {getComprovantesParticipante(selectedParticipante).length >
-                    0 && (
-                    <div className="space-y-2">
-                      {getComprovantesParticipante(selectedParticipante).map(
-                        (comp: any, index: number) => (
-                          <div
-                            key={`${comp.url}-${index}`}
-                            className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3"
-                          >
-                            <File className="h-5 w-5 text-primary shrink-0" />
-                            <span className="text-sm truncate flex-1">
-                              {comp.nome || `Comprovante ${index + 1}`}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0"
-                              onClick={() => abrirComprovante(comp.url)}
-                              title="Abrir comprovante"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive shrink-0"
-                              onClick={() => handleComprovanteDelete(index)}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => comprovanteInputRef.current?.click()}
-                    disabled={uploadingComprovante}
-                  >
-                    {uploadingComprovante ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    {uploadingComprovante
-                      ? "Enviando..."
-                      : getComprovantesParticipante(selectedParticipante)
-                            .length > 0
-                        ? "Adicionar mais comprovantes"
-                        : "Anexar Comprovante"}
-                  </Button>
-                  {getComprovantesParticipante(selectedParticipante).length >
-                    1 && (
-                    <Button
-                      variant="ghost"
-                      className="w-full gap-2 text-destructive"
-                      onClick={() => handleComprovanteDelete()}
-                    >
-                      <X className="h-4 w-4" />
-                      Remover todos os comprovantes
-                    </Button>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Você pode anexar mais de um arquivo. Formatos aceitos: PDF,
-                    PNG, JPG, Word
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Participante Dialog */}
-      <Dialog open={addParticipanteOpen} onOpenChange={setAddParticipanteOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Adicionar Participante</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Buscar aluno cadastrado</Label>
-              <div className="relative">
-                <Input
-                  value={alunoSearch}
-                  onChange={(e) => {
-                    setAlunoSearch(e.target.value);
-                    setSelectedAlunoId(null);
-                  }}
-                  placeholder="Digite o nome do aluno..."
-                />
-                <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-              </div>
-              {alunoSearch.length >= 2 && !selectedAlunoId && (
-                <div className="border rounded-md max-h-40 overflow-y-auto">
-                  {alunosCadastrados
-                    .filter((a: any) =>
-                      a.nome.toLowerCase().includes(alunoSearch.toLowerCase()),
-                    )
-                    .slice(0, 8)
-                    .map((a: any) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors border-b last:border-b-0"
-                        onClick={() => {
-                          setSelectedAlunoId(a.id);
-                          setAlunoSearch(a.nome);
-                          setPartForm((f) => ({
-                            ...f,
-                            nome: a.nome,
-                            email: a.email || "",
-                            telefone: a.telefone ? formatPhone(a.telefone) : "",
-                          }));
-                        }}
-                      >
-                        <span className="font-medium">{a.nome}</span>
-                        {a.email && (
-                          <span className="text-muted-foreground ml-2 text-xs">
-                            {a.email}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  {alunosCadastrados.filter((a: any) =>
-                    a.nome.toLowerCase().includes(alunoSearch.toLowerCase()),
-                  ).length === 0 && (
-                    <p className="px-3 py-2 text-sm text-muted-foreground">
-                      Nenhum aluno encontrado
-                    </p>
-                  )}
-                </div>
-              )}
-              {selectedAlunoId && (
-                <p className="text-xs text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Aluno selecionado —
-                  campos preenchidos automaticamente
-                </p>
-              )}
-            </div>
-
-            <div className="relative flex items-center gap-2">
-              <div className="flex-1 border-t" />
-              <span className="text-xs text-muted-foreground">
-                ou preencha manualmente
-              </span>
-              <div className="flex-1 border-t" />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Nome *</Label>
-              <Input
-                value={partForm.nome}
-                onChange={(e) => {
-                  setPartForm((f) => ({ ...f, nome: e.target.value }));
-                  if (selectedAlunoId) {
-                    setSelectedAlunoId(null);
-                    setAlunoSearch("");
-                  }
-                }}
-                placeholder="Nome completo"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input
-                  type="email"
-                  value={partForm.email}
-                  onChange={(e) =>
-                    setPartForm((f) => ({ ...f, email: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Telefone</Label>
-                <Input
-                  value={partForm.telefone}
-                  onChange={(e) =>
-                    setPartForm((f) => ({
-                      ...f,
-                      telefone: formatPhone(e.target.value),
-                    }))
-                  }
-                  placeholder="(00) 00000-0000"
-                  maxLength={15}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Observações</Label>
-              <Input
-                value={partForm.observacoes}
-                onChange={(e) =>
-                  setPartForm((f) => ({ ...f, observacoes: e.target.value }))
-                }
-              />
-            </div>
-            {evento.comunidade && (
-              <>
-                <div className="space-y-2">
-                  <Label>Tipo de participante</Label>
-                  <Select
-                    value={partForm.tipo_participante}
-                    onValueChange={(v) =>
-                      setPartForm((f) => ({
-                        ...f,
-                        tipo_participante: v,
-                        convidado_por: v !== "convidado" ? "" : f.convidado_por,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="comunidade">Comunidade</SelectItem>
-                      <SelectItem value="convidado">Convidado(a)</SelectItem>
-                      <SelectItem value="divulgacao">Divulgação</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {partForm.tipo_participante === "convidado" && (
-                  <div className="space-y-2">
-                    <Label>Convidado(a) por</Label>
-                    <Input
-                      value={partForm.convidado_por}
-                      onChange={(e) =>
-                        setPartForm((f) => ({
-                          ...f,
-                          convidado_por: e.target.value,
-                        }))
-                      }
-                      placeholder="Nome de quem convidou"
-                    />
-                  </div>
-                )}
-              </>
-            )}
-            {isPago && (
-              <p className="text-sm text-muted-foreground">
-                Valor do evento: <strong>{formatCurrency(evento.valor)}</strong>{" "}
-                — será atribuído automaticamente ao participante.
-              </p>
-            )}
-            <Button
-              onClick={saveParticipante}
-              disabled={addParticipanteMutation.isPending}
-              className="w-full"
-            >
-              {addParticipanteMutation.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              )}
-              Adicionar Participante
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AddParticipanteDialog
+        open={addParticipanteOpen}
+        onOpenChange={setAddParticipanteOpen}
+        evento={evento}
+        partForm={partForm}
+        setPartForm={setPartForm}
+        alunoSearch={alunoSearch}
+        setAlunoSearch={setAlunoSearch}
+        selectedAlunoId={selectedAlunoId}
+        setSelectedAlunoId={setSelectedAlunoId}
+        alunosCadastrados={alunosCadastrados}
+        onSave={saveParticipante}
+        isSaving={addParticipanteMutation.isPending}
+      />
 
       <EventoMetricsDialog
         open={metricsOpen}
