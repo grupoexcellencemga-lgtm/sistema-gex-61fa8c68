@@ -256,6 +256,7 @@ export function ChecklistTemplatesSection() {
                   </Select>
                   <Input type="number" min="0" className="col-span-2 sm:col-span-1 h-8 text-sm"
                     value={item.offset_valor} onChange={(e) => setItem(i, { offset_valor: e.target.value })}
+                    onFocus={(e) => e.target.select()}
                     title="Quanto tempo antes (ou depois, se pós-evento)" />
                   <Select value={item.offset_unidade} onValueChange={(v) => setItem(i, { offset_unidade: v })}>
                     <SelectTrigger className="col-span-3 sm:col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>

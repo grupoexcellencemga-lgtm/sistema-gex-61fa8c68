@@ -86,7 +86,7 @@ export function RelatorioDRE() {
   const { data: participantesEventos, isLoading: loadPart } = useQuery({
     queryKey: ["dre-participantes", dataInicio, dataFim],
     queryFn: async () => {
-      const { data } = await supabase.from("participantes_eventos").select("*, eventos!participantes_eventos_evento_id_fkey(id, nome, produto_id)")
+      const { data } = await supabase.from("participantes_eventos").select("*, eventos!participantes_eventos_evento_id_fkey(id, nome, produto_id, data)")
         .eq("status_pagamento", "pago");
       return data || [];
     },
@@ -151,10 +151,13 @@ export function RelatorioDRE() {
       return true;
     });
 
-    // Filter participantes eventos
+    // Filter participantes eventos — receita de evento entra no mês do pagamento
+    // do participante; quando não há data de pagamento, cai na data do evento.
     const filteredPart = (participantesEventos || []).filter((pe: any) => {
       if (eventoId !== "todos" && pe.evento_id !== eventoId) return false;
       if (produtoId !== "todos" && pe.eventos?.produto_id !== produtoId) return false;
+      const refData = pe.data_pagamento || pe.eventos?.data;
+      if (!refData || refData < dataInicio || refData > dataFim) return false;
       return true;
     });
 

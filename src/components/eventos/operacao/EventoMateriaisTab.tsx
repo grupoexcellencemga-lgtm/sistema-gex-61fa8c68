@@ -100,6 +100,7 @@ export function EventoMateriaisTab({ eventoId }: { eventoId: string }) {
           className="w-20"
           value={novaQtd}
           onChange={(e) => setNovaQtd(e.target.value)}
+          onFocus={(e) => e.target.select()}
           title="Quantidade"
         />
         <Button
