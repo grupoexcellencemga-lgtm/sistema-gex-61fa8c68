@@ -24,6 +24,7 @@ const Alunos = lazy(() => import("./pages/Alunos"));
 const Produtos = lazy(() => import("./pages/Produtos"));
 const Turmas = lazy(() => import("./pages/Turmas"));
 const Eventos = lazy(() => import("./pages/Eventos"));
+const Agenda = lazy(() => import("./pages/Agenda"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const UsuariosADM = lazy(() => import("./pages/UsuariosADM"));
@@ -87,6 +88,7 @@ const AppRoutes = () => {
           <Route path="/produtos" element={<PR path="/produtos"><Produtos /></PR>} />
           <Route path="/turmas" element={<PR path="/turmas"><Turmas /></PR>} />
           <Route path="/eventos" element={<PR path="/eventos"><Eventos /></PR>} />
+          <Route path="/agenda" element={<PR path="/agenda"><Agenda /></PR>} />
           <Route path="/processo-individual" element={<PR path="/processo-individual"><ProcessoIndividual /></PR>} />
           <Route path="/processo-empresarial" element={<PR path="/processo-empresarial"><ProcessoEmpresarial /></PR>} />
           <Route path="/profissionais" element={<PR path="/profissionais"><Profissionais /></PR>} />
