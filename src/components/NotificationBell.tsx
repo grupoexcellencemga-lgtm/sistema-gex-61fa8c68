@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, CheckCheck, Loader2 } from "lucide-react";
+import { Bell, CheckCheck, Loader2, AlertTriangle, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,32 @@ export function NotificationBell() {
     refetchInterval: 60000,
   });
 
+  // Tarefas de checklist de EVENTO atrasadas/urgentes do usuário (ao vivo, sem cron).
+  const hojeISO = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+  const { data: tarefasEvento = [] } = useQuery({
+    queryKey: ["notif-tarefas-evento", user?.id, hojeISO],
+    queryFn: async () => {
+      if (!user) return [];
+      const limite = new Date(Date.now() - 3 * 3_600_000 + 2 * 86_400_000)
+        .toISOString()
+        .slice(0, 10); // hoje + 2 dias = janela "urgente"
+      const { data } = await (supabase as any)
+        .from("tarefas")
+        .select("id, titulo, data_vencimento, evento_id, eventos(nome)")
+        .eq("responsavel_id", user.id)
+        .eq("status", "pendente")
+        .not("evento_id", "is", null)
+        .not("data_vencimento", "is", null)
+        .lte("data_vencimento", limite)
+        .order("data_vencimento", { ascending: true });
+      return data || [];
+    },
+    enabled: !!user,
+    refetchInterval: 60000,
+  });
+
   const unreadCount = notifications.filter((n: any) => !n.lida).length;
+  const badgeCount = unreadCount + tarefasEvento.length;
 
   // Realtime subscription
   useEffect(() => {
@@ -103,9 +128,9 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9">
           <Bell className={cn("h-5 w-5", hasNew && "animate-wiggle")} />
-          {unreadCount > 0 && (
+          {badgeCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {badgeCount > 9 ? "9+" : badgeCount}
             </span>
           )}
         </Button>
@@ -126,6 +151,45 @@ export function NotificationBell() {
             </Button>
           )}
         </div>
+        {tarefasEvento.length > 0 && (
+          <div className="border-b bg-amber-50/60 dark:bg-amber-950/20">
+            <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Tarefas de evento
+            </p>
+            <div className="divide-y divide-amber-100 dark:divide-amber-900/40">
+              {tarefasEvento.map((t: any) => {
+                const atrasada = t.data_vencimento < hojeISO;
+                return (
+                  <button
+                    key={t.id}
+                    className="w-full text-left px-4 py-2 hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors"
+                    onClick={() => {
+                      navigate(`/eventos?evento=${t.evento_id}`);
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex gap-2">
+                      {atrasada ? (
+                        <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate font-medium">{t.titulo}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {t.eventos?.nome || "Evento"} ·{" "}
+                          <span className={atrasada ? "text-red-600 font-medium" : "text-amber-600"}>
+                            {atrasada ? "atrasada" : "vence em breve"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <ScrollArea className="max-h-80">
           {isLoading ? (
             <div className="flex justify-center py-8">
