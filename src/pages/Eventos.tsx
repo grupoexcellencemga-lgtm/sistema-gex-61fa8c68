@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { aplicarChecklistNoEvento } from "@/lib/checklistEvento";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -117,17 +118,38 @@ const Eventos = () => {
   // Mutations
   const insertMutation = useMutation({
     mutationFn: async (data: EventoForm) => {
-      const { error } = await supabase.from("eventos").insert({
+      const { data: criado, error } = await supabase.from("eventos").insert({
         nome: data.nome, data: data.data || null, local: data.local || null,
         tipo: data.tipo ? data.tipo.toLowerCase() : null, responsavel: data.responsavel || null,
         limite_participantes: data.limite_participantes ? parseInt(data.limite_participantes) : null,
         descricao: data.descricao || null, pago: data.pago,
         valor: data.pago && data.valor ? parseFloat(data.valor) : 0, comunidade: data.comunidade,
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
-      });
+      }).select("id, nome, tipo, data").single();
       if (error) throw error;
+
+      // Aplica o modelo de checklist do tipo do evento, se existir (Fase 1).
+      // Idempotente: eventos.checklist_template_id é a trava anti-duplicação.
+      const { data: auth } = await supabase.auth.getUser();
+      if (criado && auth.user) {
+        try {
+          return await aplicarChecklistNoEvento(criado, auth.user.id);
+        } catch (e: any) {
+          toast.warning("Evento criado, mas o checklist falhou: " + e.message);
+        }
+      }
+      return null;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["eventos"] }); toast.success("Evento cadastrado"); setDialogOpen(false); },
+    onSuccess: (checklist) => {
+      queryClient.invalidateQueries({ queryKey: ["eventos"] });
+      queryClient.invalidateQueries({ queryKey: ["tarefas"] });
+      if (checklist?.aplicado && checklist.tarefasCriadas) {
+        toast.success(`Evento cadastrado — checklist "${checklist.templateNome}" aplicado (${checklist.tarefasCriadas} tarefas)`);
+      } else {
+        toast.success("Evento cadastrado");
+      }
+      setDialogOpen(false);
+    },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 

@@ -2,7 +2,8 @@ import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Receipt } from "lucide-react";
+import { Users, Receipt, ListChecks } from "lucide-react";
+import { EventoDetailSheet } from "./EventoDetailSheet";
 import { formatPhone } from "@/lib/formatters";
 import { toast } from "sonner";
 import { EventoMetricsDialog } from "./EventoMetricsDialog";
@@ -267,6 +268,9 @@ export function ParticipantesSection({
           <TabsTrigger value="despesas" className="gap-1">
             <Receipt className="h-4 w-4" /> Despesas
           </TabsTrigger>
+          <TabsTrigger value="operacao" className="gap-1">
+            <ListChecks className="h-4 w-4" /> Operação
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="participantes">
@@ -294,6 +298,10 @@ export function ParticipantesSection({
             eventoProdutoId={evento.produto_id}
             eventoTurmaId={evento.turma_id}
           />
+        </TabsContent>
+
+        <TabsContent value="operacao">
+          <EventoDetailSheet evento={evento} currentUserName={currentUserName} />
         </TabsContent>
       </Tabs>
 

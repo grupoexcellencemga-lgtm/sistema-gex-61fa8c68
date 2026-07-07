@@ -3,6 +3,7 @@ import { EmailTemplatesSection } from "@/components/configuracoes/EmailTemplates
 import { TaxasSection } from "@/components/configuracoes/TaxasSection";
 import { FormasPagamentoSection } from "@/components/configuracoes/FormasPagamentoSection";
 import { CategoriasSection } from "@/components/configuracoes/CategoriasSection";
+import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistTemplatesSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
@@ -38,6 +39,7 @@ import {
   Tags,
   CreditCard,
   Percent,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -358,6 +360,11 @@ const Configuracoes = () => {
               <Percent className="h-4 w-4" />
               Taxas
             </TabsTrigger>
+
+            <TabsTrigger value="checklists" className="gap-1.5 shrink-0">
+              <ListChecks className="h-4 w-4" />
+              Checklists de Eventos
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -617,6 +624,10 @@ const Configuracoes = () => {
 
         <TabsContent value="taxas" className="max-w-5xl space-y-6">
           <TaxasSection />
+        </TabsContent>
+
+        <TabsContent value="checklists" className="max-w-5xl space-y-6">
+          <ChecklistTemplatesSection />
         </TabsContent>
       </Tabs>
     </div>

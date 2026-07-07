@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -142,22 +142,105 @@ export type Database = {
       }
       categorias_despesas: {
         Row: {
+          ativo: boolean | null
           created_at: string
+          deleted_at: string | null
           id: string
           nome: string
           tipo: string
+          updated_at: string | null
         }
         Insert: {
+          ativo?: boolean | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           nome: string
           tipo?: string
+          updated_at?: string | null
         }
         Update: {
+          ativo?: boolean | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           nome?: string
           tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      checklist_template_items: {
+        Row: {
+          deleted_at: string | null
+          fase: string
+          id: string
+          nome_tarefa: string
+          obrigatoria: boolean
+          offset_unidade: string
+          offset_valor: number
+          prioridade: string
+          template_id: string
+        }
+        Insert: {
+          deleted_at?: string | null
+          fase?: string
+          id?: string
+          nome_tarefa: string
+          obrigatoria?: boolean
+          offset_unidade?: string
+          offset_valor?: number
+          prioridade?: string
+          template_id: string
+        }
+        Update: {
+          deleted_at?: string | null
+          fase?: string
+          id?: string
+          nome_tarefa?: string
+          obrigatoria?: boolean
+          offset_unidade?: string
+          offset_valor?: number
+          prioridade?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_templates: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          deleted_at: string | null
+          id: string
+          nome: string
+          tipo_evento: string
+          versao: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          nome: string
+          tipo_evento: string
+          versao?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          nome?: string
+          tipo_evento?: string
+          versao?: number
         }
         Relationships: []
       }
@@ -487,6 +570,7 @@ export type Database = {
         Row: {
           categoria_id: string | null
           comprovante_url: string | null
+          comprovantes_urls: Json
           conta_bancaria_id: string | null
           created_at: string
           data: string
@@ -496,6 +580,8 @@ export type Database = {
           forma_pagamento: string | null
           fornecedor: string | null
           id: string
+          nota_nome: string | null
+          nota_url: string | null
           observacoes: string | null
           produto_id: string | null
           recorrente: boolean
@@ -506,6 +592,7 @@ export type Database = {
         Insert: {
           categoria_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           created_at?: string
           data?: string
@@ -515,6 +602,8 @@ export type Database = {
           forma_pagamento?: string | null
           fornecedor?: string | null
           id?: string
+          nota_nome?: string | null
+          nota_url?: string | null
           observacoes?: string | null
           produto_id?: string | null
           recorrente?: boolean
@@ -525,6 +614,7 @@ export type Database = {
         Update: {
           categoria_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           created_at?: string
           data?: string
@@ -534,6 +624,8 @@ export type Database = {
           forma_pagamento?: string | null
           fornecedor?: string | null
           id?: string
+          nota_nome?: string | null
+          nota_url?: string | null
           observacoes?: string | null
           produto_id?: string | null
           recorrente?: boolean
@@ -575,6 +667,161 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      divulgacao_colunas: {
+        Row: {
+          cor: string | null
+          created_at: string | null
+          icone: string | null
+          id: string
+          nome: string
+          ordem: number
+          quadro_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cor?: string | null
+          created_at?: string | null
+          icone?: string | null
+          id?: string
+          nome: string
+          ordem?: number
+          quadro_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cor?: string | null
+          created_at?: string | null
+          icone?: string | null
+          id?: string
+          nome?: string
+          ordem?: number
+          quadro_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "divulgacao_colunas_quadro_id_fkey"
+            columns: ["quadro_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_quadros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      divulgacao_quadros: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      divulgacoes: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_tipo: string | null
+          arquivo_url: string | null
+          arquivos: Json
+          ativo: boolean
+          categoria: string
+          coluna_id: string | null
+          created_at: string
+          data: string | null
+          descricao: string | null
+          id: string
+          imagem_url: string | null
+          link_url: string | null
+          link_urls: Json
+          links: Json
+          ordem: number
+          quadro_id: string | null
+          responsavel_iniciais: string | null
+          status: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_tipo?: string | null
+          arquivo_url?: string | null
+          arquivos?: Json
+          ativo?: boolean
+          categoria: string
+          coluna_id?: string | null
+          created_at?: string
+          data?: string | null
+          descricao?: string | null
+          id?: string
+          imagem_url?: string | null
+          link_url?: string | null
+          link_urls?: Json
+          links?: Json
+          ordem?: number
+          quadro_id?: string | null
+          responsavel_iniciais?: string | null
+          status?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_tipo?: string | null
+          arquivo_url?: string | null
+          arquivos?: Json
+          ativo?: boolean
+          categoria?: string
+          coluna_id?: string | null
+          created_at?: string
+          data?: string | null
+          descricao?: string | null
+          id?: string
+          imagem_url?: string | null
+          link_url?: string | null
+          link_urls?: Json
+          links?: Json
+          ordem?: number
+          quadro_id?: string | null
+          responsavel_iniciais?: string | null
+          status?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "divulgacoes_coluna_id_fkey"
+            columns: ["coluna_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_colunas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "divulgacoes_quadro_id_fkey"
+            columns: ["quadro_id"]
+            isOneToOne: false
+            referencedRelation: "divulgacao_quadros"
             referencedColumns: ["id"]
           },
         ]
@@ -691,148 +938,83 @@ export type Database = {
           },
         ]
       }
-      divulgacao_quadros: {
+      evento_materiais: {
         Row: {
-          id: string
-          nome: string
-          ordem: number | null
+          created_at: string
           deleted_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          nome: string
-          ordem?: number | null
-          deleted_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          nome?: string
-          ordem?: number | null
-          deleted_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      divulgacao_colunas: {
-        Row: {
+          evento_id: string
           id: string
           nome: string
-          ordem: number
-          cor: string
-          icone: string
-          quadro_id: string | null
-          created_at: string
-          updated_at: string
+          quantidade: number
+          separado: boolean
         }
         Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          evento_id: string
           id?: string
           nome: string
-          ordem?: number
-          cor?: string
-          icone?: string
-          quadro_id?: string | null
-          created_at?: string
-          updated_at?: string
+          quantidade?: number
+          separado?: boolean
         }
         Update: {
+          created_at?: string
+          deleted_at?: string | null
+          evento_id?: string
           id?: string
           nome?: string
-          ordem?: number
-          cor?: string
-          icone?: string
-          quadro_id?: string | null
-          created_at?: string
-          updated_at?: string
+          quantidade?: number
+          separado?: boolean
         }
         Relationships: [
           {
-            foreignKeyName: "divulgacao_colunas_quadro_id_fkey"
-            columns: ["quadro_id"]
+            foreignKeyName: "evento_materiais_evento_id_fkey"
+            columns: ["evento_id"]
             isOneToOne: false
-            referencedRelation: "divulgacao_quadros"
+            referencedRelation: "eventos"
             referencedColumns: ["id"]
           },
         ]
       }
-      divulgacoes: {
+      evento_status_history: {
         Row: {
-          id: string
-          titulo: string
-          descricao: string | null
-          categoria: string
-          status: string
-          coluna_id: string | null
-          quadro_id: string | null
-          imagem_url: string | null
-          arquivo_url: string | null
-          arquivo_tipo: string | null
-          arquivo_nome: string | null
-          responsavel_iniciais: string | null
-          data: string | null
-          ativo: boolean
+          alterado_por: string | null
           created_at: string
-          updated_at: string
+          evento_id: string
+          id: string
+          status_anterior: string | null
+          status_novo: string
         }
         Insert: {
-          id?: string
-          titulo: string
-          descricao?: string | null
-          categoria: string
-          status?: string
-          coluna_id?: string | null
-          quadro_id?: string | null
-          imagem_url?: string | null
-          arquivo_url?: string | null
-          arquivo_tipo?: string | null
-          arquivo_nome?: string | null
-          responsavel_iniciais?: string | null
-          data?: string | null
-          ativo?: boolean
+          alterado_por?: string | null
           created_at?: string
-          updated_at?: string
+          evento_id: string
+          id?: string
+          status_anterior?: string | null
+          status_novo: string
         }
         Update: {
-          id?: string
-          titulo?: string
-          descricao?: string | null
-          categoria?: string
-          status?: string
-          coluna_id?: string | null
-          quadro_id?: string | null
-          imagem_url?: string | null
-          arquivo_url?: string | null
-          arquivo_tipo?: string | null
-          arquivo_nome?: string | null
-          responsavel_iniciais?: string | null
-          data?: string | null
-          ativo?: boolean
+          alterado_por?: string | null
           created_at?: string
-          updated_at?: string
+          evento_id?: string
+          id?: string
+          status_anterior?: string | null
+          status_novo?: string
         }
         Relationships: [
           {
-            foreignKeyName: "divulgacoes_coluna_id_fkey"
-            columns: ["coluna_id"]
+            foreignKeyName: "evento_status_history_evento_id_fkey"
+            columns: ["evento_id"]
             isOneToOne: false
-            referencedRelation: "divulgacao_colunas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "divulgacoes_quadro_id_fkey"
-            columns: ["quadro_id"]
-            isOneToOne: false
-            referencedRelation: "divulgacao_quadros"
+            referencedRelation: "eventos"
             referencedColumns: ["id"]
           },
         ]
       }
       eventos: {
         Row: {
+          checklist_template_id: string | null
+          checklist_template_versao: number | null
           comunidade: boolean
           created_at: string
           data: string | null
@@ -845,12 +1027,15 @@ export type Database = {
           pago: boolean
           produto_id: string | null
           responsavel: string | null
+          status: string
           tipo: string | null
           turma_id: string | null
           updated_at: string
           valor: number | null
         }
         Insert: {
+          checklist_template_id?: string | null
+          checklist_template_versao?: number | null
           comunidade?: boolean
           created_at?: string
           data?: string | null
@@ -863,12 +1048,15 @@ export type Database = {
           pago?: boolean
           produto_id?: string | null
           responsavel?: string | null
+          status?: string
           tipo?: string | null
           turma_id?: string | null
           updated_at?: string
           valor?: number | null
         }
         Update: {
+          checklist_template_id?: string | null
+          checklist_template_versao?: number | null
           comunidade?: boolean
           created_at?: string
           data?: string | null
@@ -881,6 +1069,7 @@ export type Database = {
           pago?: boolean
           produto_id?: string | null
           responsavel?: string | null
+          status?: string
           tipo?: string | null
           turma_id?: string | null
           updated_at?: string
@@ -937,6 +1126,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      formas_pagamento: {
+        Row: {
+          abre_parcelas: boolean | null
+          abre_taxa: boolean | null
+          ativo: boolean | null
+          codigo: string
+          created_at: string | null
+          deleted_at: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          abre_parcelas?: boolean | null
+          abre_taxa?: boolean | null
+          ativo?: boolean | null
+          codigo: string
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          abre_parcelas?: boolean | null
+          abre_taxa?: boolean | null
+          ativo?: boolean | null
+          codigo?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       inscricoes_eventos: {
         Row: {
@@ -1029,6 +1260,8 @@ export type Database = {
         Row: {
           aluno_id: string
           comercial_id: string | null
+          comprovante_url: string | null
+          comprovantes_urls: Json
           created_at: string
           data_fim: string | null
           data_inicio: string | null
@@ -1036,6 +1269,7 @@ export type Database = {
           desconto: number | null
           id: string
           observacoes: string | null
+          percentual_comissao: number | null
           produto_id: string | null
           status: string
           turma_id: string | null
@@ -1046,6 +1280,8 @@ export type Database = {
         Insert: {
           aluno_id: string
           comercial_id?: string | null
+          comprovante_url?: string | null
+          comprovantes_urls?: Json
           created_at?: string
           data_fim?: string | null
           data_inicio?: string | null
@@ -1053,6 +1289,7 @@ export type Database = {
           desconto?: number | null
           id?: string
           observacoes?: string | null
+          percentual_comissao?: number | null
           produto_id?: string | null
           status?: string
           turma_id?: string | null
@@ -1063,6 +1300,8 @@ export type Database = {
         Update: {
           aluno_id?: string
           comercial_id?: string | null
+          comprovante_url?: string | null
+          comprovantes_urls?: Json
           created_at?: string
           data_fim?: string | null
           data_inicio?: string | null
@@ -1070,6 +1309,7 @@ export type Database = {
           desconto?: number | null
           id?: string
           observacoes?: string | null
+          percentual_comissao?: number | null
           produto_id?: string | null
           status?: string
           turma_id?: string | null
@@ -1188,6 +1428,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      movimentacoes_contas: {
+        Row: {
+          conta_bancaria_id: string | null
+          conta_origem_id: string
+          conta_origem_tipo: string
+          created_at: string
+          data: string
+          deleted_at: string | null
+          forma_pagamento: string | null
+          id: string
+          observacoes: string | null
+          tipo: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          conta_bancaria_id?: string | null
+          conta_origem_id: string
+          conta_origem_tipo: string
+          created_at?: string
+          data?: string
+          deleted_at?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          observacoes?: string | null
+          tipo: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          conta_bancaria_id?: string | null
+          conta_origem_id?: string
+          conta_origem_tipo?: string
+          created_at?: string
+          data?: string
+          deleted_at?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          observacoes?: string | null
+          tipo?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimentacoes_contas_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notificacoes: {
         Row: {
@@ -1510,6 +1803,7 @@ export type Database = {
           adicionado_por_nome: string | null
           adicionado_por_user_id: string | null
           comprovante_url: string | null
+          comprovantes_urls: Json
           conta_bancaria_id: string | null
           convidado_por: string | null
           created_at: string
@@ -1532,6 +1826,7 @@ export type Database = {
           adicionado_por_nome?: string | null
           adicionado_por_user_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           convidado_por?: string | null
           created_at?: string
@@ -1554,6 +1849,7 @@ export type Database = {
           adicionado_por_nome?: string | null
           adicionado_por_user_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           convidado_por?: string | null
           created_at?: string
@@ -2113,6 +2409,7 @@ export type Database = {
         Row: {
           categoria_id: string | null
           comprovante_url: string | null
+          comprovantes_urls: Json
           conta_bancaria_id: string | null
           created_at: string
           data_despesa: string
@@ -2133,6 +2430,7 @@ export type Database = {
         Insert: {
           categoria_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           created_at?: string
           data_despesa?: string
@@ -2153,6 +2451,7 @@ export type Database = {
         Update: {
           categoria_id?: string | null
           comprovante_url?: string | null
+          comprovantes_urls?: Json
           conta_bancaria_id?: string | null
           created_at?: string
           data_despesa?: string
@@ -2194,6 +2493,68 @@ export type Database = {
           },
         ]
       }
+      sessoes_processo: {
+        Row: {
+          created_at: string | null
+          data_hora: string
+          deleted_at: string | null
+          duracao_minutos: number | null
+          id: string
+          link_online: string | null
+          local: string | null
+          numero_sessao: number | null
+          observacoes: string | null
+          observacoes_pos: string | null
+          processo_id: string
+          processo_tipo: string
+          profissional_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_hora: string
+          deleted_at?: string | null
+          duracao_minutos?: number | null
+          id?: string
+          link_online?: string | null
+          local?: string | null
+          numero_sessao?: number | null
+          observacoes?: string | null
+          observacoes_pos?: string | null
+          processo_id: string
+          processo_tipo: string
+          profissional_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data_hora?: string
+          deleted_at?: string | null
+          duracao_minutos?: number | null
+          id?: string
+          link_online?: string | null
+          local?: string | null
+          numero_sessao?: number | null
+          observacoes?: string | null
+          observacoes_pos?: string | null
+          processo_id?: string
+          processo_tipo?: string
+          profissional_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessoes_processo_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profissionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tarefas: {
         Row: {
           aluno_id: string | null
@@ -2202,9 +2563,12 @@ export type Database = {
           created_by: string | null
           data_vencimento: string | null
           descricao: string | null
+          evento_id: string | null
+          fase_evento: string | null
           hora: string | null
           id: string
           lead_id: string | null
+          origem_tarefa: string
           prioridade: string
           processo_id: string | null
           recorrencia: string
@@ -2221,9 +2585,12 @@ export type Database = {
           created_by?: string | null
           data_vencimento?: string | null
           descricao?: string | null
+          evento_id?: string | null
+          fase_evento?: string | null
           hora?: string | null
           id?: string
           lead_id?: string | null
+          origem_tarefa?: string
           prioridade?: string
           processo_id?: string | null
           recorrencia?: string
@@ -2240,9 +2607,12 @@ export type Database = {
           created_by?: string | null
           data_vencimento?: string | null
           descricao?: string | null
+          evento_id?: string | null
+          fase_evento?: string | null
           hora?: string | null
           id?: string
           lead_id?: string | null
+          origem_tarefa?: string
           prioridade?: string
           processo_id?: string | null
           recorrencia?: string
@@ -2258,6 +2628,13 @@ export type Database = {
             columns: ["aluno_id"]
             isOneToOne: false
             referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarefas_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "eventos"
             referencedColumns: ["id"]
           },
           {
@@ -2535,6 +2912,7 @@ export type Database = {
       }
       dashboard_metrics: { Args: { _ano: number; _mes: number }; Returns: Json }
       get_user_comercial_id: { Args: { _user_id: string }; Returns: string }
+      get_user_profissional_id: { Args: { _user_id: string }; Returns: string }
       get_user_profissional_nome: {
         Args: { _user_id: string }
         Returns: string
@@ -2547,6 +2925,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_gestor: { Args: { _user_id: string }; Returns: boolean }
       relatorios_data: {
         Args: { _data_fim?: string; _data_inicio?: string }
         Returns: Json
