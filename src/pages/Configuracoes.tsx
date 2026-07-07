@@ -4,6 +4,7 @@ import { TaxasSection } from "@/components/configuracoes/TaxasSection";
 import { FormasPagamentoSection } from "@/components/configuracoes/FormasPagamentoSection";
 import { CategoriasSection } from "@/components/configuracoes/CategoriasSection";
 import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistTemplatesSection";
+import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
@@ -40,6 +41,7 @@ import {
   CreditCard,
   Percent,
   ListChecks,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -365,6 +367,11 @@ const Configuracoes = () => {
               <ListChecks className="h-4 w-4" />
               Checklists de Eventos
             </TabsTrigger>
+
+            <TabsTrigger value="google-agenda" className="gap-1.5 shrink-0">
+              <CalendarClock className="h-4 w-4" />
+              Google Agenda
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -628,6 +635,10 @@ const Configuracoes = () => {
 
         <TabsContent value="checklists" className="max-w-5xl space-y-6">
           <ChecklistTemplatesSection />
+        </TabsContent>
+
+        <TabsContent value="google-agenda" className="max-w-5xl space-y-6">
+          <GoogleAgendaSection />
         </TabsContent>
       </Tabs>
     </div>

@@ -7,7 +7,7 @@ import {
   format,
 } from "date-fns";
 
-export type AgendaTipo = "evento" | "turma" | "tarefa";
+export type AgendaTipo = "evento" | "turma" | "tarefa" | "google";
 
 export interface AgendaItem {
   id: string;
@@ -38,6 +38,11 @@ export const TIPO_CONFIG: Record<
     dot: "bg-emerald-500",
     chip: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
   },
+  google: {
+    label: "Google",
+    dot: "bg-purple-500",
+    chip: "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200",
+  },
 };
 
 // Data local (America/Sao_Paulo, -03:00) em YYYY-MM-DD, para marcar "hoje".
@@ -63,8 +68,8 @@ export function itensPorDia(itens: AgendaItem[]): Map<string, AgendaItem[]> {
     lista.push(it);
     mapa.set(chave, lista);
   }
-  // ordena dentro do dia: eventos, turmas, tarefas
-  const ordem: Record<AgendaTipo, number> = { evento: 0, turma: 1, tarefa: 2 };
+  // ordena dentro do dia: eventos, turmas, tarefas, google
+  const ordem: Record<AgendaTipo, number> = { evento: 0, turma: 1, tarefa: 2, google: 3 };
   for (const lista of mapa.values()) {
     lista.sort((a, b) => ordem[a.tipo] - ordem[b.tipo]);
   }

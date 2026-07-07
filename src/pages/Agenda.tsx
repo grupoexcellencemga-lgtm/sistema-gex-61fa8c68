@@ -24,6 +24,7 @@ const Agenda = () => {
     evento: true,
     turma: true,
     tarefa: true,
+    google: true,
   });
 
   // Janela do mês visível (com folga p/ dias vizinhos que aparecem na grade)
@@ -77,6 +78,19 @@ const Agenda = () => {
     },
   });
 
+  const { data: googleEventos = [] } = useQuery({
+    queryKey: ["agenda-google", inicio, fim],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("google_agenda_eventos")
+        .select("id, titulo, data, hora")
+        .gte("data", inicio)
+        .lte("data", fim);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const hoje = hojeISO();
 
   const itens: AgendaItem[] = useMemo(() => {
@@ -119,8 +133,19 @@ const Agenda = () => {
         }),
       );
     }
+    if (tiposAtivos.google) {
+      googleEventos.forEach((g: any) =>
+        lista.push({
+          id: g.id,
+          tipo: "google",
+          titulo: g.hora ? `${g.hora} ${g.titulo}` : g.titulo,
+          data: g.data,
+          url: "", // espelho do Google é só visualização
+        }),
+      );
+    }
     return lista;
-  }, [eventos, encontros, tarefas, tiposAtivos, hoje]);
+  }, [eventos, encontros, tarefas, googleEventos, tiposAtivos, hoje]);
 
   const isLoading = l1 || l2 || l3;
   const irMes = (delta: number) =>
@@ -181,7 +206,9 @@ const Agenda = () => {
         <CalendarioMes
           mesRef={ref}
           itens={itens}
-          onItemClick={(item) => navigate(item.url)}
+          onItemClick={(item) => {
+            if (item.url) navigate(item.url);
+          }}
         />
       )}
     </div>
