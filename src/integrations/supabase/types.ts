@@ -1169,6 +1169,117 @@ export type Database = {
         }
         Relationships: []
       }
+      funil_etapas: {
+        Row: {
+          cor: string
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          cor?: string
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          cor?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_agenda_config: {
+        Row: {
+          ativo: boolean
+          ical_url: string | null
+          id: string
+          ultima_sync: string | null
+          ultimo_erro: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          ical_url?: string | null
+          id?: string
+          ultima_sync?: string | null
+          ultimo_erro?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          ical_url?: string | null
+          id?: string
+          ultima_sync?: string | null
+          ultimo_erro?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_agenda_cores: {
+        Row: {
+          chave: string
+          cor: string
+          updated_at: string | null
+        }
+        Insert: {
+          chave: string
+          cor: string
+          updated_at?: string | null
+        }
+        Update: {
+          chave?: string
+          cor?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      google_agenda_eventos: {
+        Row: {
+          atualizado_em: string
+          cor: string | null
+          data: string
+          data_fim: string | null
+          dia_inteiro: boolean
+          hora: string | null
+          id: string
+          titulo: string
+          uid: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          cor?: string | null
+          data: string
+          data_fim?: string | null
+          dia_inteiro?: boolean
+          hora?: string | null
+          id?: string
+          titulo: string
+          uid?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          cor?: string | null
+          data?: string
+          data_fim?: string | null
+          dia_inteiro?: boolean
+          hora?: string | null
+          id?: string
+          titulo?: string
+          uid?: string | null
+        }
+        Relationships: []
+      }
       inscricoes_eventos: {
         Row: {
           aluno_id: string
@@ -1211,7 +1322,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           email: string | null
-          etapa: string
+          etapa_id: string
           id: string
           motivo_perda: string | null
           nome: string
@@ -1227,7 +1338,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
-          etapa?: string
+          etapa_id: string
           id?: string
           motivo_perda?: string | null
           nome: string
@@ -1243,7 +1354,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
-          etapa?: string
+          etapa_id?: string
           id?: string
           motivo_perda?: string | null
           nome?: string
@@ -1254,7 +1365,22 @@ export type Database = {
           telefone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "funil_etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "comerciais"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       matriculas: {
         Row: {
@@ -2930,6 +3056,8 @@ export type Database = {
         Args: { _data_fim?: string; _data_inicio?: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role:

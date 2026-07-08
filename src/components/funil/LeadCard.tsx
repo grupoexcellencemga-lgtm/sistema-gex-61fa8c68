@@ -2,16 +2,18 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MapPin, User, Trash2 } from "lucide-react";
 import type { LeadRow } from "@/types";
 
 interface Props {
   lead: LeadRow;
   comercialNome?: string;
   onClick: () => void;
+  onDelete?: () => void;
 }
 
-export function LeadCard({ lead, comercialNome, onClick }: Props) {
+export function LeadCard({ lead, comercialNome, onClick, onDelete }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: { lead },
@@ -27,13 +29,28 @@ export function LeadCard({ lead, comercialNome, onClick }: Props) {
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
       <Card
-        className="cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md border"
+        className="group/card relative cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md border"
         onClick={(e) => {
           if (!isDragging) onClick();
         }}
       >
         <CardContent className="p-3">
-          <p className="font-medium text-sm truncate">{lead.nome}</p>
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/card:opacity-100 text-muted-foreground hover:text-destructive z-10"
+              title="Excluir lead"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <p className="font-medium text-sm truncate pr-6">{lead.nome}</p>
           {lead.produto_interesse && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{lead.produto_interesse}</p>
           )}

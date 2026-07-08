@@ -10,19 +10,12 @@ import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
 import type { TarefaRow } from "@/types";
+import { ETAPA_CORES, type FunilEtapa } from "@/components/funil/funilUtils";
 
 interface Props {
   mes: number;
   ano: number;
 }
-
-const etapaLabels: Record<string, string> = {
-  lead: "Lead", contato: "Contato", negociacao: "Negociação", matricula: "Matrícula",
-};
-const etapaColors: Record<string, string> = {
-  lead: "bg-muted text-muted-foreground", contato: "bg-warning/10 text-warning",
-  negociacao: "bg-primary/10 text-primary", matricula: "bg-success/10 text-success",
-};
 
 export function DashboardComercial({ mes, ano }: Props) {
   const { user } = useAuth();
@@ -39,36 +32,50 @@ export function DashboardComercial({ mes, ano }: Props) {
     enabled: !!user,
   });
 
-  const { data: leadsAtivos = 0, isLoading: loadingLeads } = useQuery({
-    queryKey: ["dash-comercial-leads", comercialId],
+  const { data: etapas = [] } = useQuery<FunilEtapa[]>({
+    queryKey: ["funil-etapas"],
     queryFn: async () => {
-      if (!comercialId) return 0;
+      const { data, error } = await (supabase as any).from("funil_etapas").select("*").order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as FunilEtapa[];
+    },
+  });
+
+  const etapasMap = new Map(etapas.map((e) => [e.id, e]));
+  const idsEmAndamento = etapas.filter((e) => e.tipo === "em_andamento").map((e) => e.id);
+  const idsGanho = etapas.filter((e) => e.tipo === "ganho").map((e) => e.id);
+  const etapasFunil = [...etapas].filter((e) => e.tipo !== "perdido").sort((a, b) => a.ordem - b.ordem);
+
+  const { data: leadsAtivos = 0, isLoading: loadingLeads } = useQuery({
+    queryKey: ["dash-comercial-leads", comercialId, idsEmAndamento.join(",")],
+    queryFn: async () => {
+      if (!comercialId || idsEmAndamento.length === 0) return 0;
       const { count } = await supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("responsavel_id", comercialId)
         .is("deleted_at", null)
-        .in("etapa", ["lead", "contato", "negociacao"]);
+        .in("etapa_id", idsEmAndamento);
       return count || 0;
     },
-    enabled: !!comercialId,
+    enabled: !!comercialId && idsEmAndamento.length > 0,
   });
 
   const { data: conversoesMes = 0 } = useQuery({
-    queryKey: ["dash-comercial-conversoes", comercialId, mes, ano],
+    queryKey: ["dash-comercial-conversoes", comercialId, mes, ano, idsGanho.join(",")],
     queryFn: async () => {
-      if (!comercialId) return 0;
+      if (!comercialId || idsGanho.length === 0) return 0;
       const { count } = await supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("responsavel_id", comercialId)
-        .eq("etapa", "matricula")
+        .in("etapa_id", idsGanho)
         .is("deleted_at", null)
         .gte("updated_at", startStr)
         .lte("updated_at", endStr + "T23:59:59");
       return count || 0;
     },
-    enabled: !!comercialId,
+    enabled: !!comercialId && idsGanho.length > 0,
   });
 
   const taxaConversao = leadsAtivos + conversoesMes > 0
@@ -92,23 +99,22 @@ export function DashboardComercial({ mes, ano }: Props) {
   });
 
   const { data: funilData = [] } = useQuery({
-    queryKey: ["dash-comercial-funil", comercialId],
+    queryKey: ["dash-comercial-funil", comercialId, etapasFunil.map((e) => e.id).join(",")],
     queryFn: async () => {
-      if (!comercialId) return [];
-      const etapas = ["lead", "contato", "negociacao", "matricula"];
+      if (!comercialId || etapasFunil.length === 0) return [];
       const results = [];
-      for (const etapa of etapas) {
+      for (const etapa of etapasFunil) {
         const { count } = await supabase
           .from("leads")
           .select("id", { count: "exact", head: true })
           .eq("responsavel_id", comercialId)
-          .eq("etapa", etapa)
+          .eq("etapa_id", etapa.id)
           .is("deleted_at", null);
-        results.push({ etapa, count: count || 0 });
+        results.push({ etapaId: etapa.id, count: count || 0 });
       }
       return results;
     },
-    enabled: !!comercialId,
+    enabled: !!comercialId && etapasFunil.length > 0,
   });
 
   const { data: metas = [] } = useQuery({
@@ -129,20 +135,20 @@ export function DashboardComercial({ mes, ano }: Props) {
   });
 
   const { data: followUps = [] } = useQuery({
-    queryKey: ["dash-comercial-followups", comercialId],
+    queryKey: ["dash-comercial-followups", comercialId, idsEmAndamento.join(",")],
     queryFn: async () => {
-      if (!comercialId) return [];
-      const { data } = await supabase
+      if (!comercialId || idsEmAndamento.length === 0) return [];
+      const { data } = await (supabase as any)
         .from("leads")
-        .select("id, nome, telefone, etapa, updated_at")
+        .select("id, nome, telefone, etapa_id, updated_at")
         .eq("responsavel_id", comercialId)
         .is("deleted_at", null)
-        .in("etapa", ["lead", "contato", "negociacao"])
+        .in("etapa_id", idsEmAndamento)
         .order("updated_at", { ascending: true })
         .limit(5);
       return data || [];
     },
-    enabled: !!comercialId,
+    enabled: !!comercialId && idsEmAndamento.length > 0,
   });
 
   const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
@@ -179,12 +185,16 @@ export function DashboardComercial({ mes, ano }: Props) {
           <CardHeader><CardTitle className="text-base font-semibold">Meu Funil</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {funilData.map((f) => (
-                <div key={f.etapa} className="flex items-center justify-between">
-                  <Badge className={etapaColors[f.etapa] || ""}>{etapaLabels[f.etapa] || f.etapa}</Badge>
-                  <span className="text-lg font-bold">{f.count}</span>
-                </div>
-              ))}
+              {funilData.map((f) => {
+                const etapa = etapasMap.get(f.etapaId);
+                const cor = etapa ? ETAPA_CORES[etapa.cor]?.badge || "" : "";
+                return (
+                  <div key={f.etapaId} className="flex items-center justify-between">
+                    <Badge className={cor}>{etapa?.nome || "—"}</Badge>
+                    <span className="text-lg font-bold">{f.count}</span>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -222,13 +232,13 @@ export function DashboardComercial({ mes, ano }: Props) {
           <CardHeader><CardTitle className="text-base font-semibold flex items-center gap-2"><Phone className="h-4 w-4" /> Próximos Follow-ups</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {followUps.map((lead) => {
+              {followUps.map((lead: any) => {
                 const diasSemContato = Math.floor((Date.now() - new Date(lead.updated_at).getTime()) / 86400000);
                 return (
                   <Link key={lead.id} to="/funil" className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-sm font-medium truncate">{lead.nome}</span>
-                      <Badge variant="outline" className="text-[10px] shrink-0">{etapaLabels[lead.etapa]}</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{etapasMap.get(lead.etapa_id)?.nome || "—"}</Badge>
                     </div>
                     <span className={`text-xs shrink-0 ${diasSemContato > 7 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
                       {diasSemContato}d sem contato

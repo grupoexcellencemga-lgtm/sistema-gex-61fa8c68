@@ -14,19 +14,14 @@ export const emptyLeadForm: LeadForm = {
   produto_interesse: "", origem: "", observacoes: "", responsavel_id: "",
 };
 
-export const etapas = [
-  { key: "lead", label: "Lead", color: "bg-muted text-muted-foreground" },
-  { key: "contato", label: "Contato", color: "bg-warning/10 text-warning border-warning/20" },
-  { key: "negociacao", label: "Negociação", color: "bg-primary/10 text-primary border-primary/20" },
-  { key: "matricula", label: "Matrícula", color: "bg-success/10 text-success border-success/20" },
-  { key: "perdido", label: "Perdido", color: "bg-destructive/10 text-destructive border-destructive/20" },
-];
-
-export const etapaOrder = ["lead", "contato", "negociacao", "matricula"];
-
-export const etapaLabels: Record<string, string> = {
-  lead: "Lead", contato: "Contato", negociacao: "Negociação", matricula: "Matrícula", perdido: "Perdido",
-};
+// Uma etapa (coluna) do funil — configurável em Configurações → Funil.
+export interface FunilEtapa {
+  id: string;
+  nome: string;
+  ordem: number;
+  cor: string;
+  tipo: "em_andamento" | "ganho" | "perdido";
+}
 
 export const origens = [
   { value: "site", label: "Site" },
@@ -38,6 +33,28 @@ export const origens = [
 ];
 
 export const cidades = ["Maringá", "Mandaguari", "Online"];
+
+export const TIPO_ETAPA_LABELS: Record<string, string> = {
+  em_andamento: "Em andamento",
+  ganho: "Ganho (matrícula)",
+  perdido: "Perdido",
+};
+
+// Classes Tailwind literais (não interpoladas) para o color-picker das etapas —
+// precisam existir como string exata no código para o Tailwind incluir no build.
+export const ETAPA_CORES: Record<string, { badge: string; dot: string }> = {
+  slate: { badge: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" },
+  yellow: { badge: "bg-yellow-100 text-yellow-800 border-yellow-200", dot: "bg-yellow-400" },
+  orange: { badge: "bg-orange-100 text-orange-700 border-orange-200", dot: "bg-orange-400" },
+  blue: { badge: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-400" },
+  green: { badge: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-400" },
+  red: { badge: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-400" },
+  purple: { badge: "bg-purple-100 text-purple-700 border-purple-200", dot: "bg-purple-400" },
+  pink: { badge: "bg-pink-100 text-pink-700 border-pink-200", dot: "bg-pink-400" },
+  teal: { badge: "bg-teal-100 text-teal-700 border-teal-200", dot: "bg-teal-400" },
+  indigo: { badge: "bg-indigo-100 text-indigo-700 border-indigo-200", dot: "bg-indigo-400" },
+};
+export const ETAPA_CORES_LIST = Object.keys(ETAPA_CORES);
 
 export function calcularTaxaConversao(total: number, convertidos: number): string {
   if (total <= 0) return "0.0";

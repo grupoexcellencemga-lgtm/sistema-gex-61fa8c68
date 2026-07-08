@@ -1,20 +1,20 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/components/ActivityTimeline";
 import type { LeadRow, ProdutoSelect, ComercialSelect, TurmaSelect } from "@/types";
 
-import { LeadForm, emptyLeadForm, etapas, etapaOrder, etapaLabels } from "@/components/funil/funilUtils";
+import { LeadForm, emptyLeadForm, origens, cidades, type FunilEtapa } from "@/components/funil/funilUtils";
 import { FunilMetrics } from "@/components/funil/FunilMetrics";
 import { FunilFilters } from "@/components/funil/FunilFilters";
 import { FunilColumn } from "@/components/funil/FunilColumn";
+import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
 import { LeadFormDialog } from "@/components/funil/LeadFormDialog";
 import { LeadDetailSheet } from "@/components/funil/LeadDetailSheet";
 
@@ -38,6 +38,12 @@ const Funil = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>(emptyLeadForm);
+  const [etapaDialogOpen, setEtapaDialogOpen] = useState(false);
+  const [editEtapa, setEditEtapa] = useState<FunilEtapa | null>(null);
+
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const syncingScrollRef = useRef(false);
 
   // Sensors for drag-and-drop (pointer + touch)
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
@@ -51,6 +57,18 @@ const Funil = () => {
       const { data, error } = await supabase.from("leads").select("*").is("deleted_at", null).order("created_at", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
+    queryKey: ["funil-etapas"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("*")
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as FunilEtapa[];
     },
   });
 
@@ -82,6 +100,7 @@ const Funil = () => {
   });
 
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
+  const etapasMap = useMemo(() => new Map(etapas.map((e) => [e.id, e])), [etapas]);
 
   // ── Filtered leads ──
   const filteredLeads = useMemo(() => {
@@ -98,11 +117,25 @@ const Funil = () => {
     });
   }, [leads, debouncedSearch, filters]);
 
-  const getLeadsByEtapa = (etapa: string) => filteredLeads.filter((l) => l.etapa === etapa);
+  const getLeadsByEtapa = (etapaId: string) => filteredLeads.filter((l: any) => l.etapa_id === etapaId);
 
-  // ── Mutations ──
+  const boardWidth = Math.max(etapas.length * 296, 1);
+  const syncScroll = (from: "top" | "board") => {
+    if (syncingScrollRef.current) return;
+    const top = topScrollRef.current;
+    const board = boardScrollRef.current;
+    if (!top || !board) return;
+    syncingScrollRef.current = true;
+    if (from === "top") board.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = board.scrollLeft;
+    requestAnimationFrame(() => { syncingScrollRef.current = false; });
+  };
+
+  // ── Mutations: leads ──
   const insertMutation = useMutation({
     mutationFn: async (data: LeadForm) => {
+      const primeiraEtapa = [...etapas].sort((a, b) => a.ordem - b.ordem)[0];
+      if (!primeiraEtapa) throw new Error("Crie ao menos uma coluna no funil antes de cadastrar leads.");
       const { error } = await supabase.from("leads").insert({
         nome: data.nome,
         email: data.email || null,
@@ -112,8 +145,8 @@ const Funil = () => {
         origem: data.origem ? data.origem.toLowerCase() : null,
         observacoes: data.observacoes || null,
         responsavel_id: data.responsavel_id && data.responsavel_id !== "none" ? data.responsavel_id : null,
-        etapa: "lead",
-      });
+        etapa_id: primeiraEtapa.id,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -126,12 +159,12 @@ const Funil = () => {
   });
 
   const moveEtapaMutation = useMutation({
-    mutationFn: async ({ id, fromEtapa, toEtapa }: { id: string; fromEtapa: string; toEtapa: string }) => {
-      const { error } = await supabase.from("leads").update({ etapa: toEtapa }).eq("id", id);
+    mutationFn: async ({ id, fromEtapaId, toEtapaId }: { id: string; fromEtapaId: string; toEtapaId: string }) => {
+      const { error } = await supabase.from("leads").update({ etapa_id: toEtapaId } as any).eq("id", id);
       if (error) throw error;
       await logActivity({
         tipo: "avanco_etapa",
-        descricao: `Lead movido de ${etapaLabels[fromEtapa] || fromEtapa} para ${etapaLabels[toEtapa] || toEtapa}`,
+        descricao: `Lead movido de ${etapasMap.get(fromEtapaId)?.nome || fromEtapaId} para ${etapasMap.get(toEtapaId)?.nome || toEtapaId}`,
         lead_id: id,
       });
     },
@@ -142,17 +175,95 @@ const Funil = () => {
     onError: (err: Error) => toast.error("Erro ao mover: " + err.message),
   });
 
+  const deleteLeadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leads").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Lead excluído");
+    },
+    onError: (err: Error) => toast.error("Erro ao excluir: " + err.message),
+  });
+
+  // ── Mutations: etapas (colunas) ──
+  const insertEtapaMutation = useMutation({
+    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] }) => {
+      const ordem = etapas.length;
+      const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem });
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna criada"); },
+    onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
+  });
+
+  const updateEtapaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] } }) => {
+      const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna atualizada"); },
+    onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
+  });
+
+  const deleteEtapaMutation = useMutation({
+    mutationFn: async (etapa: FunilEtapa) => {
+      const emUso = leads.filter((l: any) => l.etapa_id === etapa.id).length;
+      if (emUso > 0) {
+        throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
+      }
+      const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna excluída"); },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const reorderEtapasMutation = useMutation({
+    mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
+      const results = await Promise.all(
+        updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id))
+      );
+      const error = results.find((r) => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }),
+    onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
+  });
+
+  const handleMoveEtapa = (etapa: FunilEtapa, direction: -1 | 1) => {
+    const ordenadas = [...etapas].sort((a, b) => a.ordem - b.ordem);
+    const idx = ordenadas.findIndex((e) => e.id === etapa.id);
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= ordenadas.length) return;
+    const reordenadas = [...ordenadas];
+    [reordenadas[idx], reordenadas[targetIdx]] = [reordenadas[targetIdx], reordenadas[idx]];
+    reorderEtapasMutation.mutate(reordenadas.map((e, i) => ({ id: e.id, ordem: i })));
+  };
+
+  const handleSaveEtapa = async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] }) => {
+    if (editEtapa) await updateEtapaMutation.mutateAsync({ id: editEtapa.id, data });
+    else await insertEtapaMutation.mutateAsync(data);
+  };
+
+  const handleDeleteEtapa = (etapa: FunilEtapa) => {
+    if (etapas.length <= 1) { toast.error("O funil precisa de ao menos uma coluna."); return; }
+    if (confirm(`Excluir a coluna "${etapa.nome}"?`)) deleteEtapaMutation.mutate(etapa);
+  };
+
   // ── Drag and Drop ──
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
     const leadId = active.id as string;
-    const targetEtapa = over.id as string;
-    const lead = leads.find((l) => l.id === leadId);
-    if (!lead || lead.etapa === targetEtapa) return;
-    // Don't allow dropping into "perdido" via drag
-    if (targetEtapa === "perdido") return;
-    moveEtapaMutation.mutate({ id: leadId, fromEtapa: lead.etapa, toEtapa: targetEtapa });
+    const targetEtapaId = over.id as string;
+    const lead = leads.find((l) => l.id === leadId) as any;
+    if (!lead || lead.etapa_id === targetEtapaId) return;
+    const targetEtapa = etapasMap.get(targetEtapaId);
+    // Perda sempre passa pela tela de detalhe (exige motivo).
+    if (targetEtapa?.tipo === "perdido") return;
+    moveEtapaMutation.mutate({ id: leadId, fromEtapaId: lead.etapa_id, toEtapaId: targetEtapaId });
   };
 
   const saveLead = () => {
@@ -160,19 +271,22 @@ const Funil = () => {
     insertMutation.mutate(form);
   };
 
-  const activeEtapas = etapas.filter((e) => e.key !== "perdido");
-  const perdidos = getLeadsByEtapa("perdido");
+  const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
+  const loading = isLoading || etapasLoading;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Funil Comercial" description="Pipeline de leads e conversão">
+        <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />Nova Coluna
+        </Button>
         <Button onClick={() => { setForm(emptyLeadForm); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />Novo Lead
         </Button>
       </PageHeader>
 
       {/* Metrics */}
-      {!isLoading && <FunilMetrics leads={leads} produtos={produtos} />}
+      {!loading && <FunilMetrics leads={leads} produtos={produtos} etapas={etapas} />}
 
       {/* Filters */}
       <FunilFilters filters={filters} setFilters={setFilters} comerciais={comerciais} produtos={produtos} />
@@ -189,53 +303,56 @@ const Funil = () => {
         comerciais={comerciais}
       />
 
-      {/* Pipeline columns with DnD */}
-      {isLoading ? (
+      <FunilEtapaDialog
+        open={etapaDialogOpen}
+        onClose={() => { setEtapaDialogOpen(false); setEditEtapa(null); }}
+        onSave={handleSaveEtapa}
+        initialData={editEtapa}
+      />
+
+      {/* Pipeline columns with DnD — largura fixa, rolagem horizontal (não comprime) */}
+      {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
+      ) : etapasOrdenadas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <p className="text-sm">Nenhuma coluna criada no funil ainda.</p>
+          <Button size="sm" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" />Criar primeira coluna
+          </Button>
+        </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-x-visible md:pb-0">
-            {activeEtapas.map((etapa) => (
-              <FunilColumn
-                key={etapa.key}
-                etapa={etapa}
-                leads={getLeadsByEtapa(etapa.key)}
-                comerciaisMap={comerciaisMap}
-                onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
-              />
-            ))}
+          <div className="space-y-2">
+            <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden" onScroll={() => syncScroll("top")}>
+              <div style={{ width: boardWidth }} className="h-1" />
+            </div>
+            <div ref={boardScrollRef} className="w-full overflow-x-auto overflow-y-hidden pb-2" onScroll={() => syncScroll("board")}>
+              <div className="flex w-max gap-4">
+                {etapasOrdenadas.map((etapa, idx) => (
+                  <FunilColumn
+                    key={etapa.id}
+                    etapa={etapa}
+                    leads={getLeadsByEtapa(etapa.id)}
+                    comerciaisMap={comerciaisMap}
+                    onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
+                    onDeleteLead={(lead) => {
+                      if (confirm(`Excluir o lead "${lead.nome}"? Esta ação não pode ser desfeita.`)) {
+                        deleteLeadMutation.mutate(lead.id);
+                      }
+                    }}
+                    onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
+                    onDeleteEtapa={handleDeleteEtapa}
+                    onMoveEtapa={handleMoveEtapa}
+                    canMoveLeft={idx > 0}
+                    canMoveRight={idx < etapasOrdenadas.length - 1}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </DndContext>
-      )}
-
-      {/* Lost leads section */}
-      {perdidos.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base font-semibold text-destructive">Leads Perdidos ({perdidos.length})</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {perdidos.map((lead) => (
-                <div
-                  key={lead.id}
-                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors hover:bg-secondary/50"
-                  onClick={() => { setSelectedLead(lead); setSheetOpen(true); }}
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{lead.nome}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {lead.produto_interesse}{lead.origem ? ` · ${lead.origem}` : ""}
-                    </p>
-                    {lead.motivo_perda && (
-                      <p className="text-xs text-destructive/70 truncate mt-0.5">{lead.motivo_perda}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Lead Detail Sheet */}
@@ -246,6 +363,8 @@ const Funil = () => {
         produtos={produtos}
         comerciais={comerciais}
         turmas={turmas}
+        etapas={etapas}
+        onDeleteLead={(id) => deleteLeadMutation.mutate(id)}
         onLeadUpdated={() => {
           queryClient.invalidateQueries({ queryKey: ["leads"] });
           if (selectedLead) queryClient.invalidateQueries({ queryKey: ["atividades", undefined, selectedLead.id] });

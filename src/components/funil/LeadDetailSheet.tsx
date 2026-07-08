@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Mail, MapPin, ArrowRight, ArrowLeft, XCircle, Loader2, Clock, Pencil, UserCheck, User } from "lucide-react";
+import { Phone, Mail, MapPin, ArrowRight, ArrowLeft, XCircle, Loader2, Clock, Pencil, UserCheck, User, Trash2 } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import { toast } from "sonner";
 import { ActivityTimeline, logActivity } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
-import { etapas, etapaOrder, etapaLabels, LeadForm, emptyLeadForm, origens, cidades } from "./funilUtils";
+import { LeadForm, emptyLeadForm, origens, cidades, ETAPA_CORES, type FunilEtapa } from "./funilUtils";
 import { maskPhone } from "@/lib/utils";
 
 interface Props {
@@ -26,10 +26,12 @@ interface Props {
   produtos: any[];
   comerciais: any[];
   turmas: any[];
+  etapas: FunilEtapa[];
   onLeadUpdated: () => void;
+  onDeleteLead: (id: string) => void;
 }
 
-export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais, turmas, onLeadUpdated }: Props) {
+export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais, turmas, etapas, onLeadUpdated, onDeleteLead }: Props) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<LeadForm>(emptyLeadForm);
@@ -42,6 +44,10 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   // Hooks precisam rodar sempre na mesma ordem/quantidade, mesmo quando o
   // sheet ainda não tem lead selecionado (fica montado com lead=null antes
   // do primeiro clique) — por isso ficam TODOS antes do "if (!lead)" abaixo.
+  const etapasAtivas = [...etapas].filter((e) => e.tipo !== "perdido").sort((a, b) => a.ordem - b.ordem);
+  const etapaPerdido = etapas.find((e) => e.tipo === "perdido");
+  const currentIdxForMutation = lead ? etapasAtivas.findIndex((e) => e.id === lead.etapa_id) : -1;
+
   const saveEdit = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("leads").update({
@@ -53,7 +59,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
         origem: editForm.origem ? editForm.origem.toLowerCase() : null,
         observacoes: editForm.observacoes || null,
         responsavel_id: editForm.responsavel_id && editForm.responsavel_id !== "none" ? editForm.responsavel_id : null,
-      }).eq("id", lead.id);
+      } as any).eq("id", lead.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -64,15 +70,13 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
-  const currentIdxForMutation = lead ? etapaOrder.indexOf(lead.etapa) : -1;
-
   const advanceMutation = useMutation({
     mutationFn: async () => {
-      if (currentIdxForMutation < 0 || currentIdxForMutation >= etapaOrder.length - 1) return;
-      const nextEtapa = etapaOrder[currentIdxForMutation + 1];
-      const { error } = await supabase.from("leads").update({ etapa: nextEtapa }).eq("id", lead.id);
+      if (currentIdxForMutation < 0 || currentIdxForMutation >= etapasAtivas.length - 1) return;
+      const nextEtapa = etapasAtivas[currentIdxForMutation + 1];
+      const { error } = await supabase.from("leads").update({ etapa_id: nextEtapa.id } as any).eq("id", lead.id);
       if (error) throw error;
-      await logActivity({ tipo: "avanco_etapa", descricao: `Lead avançou de ${etapaLabels[lead.etapa]} para ${etapaLabels[nextEtapa]}`, lead_id: lead.id });
+      await logActivity({ tipo: "avanco_etapa", descricao: `Lead avançou para ${nextEtapa.nome}`, lead_id: lead.id });
     },
     onSuccess: () => { onLeadUpdated(); toast.success("Lead avançado"); onOpenChange(false); },
     onError: (err: any) => toast.error("Erro: " + err.message),
@@ -81,10 +85,10 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   const retrocederMutation = useMutation({
     mutationFn: async () => {
       if (currentIdxForMutation <= 0) return;
-      const prevEtapa = etapaOrder[currentIdxForMutation - 1];
-      const { error } = await supabase.from("leads").update({ etapa: prevEtapa }).eq("id", lead.id);
+      const prevEtapa = etapasAtivas[currentIdxForMutation - 1];
+      const { error } = await supabase.from("leads").update({ etapa_id: prevEtapa.id } as any).eq("id", lead.id);
       if (error) throw error;
-      await logActivity({ tipo: "avanco_etapa", descricao: `Lead retrocedeu de ${etapaLabels[lead.etapa]} para ${etapaLabels[prevEtapa]}`, lead_id: lead.id });
+      await logActivity({ tipo: "avanco_etapa", descricao: `Lead retrocedeu para ${prevEtapa.nome}`, lead_id: lead.id });
     },
     onSuccess: () => { onLeadUpdated(); toast.success("Lead retrocedido"); onOpenChange(false); },
     onError: (err: any) => toast.error("Erro: " + err.message),
@@ -93,8 +97,9 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   const marcarPerdido = useMutation({
     mutationFn: async () => {
       if (!motivoPerda.trim()) throw new Error("Motivo é obrigatório");
+      if (!etapaPerdido) throw new Error('Crie uma coluna do tipo "Perdido" em Novo Lead → Nova Coluna.');
       const { error } = await supabase.from("leads").update({
-        etapa: "perdido",
+        etapa_id: etapaPerdido.id,
         motivo_perda: motivoPerda.trim(),
       } as any).eq("id", lead.id);
       if (error) throw error;
@@ -112,6 +117,8 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
 
   const converterAluno = useMutation({
     mutationFn: async () => {
+      const etapaGanho = [...etapas].filter((e) => e.tipo === "ganho").sort((a, b) => a.ordem - b.ordem)[0];
+
       // 1. Create aluno
       const { data: aluno, error: alunoErr } = await supabase.from("alunos").insert({
         nome: lead.nome,
@@ -138,10 +145,12 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
       }
 
       // 3. Mark lead as converted
-      const { error: leadErr } = await supabase.from("leads").update({
-        etapa: "matricula",
-      }).eq("id", lead.id);
-      if (leadErr) throw leadErr;
+      if (etapaGanho) {
+        const { error: leadErr } = await supabase.from("leads").update({
+          etapa_id: etapaGanho.id,
+        } as any).eq("id", lead.id);
+        if (leadErr) throw leadErr;
+      }
 
       await logActivity({ tipo: "matricula", descricao: `Lead convertido em aluno e matriculado`, lead_id: lead.id });
       if (aluno) {
@@ -161,8 +170,12 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
 
   if (!lead) return null;
 
+  const etapaAtual = etapas.find((e) => e.id === lead.etapa_id);
+  const cores = etapaAtual ? ETAPA_CORES[etapaAtual.cor] || ETAPA_CORES.slate : ETAPA_CORES.slate;
   const comercialNome = lead.responsavel_id ? comerciais.find((c: any) => c.id === lead.responsavel_id)?.nome : null;
   const currentIdx = currentIdxForMutation;
+  const maxOrdemAtivo = Math.max(-1, ...etapasAtivas.filter((e) => e.tipo === "em_andamento").map((e) => e.ordem));
+  const podeConverter = etapaAtual && (etapaAtual.tipo === "ganho" || etapaAtual.ordem === maxOrdemAtivo);
 
   const startEdit = () => {
     setEditForm({
@@ -191,7 +204,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               {lead.nome}
-              {!editing && lead.etapa !== "perdido" && (
+              {!editing && etapaAtual?.tipo !== "perdido" && (
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={startEdit}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -255,9 +268,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
               /* View mode */
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={etapas.find((e) => e.key === lead.etapa)?.color}>
-                    {etapaLabels[lead.etapa]}
-                  </Badge>
+                  <Badge className={cores.badge}>{etapaAtual?.nome || "—"}</Badge>
                   {comercialNome && (
                     <Badge variant="outline" className="text-xs gap-1">
                       <User className="h-3 w-3" />{comercialNome}
@@ -293,7 +304,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   </div>
                 )}
 
-                {lead.motivo_perda && lead.etapa === "perdido" && (
+                {lead.motivo_perda && etapaAtual?.tipo === "perdido" && (
                   <div className="border-t pt-4">
                     <h3 className="text-sm font-semibold mb-2 text-destructive">Motivo da Perda</h3>
                     <p className="text-sm text-muted-foreground">{lead.motivo_perda}</p>
@@ -301,37 +312,46 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                 )}
 
                 {/* Action buttons */}
-                {lead.etapa !== "perdido" && (
-                  <div className="border-t pt-4 space-y-2">
-                    {lead.etapa === "negociacao" && (
-                      <Button className="w-full" variant="default" onClick={() => setConvertDialogOpen(true)}>
-                        <UserCheck className="h-4 w-4 mr-2" />Converter em Aluno
-                      </Button>
-                    )}
-                    {lead.etapa === "matricula" && (
-                      <Button className="w-full" variant="default" onClick={() => setConvertDialogOpen(true)}>
-                        <UserCheck className="h-4 w-4 mr-2" />Converter em Aluno
-                      </Button>
-                    )}
-                    <div className="flex gap-2">
-                      {currentIdx > 0 && (
-                        <Button variant="outline" className="flex-1" onClick={() => retrocederMutation.mutate()} disabled={retrocederMutation.isPending}>
-                          {retrocederMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowLeft className="h-4 w-4 mr-2" />}
-                          Retroceder
+                <div className="border-t pt-4 space-y-2">
+                  {etapaAtual?.tipo !== "perdido" && (
+                    <>
+                      {podeConverter && (
+                        <Button className="w-full" variant="default" onClick={() => setConvertDialogOpen(true)}>
+                          <UserCheck className="h-4 w-4 mr-2" />Converter em Aluno
                         </Button>
                       )}
-                      {currentIdx >= 0 && currentIdx < etapaOrder.length - 1 && (
-                        <Button className="flex-1" onClick={() => advanceMutation.mutate()} disabled={advanceMutation.isPending}>
-                          {advanceMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                          Avançar
-                        </Button>
-                      )}
-                    </div>
-                    <Button variant="destructive" className="w-full" onClick={() => setPerdidoDialogOpen(true)}>
-                      <XCircle className="h-4 w-4 mr-2" />Marcar como Perdido
-                    </Button>
-                  </div>
-                )}
+                      <div className="flex gap-2">
+                        {currentIdx > 0 && (
+                          <Button variant="outline" className="flex-1" onClick={() => retrocederMutation.mutate()} disabled={retrocederMutation.isPending}>
+                            {retrocederMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowLeft className="h-4 w-4 mr-2" />}
+                            Retroceder
+                          </Button>
+                        )}
+                        {currentIdx >= 0 && currentIdx < etapasAtivas.length - 1 && (
+                          <Button className="flex-1" onClick={() => advanceMutation.mutate()} disabled={advanceMutation.isPending}>
+                            {advanceMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+                            Avançar
+                          </Button>
+                        )}
+                      </div>
+                      <Button variant="destructive" className="w-full" onClick={() => setPerdidoDialogOpen(true)}>
+                        <XCircle className="h-4 w-4 mr-2" />Marcar como Perdido
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (confirm(`Excluir o lead "${lead.nome}"? Esta ação não pode ser desfeita.`)) {
+                        onDeleteLead(lead.id);
+                        onOpenChange(false);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />Excluir Lead
+                  </Button>
+                </div>
 
                 {/* Timeline */}
                 <div className="border-t pt-4">

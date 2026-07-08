@@ -2,18 +2,22 @@ import { MetricCard } from "@/components/MetricCard";
 import { Users, TrendingUp, Clock, UserX, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import type { LeadRow, ProdutoSelect } from "@/types";
+import { calcularTaxaConversao, calcularTempoMedioConversao, type FunilEtapa } from "./funilUtils";
 
 interface Props {
   leads: LeadRow[];
   produtos: ProdutoSelect[];
+  etapas: FunilEtapa[];
 }
 
-import { calcularTaxaConversao, calcularTempoMedioConversao } from "./funilUtils";
-
-export function FunilMetrics({ leads, produtos }: Props) {
+export function FunilMetrics({ leads, produtos, etapas }: Props) {
   const now = new Date();
   const mesAtual = now.getMonth();
   const anoAtual = now.getFullYear();
+
+  const tipoDaEtapa = new Map(etapas.map((e) => [e.id, e.tipo]));
+  const isGanho = (l: LeadRow) => tipoDaEtapa.get((l as any).etapa_id) === "ganho";
+  const isPerdido = (l: LeadRow) => tipoDaEtapa.get((l as any).etapa_id) === "perdido";
 
   const leadsMes = leads.filter((l) => {
     const d = new Date(l.created_at);
@@ -22,7 +26,7 @@ export function FunilMetrics({ leads, produtos }: Props) {
 
   const totalLeadsMes = leadsMes.length;
 
-  const convertidos = leads.filter((l) => l.etapa === "matricula");
+  const convertidos = leads.filter(isGanho);
   const taxaConversao = calcularTaxaConversao(leads.length, convertidos.length);
 
   const temposConversao = convertidos
@@ -34,11 +38,11 @@ export function FunilMetrics({ leads, produtos }: Props) {
     .filter((d) => d > 0);
   const tempoMedio = calcularTempoMedioConversao(temposConversao);
 
-  const perdidosMes = leadsMes.filter((l) => l.etapa === "perdido").length;
+  const perdidosMes = leadsMes.filter(isPerdido).length;
 
   const produtoMap = new Map(produtos.map((p) => [p.nome, Number(p.valor || 0)]));
   const valorPotencial = leads
-    .filter((l) => l.etapa !== "perdido" && l.etapa !== "matricula" && l.produto_interesse)
+    .filter((l) => !isPerdido(l) && !isGanho(l) && l.produto_interesse)
     .reduce((sum, l) => sum + (produtoMap.get(l.produto_interesse!) || 0), 0);
 
   return (
