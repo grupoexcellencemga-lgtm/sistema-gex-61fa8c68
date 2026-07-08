@@ -40,8 +40,8 @@ export const TIPO_CONFIG: Record<
   },
   google: {
     label: "Google",
-    dot: "bg-purple-500",
-    chip: "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200",
+    dot: "bg-slate-400",
+    chip: "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200",
   },
 };
 
