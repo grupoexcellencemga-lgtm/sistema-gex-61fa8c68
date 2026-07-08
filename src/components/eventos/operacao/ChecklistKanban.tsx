@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -17,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { CalendarDays, GripVertical } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
+import { AREA_LABELS, AREA_BADGE, type AreaEvento } from "@/lib/checklistEvento";
 
 const COLUNAS = [
   { id: "pendente", titulo: "Pendente" },
@@ -70,6 +72,11 @@ function TarefaCard({ tarefa, atrasada }: { tarefa: any; atrasada: boolean }) {
         {tarefa.fase_evento && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
             {FASE_LABEL[tarefa.fase_evento] || tarefa.fase_evento}
+          </Badge>
+        )}
+        {tarefa.area && (
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${AREA_BADGE[tarefa.area as AreaEvento] || ""}`}>
+            {AREA_LABELS[tarefa.area as AreaEvento] || tarefa.area}
           </Badge>
         )}
         <Badge
@@ -147,8 +154,10 @@ function Funil({ tarefas, hojeISO }: { tarefas: any[]; hojeISO: string }) {
   );
 }
 
-export function ChecklistKanban({ eventoId, tarefas }: { eventoId: string; tarefas: any[] }) {
+export function ChecklistKanban({ eventoId, tarefas: todasTarefas }: { eventoId: string; tarefas: any[] }) {
   const queryClient = useQueryClient();
+  const [areaFiltro, setAreaFiltro] = useState<AreaEvento | "todas">("todas");
+  const tarefas = areaFiltro === "todas" ? todasTarefas : todasTarefas.filter((t) => t.area === areaFiltro);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -197,6 +206,28 @@ export function ChecklistKanban({ eventoId, tarefas }: { eventoId: string; taref
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        <span className="text-xs text-muted-foreground mr-1">Área:</span>
+        <button
+          onClick={() => setAreaFiltro("todas")}
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${areaFiltro === "todas" ? "bg-secondary font-medium" : "opacity-60 hover:opacity-100"}`}
+        >
+          Todas ({todasTarefas.length})
+        </button>
+        {(Object.keys(AREA_LABELS) as AreaEvento[]).map((a) => {
+          const qtd = todasTarefas.filter((t) => t.area === a).length;
+          return (
+            <button
+              key={a}
+              onClick={() => setAreaFiltro(a)}
+              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${areaFiltro === a ? AREA_BADGE[a] + " font-medium" : "opacity-60 hover:opacity-100"}`}
+            >
+              {AREA_LABELS[a]} ({qtd})
+            </button>
+          );
+        })}
+      </div>
+
       <Tabs defaultValue="pre_evento" className="w-full">
         <TabsList className="flex-wrap h-auto">
           {FASES.map((f) => (

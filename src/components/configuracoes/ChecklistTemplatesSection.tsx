@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
+import { AREA_LABELS, type AreaEvento } from "@/lib/checklistEvento";
 
 // Itens em edição no dialog (id null = novo)
 interface ItemDraft {
@@ -21,11 +22,12 @@ interface ItemDraft {
   offset_unidade: string;
   prioridade: string;
   obrigatoria: boolean;
+  area: string;
 }
 
 const novoItem = (): ItemDraft => ({
   id: null, nome_tarefa: "", fase: "pre_evento", offset_valor: "1",
-  offset_unidade: "dias", prioridade: "media", obrigatoria: true,
+  offset_unidade: "dias", prioridade: "media", obrigatoria: true, area: "operacao",
 });
 
 export function ChecklistTemplatesSection() {
@@ -72,7 +74,7 @@ export function ChecklistTemplatesSection() {
     setItens((rows || []).map((r: any) => ({
       id: r.id, nome_tarefa: r.nome_tarefa, fase: r.fase,
       offset_valor: String(r.offset_valor), offset_unidade: r.offset_unidade,
-      prioridade: r.prioridade, obrigatoria: r.obrigatoria,
+      prioridade: r.prioridade, obrigatoria: r.obrigatoria, area: r.area || "operacao",
     })));
     setRemovidos([]); setDialogOpen(true);
   };
@@ -121,6 +123,7 @@ export function ChecklistTemplatesSection() {
           offset_unidade: item.offset_unidade,
           prioridade: item.prioridade,
           obrigatoria: item.obrigatoria,
+          area: item.area,
         };
         if (item.id) {
           const { error } = await sb.from("checklist_template_items").update(payload).eq("id", item.id);
@@ -302,6 +305,17 @@ export function ChecklistTemplatesSection() {
                           <SelectItem value="media">Média</SelectItem>
                           <SelectItem value="alta">Alta</SelectItem>
                           <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Área</Label>
+                      <Select value={item.area} onValueChange={(v) => setItem(i, { area: v })}>
+                        <SelectTrigger className="h-9 w-32 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(AREA_LABELS) as AreaEvento[]).map((a) => (
+                            <SelectItem key={a} value={a}>{AREA_LABELS[a]}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

@@ -172,6 +172,7 @@ export type Database = {
       }
       checklist_template_items: {
         Row: {
+          area: string
           deleted_at: string | null
           fase: string
           id: string
@@ -183,6 +184,7 @@ export type Database = {
           template_id: string
         }
         Insert: {
+          area?: string
           deleted_at?: string | null
           fase?: string
           id?: string
@@ -194,6 +196,7 @@ export type Database = {
           template_id: string
         }
         Update: {
+          area?: string
           deleted_at?: string | null
           fase?: string
           id?: string
@@ -2684,6 +2687,7 @@ export type Database = {
       tarefas: {
         Row: {
           aluno_id: string | null
+          area: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -2706,6 +2710,7 @@ export type Database = {
         }
         Insert: {
           aluno_id?: string | null
+          area?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -2728,6 +2733,7 @@ export type Database = {
         }
         Update: {
           aluno_id?: string | null
+          area?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null

@@ -7,6 +7,18 @@ const HORA_ANCORA = 9;
 
 export type OffsetUnidade = "minutos" | "horas" | "dias";
 export type FaseEvento = "pre_evento" | "dia_evento" | "pos_evento";
+export type AreaEvento = "comercial" | "marketing" | "operacao";
+
+export const AREA_LABELS: Record<AreaEvento, string> = {
+  comercial: "Comercial",
+  marketing: "Marketing",
+  operacao: "Operação",
+};
+export const AREA_BADGE: Record<AreaEvento, string> = {
+  comercial: "bg-blue-100 text-blue-700 border-blue-200",
+  marketing: "bg-purple-100 text-purple-700 border-purple-200",
+  operacao: "bg-slate-100 text-slate-700 border-slate-200",
+};
 
 export function calcularPrazoTarefa(
   dataEvento: string, // "YYYY-MM-DD"
@@ -122,6 +134,7 @@ export async function aplicarChecklistNoEvento(
       evento_id: evento.id,
       origem_tarefa: "template",
       fase_evento: item.fase,
+      area: item.area || "operacao",
     };
   });
 
@@ -168,6 +181,7 @@ async function gerarTarefasDoTemplate(
       evento_id: evento.id,
       origem_tarefa: "template",
       fase_evento: item.fase,
+      area: item.area || "operacao",
     };
   });
 }
