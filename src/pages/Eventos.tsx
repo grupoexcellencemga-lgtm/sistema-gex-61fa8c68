@@ -5,8 +5,9 @@ import { aplicarChecklistNoEvento } from "@/lib/checklistEvento";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { NOMES_MES } from "@/components/agenda/agendaUtils";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { EventoFormDialog, EventoForm, emptyForm } from "@/components/eventos/EventoFormDialog";
@@ -47,6 +48,24 @@ const Eventos = () => {
   });
 
   const eventos = filterByResponsavel(eventosRaw);
+
+  // Navegação por mês
+  const [verTodos, setVerTodos] = useState(false);
+  const [mesRef, setMesRef] = useState(() => {
+    const h = new Date(Date.now() - 3 * 3_600_000);
+    return new Date(h.getFullYear(), h.getMonth(), 1);
+  });
+  const refMesStr = `${mesRef.getFullYear()}-${String(mesRef.getMonth() + 1).padStart(2, "0")}`;
+  const eventosDoMes = verTodos
+    ? eventos
+    : eventos.filter((e: any) => e.data && e.data.slice(0, 7) === refMesStr);
+  const irMes = (delta: number) =>
+    setMesRef((r) => new Date(r.getFullYear(), r.getMonth() + delta, 1));
+  const irHoje = () => {
+    const h = new Date(Date.now() - 3 * 3_600_000);
+    setMesRef(new Date(h.getFullYear(), h.getMonth(), 1));
+    setVerTodos(false);
+  };
 
   useEffect(() => {
     if (!eventoIdFromUrl) return;
@@ -258,8 +277,51 @@ const Eventos = () => {
         profissionais={profissionais}
       />
 
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={irHoje}>
+            Hoje
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => irMes(-1)}
+            disabled={verTodos}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => irMes(1)}
+            disabled={verTodos}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <h2 className="text-lg font-semibold ml-1">
+            {verTodos
+              ? "Todos os meses"
+              : `${NOMES_MES[mesRef.getMonth()]} de ${mesRef.getFullYear()}`}
+          </h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {eventosDoMes.length} evento(s)
+          </span>
+          <Button
+            variant={verTodos ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVerTodos((v) => !v)}
+          >
+            {verTodos ? "Ver por mês" : "Ver todos"}
+          </Button>
+        </div>
+      </div>
+
       <EventoTable
-        eventos={eventos}
+        eventos={eventosDoMes}
         isLoading={isLoading}
         countParticipantes={countParticipantes}
         onSelect={openEventoDetail}
