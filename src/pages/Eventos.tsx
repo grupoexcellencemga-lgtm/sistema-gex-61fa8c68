@@ -305,6 +305,7 @@ const Eventos = () => {
         produtos={produtosEvento}
         turmas={turmasEvento}
         profissionais={profissionais}
+        checklistModelos={modelosChecklist}
       />
 
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
