@@ -245,43 +245,76 @@ export function ChecklistTemplatesSection() {
                   <Plus className="h-3.5 w-3.5 mr-1" /> Tarefa
                 </Button>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                "Quando" = quanto tempo <strong>antes</strong> do evento (ou{" "}
+                <strong>depois</strong>, se a fase for Pós-evento).
+              </p>
               {itens.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center rounded-md border p-2">
-                  <Input className="col-span-12 sm:col-span-4 h-8 text-sm" placeholder="Nome da tarefa"
-                    value={item.nome_tarefa} onChange={(e) => setItem(i, { nome_tarefa: e.target.value })} />
-                  <Select value={item.fase} onValueChange={(v) => setItem(i, { fase: v })}>
-                    <SelectTrigger className="col-span-4 sm:col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pre_evento">Pré-evento</SelectItem>
-                      <SelectItem value="dia_evento">Dia do evento</SelectItem>
-                      <SelectItem value="pos_evento">Pós-evento</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input type="number" min="0" className="col-span-2 sm:col-span-1 h-8 text-sm"
-                    value={item.offset_valor} onChange={(e) => setItem(i, { offset_valor: e.target.value })}
-                    onFocus={(e) => e.target.select()}
-                    title="Quanto tempo antes (ou depois, se pós-evento)" />
-                  <Select value={item.offset_unidade} onValueChange={(v) => setItem(i, { offset_unidade: v })}>
-                    <SelectTrigger className="col-span-3 sm:col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minutos">min antes</SelectItem>
-                      <SelectItem value="horas">horas antes</SelectItem>
-                      <SelectItem value="dias">dias antes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={item.prioridade} onValueChange={(v) => setItem(i, { prioridade: v })}>
-                    <SelectTrigger className="col-span-3 sm:col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="baixa">Baixa</SelectItem>
-                      <SelectItem value="media">Média</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="urgente">Urgente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="ghost" size="icon" className="col-span-2 sm:col-span-1 h-8 w-8 text-destructive justify-self-end"
-                    onClick={() => removeItem(i)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                <div key={i} className="rounded-md border p-3 space-y-2.5">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Atividade {i + 1}</Label>
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="Ex: Confirmar local e palestrante"
+                      value={item.nome_tarefa}
+                      onChange={(e) => setItem(i, { nome_tarefa: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Fase</Label>
+                      <Select value={item.fase} onValueChange={(v) => setItem(i, { fase: v })}>
+                        <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pre_evento">Pré-evento</SelectItem>
+                          <SelectItem value="dia_evento">Dia do evento</SelectItem>
+                          <SelectItem value="pos_evento">Pós-evento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Quando</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          min="0"
+                          className="h-9 w-16 text-sm"
+                          value={item.offset_valor}
+                          onChange={(e) => setItem(i, { offset_valor: e.target.value })}
+                          onFocus={(e) => e.target.select()}
+                        />
+                        <Select value={item.offset_unidade} onValueChange={(v) => setItem(i, { offset_unidade: v })}>
+                          <SelectTrigger className="h-9 w-28 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="minutos">minutos</SelectItem>
+                            <SelectItem value="horas">horas</SelectItem>
+                            <SelectItem value="dias">dias</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Prioridade</Label>
+                      <Select value={item.prioridade} onValueChange={(v) => setItem(i, { prioridade: v })}>
+                        <SelectTrigger className="h-9 w-32 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="baixa">Baixa</SelectItem>
+                          <SelectItem value="media">Média</SelectItem>
+                          <SelectItem value="alta">Alta</SelectItem>
+                          <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive ml-auto"
+                      onClick={() => removeItem(i)}
+                      title="Remover atividade"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
