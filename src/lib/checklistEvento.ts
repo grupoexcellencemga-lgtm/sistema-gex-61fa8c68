@@ -134,3 +134,111 @@ export async function aplicarChecklistNoEvento(
     templateNome: template.nome,
   };
 }
+
+// Gera as linhas de tarefa a partir dos itens de um template (uso interno).
+async function gerarTarefasDoTemplate(
+  evento: { id: string; nome: string; data: string },
+  templateId: string,
+  responsavelId: string,
+) {
+  const { data: itens, error } = await supabase
+    .from("checklist_template_items")
+    .select("*")
+    .eq("template_id", templateId)
+    .is("deleted_at", null);
+  if (error) throw error;
+
+  return (itens || []).map((item: any) => {
+    const prazo = calcularPrazoTarefa(
+      evento.data,
+      item.fase as FaseEvento,
+      item.offset_valor,
+      item.offset_unidade as OffsetUnidade,
+    );
+    return {
+      titulo: item.nome_tarefa,
+      descricao: `Checklist do evento "${evento.nome}"${item.obrigatoria ? "" : " (opcional)"}`,
+      tipo: "outro",
+      prioridade: item.prioridade || "media",
+      status: "pendente",
+      responsavel_id: responsavelId,
+      data_vencimento: prazo.data_vencimento,
+      hora: prazo.hora,
+      recorrencia: "nenhuma",
+      evento_id: evento.id,
+      origem_tarefa: "template",
+      fase_evento: item.fase,
+    };
+  });
+}
+
+// Define (aplica ou TROCA) um checklist ESCOLHIDO no evento. Remove as tarefas
+// de checklist anteriores (origem_tarefa='template') e gera as novas — troca limpa.
+export async function definirChecklistDoEvento(
+  evento: { id: string; nome: string; data: string | null },
+  templateId: string,
+  responsavelId: string,
+): Promise<{ tarefasCriadas: number; templateNome: string }> {
+  if (!evento.data)
+    throw new Error("Defina a data do evento antes de aplicar o checklist.");
+
+  const { data: tpl, error: tplErr } = await supabase
+    .from("checklist_templates")
+    .select("id, nome, versao")
+    .eq("id", templateId)
+    .single();
+  if (tplErr) throw tplErr;
+
+  const rows = await gerarTarefasDoTemplate(
+    { id: evento.id, nome: evento.nome, data: evento.data },
+    templateId,
+    responsavelId,
+  );
+
+  // Troca limpa: apaga as tarefas do checklist anterior deste evento.
+  const { error: delErr } = await supabase
+    .from("tarefas")
+    .delete()
+    .eq("evento_id", evento.id)
+    .eq("origem_tarefa", "template");
+  if (delErr) throw delErr;
+
+  if (rows.length) {
+    const { error: insErr } = await supabase.from("tarefas").insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  const { error: markErr } = await supabase
+    .from("eventos")
+    .update({
+      checklist_template_id: tpl.id,
+      checklist_template_versao: tpl.versao,
+    } as any)
+    .eq("id", evento.id);
+  if (markErr) throw markErr;
+
+  return { tarefasCriadas: rows.length, templateNome: tpl.nome };
+}
+
+// Remove o checklist do evento: apaga as tarefas geradas (origem template) e
+// limpa o vínculo, liberando para escolher outro.
+export async function removerChecklistDoEvento(eventoId: string): Promise<number> {
+  const { data: apagadas, error } = await supabase
+    .from("tarefas")
+    .delete()
+    .eq("evento_id", eventoId)
+    .eq("origem_tarefa", "template")
+    .select("id");
+  if (error) throw error;
+
+  const { error: updErr } = await supabase
+    .from("eventos")
+    .update({
+      checklist_template_id: null,
+      checklist_template_versao: null,
+    } as any)
+    .eq("id", eventoId);
+  if (updErr) throw updErr;
+
+  return apagadas?.length || 0;
+}

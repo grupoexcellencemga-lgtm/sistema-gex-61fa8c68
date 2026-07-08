@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +23,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { aplicarChecklistNoEvento } from "@/lib/checklistEvento";
+import {
+  definirChecklistDoEvento,
+  removerChecklistDoEvento,
+} from "@/lib/checklistEvento";
 import { ChecklistKanban } from "./operacao/ChecklistKanban";
 import { EventoMateriaisTab } from "./operacao/EventoMateriaisTab";
 import {
@@ -51,6 +55,7 @@ export function EventoDetailSheet({
   currentUserName: string | null;
 }) {
   const queryClient = useQueryClient();
+  const [templateEscolhido, setTemplateEscolhido] = useState<string>("");
 
   // Busca o evento fresco: os campos de checklist/status mudam dentro do painel.
   const { data: eventoAtual } = useQuery({
@@ -88,6 +93,25 @@ export function EventoDetailSheet({
     },
   });
 
+  // Modelos de checklist disponíveis para escolher/trocar.
+  const { data: modelos = [] } = useQuery({
+    queryKey: ["checklist-modelos-ativos"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("checklist_templates")
+        .select("id, nome, tipo_evento, checklist_template_items(id, deleted_at)")
+        .eq("ativo", true)
+        .is("deleted_at", null)
+        .order("nome");
+      return (data || []).map((t: any) => ({
+        id: t.id,
+        nome: t.nome,
+        tipo_evento: t.tipo_evento,
+        itens: (t.checklist_template_items || []).filter((i: any) => !i.deleted_at).length,
+      }));
+    },
+  });
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["tarefas-evento", evento.id] });
     queryClient.invalidateQueries({ queryKey: ["evento-operacao", evento.id] });
@@ -95,37 +119,43 @@ export function EventoDetailSheet({
     queryClient.invalidateQueries({ queryKey: ["tarefas"] });
   };
 
-  const aplicarMutation = useMutation({
+  // Seleciona por padrão o checklist já aplicado, ou o que casa com o tipo do evento.
+  useEffect(() => {
+    if (templateEscolhido || modelos.length === 0) return;
+    if (eventoAtual.checklist_template_id) {
+      setTemplateEscolhido(eventoAtual.checklist_template_id);
+      return;
+    }
+    const tipo = (eventoAtual.tipo || "").toLowerCase().trim();
+    const match = modelos.find((m: any) => m.tipo_evento === tipo);
+    setTemplateEscolhido(match?.id || modelos[0].id);
+  }, [modelos, eventoAtual.checklist_template_id, eventoAtual.tipo, templateEscolhido]);
+
+  const definirMutation = useMutation({
     mutationFn: async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sessão expirada");
-      return aplicarChecklistNoEvento(
-        {
-          id: eventoAtual.id,
-          nome: eventoAtual.nome,
-          tipo: eventoAtual.tipo,
-          data: eventoAtual.data,
-        },
+      if (!templateEscolhido) throw new Error("Escolha um checklist na lista.");
+      return definirChecklistDoEvento(
+        { id: eventoAtual.id, nome: eventoAtual.nome, data: eventoAtual.data },
+        templateEscolhido,
         auth.user.id,
       );
     },
     onSuccess: (r) => {
       invalidateAll();
-      if (r.aplicado) {
-        toast.success(
-          `Checklist "${r.templateNome}" aplicado — ${r.tarefasCriadas} tarefa(s) criada(s)`,
-        );
-      } else if (r.motivo === "sem_template") {
-        toast.info(
-          `Nenhum modelo ativo para o tipo "${eventoAtual.tipo}". Crie em Configurações → Modelos de Checklist.`,
-        );
-      } else if (r.motivo === "ja_aplicado") {
-        toast.info("Este evento já tem checklist aplicado.");
-      } else if (r.motivo === "sem_data") {
-        toast.error("Defina a data do evento antes de aplicar o checklist.");
-      } else {
-        toast.error("Evento sem tipo definido — edite o evento e defina o tipo.");
-      }
+      toast.success(
+        `Checklist "${r.templateNome}" aplicado — ${r.tarefasCriadas} tarefa(s).`,
+      );
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const removerMutation = useMutation({
+    mutationFn: () => removerChecklistDoEvento(evento.id),
+    onSuccess: (n) => {
+      invalidateAll();
+      toast.success(`Checklist removido — ${n} tarefa(s) apagada(s).`);
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
@@ -195,20 +225,64 @@ export function EventoDetailSheet({
                 </SelectContent>
               </Select>
             </div>
-            {!temChecklist && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {temChecklist && (
+                <span className="text-xs text-muted-foreground">
+                  Atual:{" "}
+                  <strong className="text-foreground">
+                    {modelos.find((m: any) => m.id === eventoAtual.checklist_template_id)?.nome || "—"}
+                  </strong>
+                </span>
+              )}
+              <Select value={templateEscolhido} onValueChange={setTemplateEscolhido}>
+                <SelectTrigger className="h-9 w-60">
+                  <SelectValue placeholder="Escolha um checklist" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelos.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhum modelo. Crie em Configurações → Modelos de Checklist.
+                    </div>
+                  ) : (
+                    modelos.map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.nome} · {m.tipo_evento} ({m.itens})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
               <Button
-                onClick={() => aplicarMutation.mutate()}
-                disabled={aplicarMutation.isPending}
+                onClick={() => definirMutation.mutate()}
+                disabled={!templateEscolhido || definirMutation.isPending}
                 className="gap-2"
               >
-                {aplicarMutation.isPending ? (
+                {definirMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                Aplicar checklist do tipo "{eventoAtual.tipo || "—"}"
+                {temChecklist ? "Trocar por este" : "Aplicar"}
               </Button>
-            )}
+              {temChecklist && (
+                <Button
+                  variant="outline"
+                  className="text-destructive"
+                  disabled={removerMutation.isPending}
+                  onClick={() => {
+                    if (
+                      confirm(
+                        "Remover o checklist? As tarefas geradas por ele serão apagadas.",
+                      )
+                    ) {
+                      removerMutation.mutate();
+                    }
+                  }}
+                >
+                  Remover
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
