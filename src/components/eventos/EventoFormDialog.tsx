@@ -21,12 +21,14 @@ export interface EventoForm {
   vincular_turma: boolean;
   produto_id: string;
   turma_id: string;
+  checklist_template_id: string;
 }
 
 export const emptyForm: EventoForm = {
   nome: "", data: "", local: "", tipo: "", responsavel: "",
   limite_participantes: "", descricao: "", pago: false, valor: "",
   comunidade: false, vincular_turma: false, produto_id: "", turma_id: "",
+  checklist_template_id: "",
 };
 
 interface Props {
@@ -40,9 +42,10 @@ interface Props {
   produtos: any[];
   turmas: any[];
   profissionais: any[];
+  checklistModelos: any[];
 }
 
-export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, isEditing, isPending, produtos, turmas, profissionais }: Props) {
+export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, isEditing, isPending, produtos, turmas, profissionais, checklistModelos }: Props) {
   const u = (field: keyof EventoForm, value: string | boolean) => setForm(prev => ({ ...prev, [field]: value }));
 
   const produtosTurma = produtos.filter((p: any) => p.tipo !== "comunidade");
@@ -157,6 +160,30 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
               <Input type="number" value={form.limite_participantes} onChange={(e) => u("limite_participantes", e.target.value)} placeholder="0" />
             </div>
           </div>
+
+          {/* Checklist obrigatório (só no cadastro) */}
+          {!isEditing && (
+            <div className="space-y-2">
+              <Label>Checklist do evento <span className="text-destructive">*</span></Label>
+              <Select value={form.checklist_template_id} onValueChange={(v) => u("checklist_template_id", v)}>
+                <SelectTrigger><SelectValue placeholder="Escolha o checklist..." /></SelectTrigger>
+                <SelectContent>
+                  {checklistModelos.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhum modelo. Crie em Configurações → Modelos de Checklist.
+                    </div>
+                  ) : (
+                    checklistModelos.map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>{m.nome} · {m.tipo_evento}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Obrigatório: define as tarefas que serão criadas para este evento.
+              </p>
+            </div>
+          )}
 
           {/* Pago */}
           <div className="rounded-lg border p-4">

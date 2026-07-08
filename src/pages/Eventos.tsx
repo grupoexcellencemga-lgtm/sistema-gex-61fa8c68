@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { aplicarChecklistNoEvento } from "@/lib/checklistEvento";
+import { definirChecklistDoEvento } from "@/lib/checklistEvento";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -130,6 +130,20 @@ const Eventos = () => {
     },
   });
 
+  const { data: modelosChecklist = [] } = useQuery({
+    queryKey: ["checklist-modelos-form"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("checklist_templates")
+        .select("id, nome, tipo_evento")
+        .eq("ativo", true)
+        .is("deleted_at", null)
+        .order("nome");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const countParticipantes = (eventoId: string) => {
     return allParticipantes.filter(p => p.evento_id === eventoId).length + inscricoes.filter(i => i.evento_id === eventoId).length;
   };
@@ -147,14 +161,24 @@ const Eventos = () => {
       }).select("id, nome, tipo, data").single();
       if (error) throw error;
 
-      // Aplica o modelo de checklist do tipo do evento, se existir (Fase 1).
-      // Idempotente: eventos.checklist_template_id é a trava anti-duplicação.
+      // Aplica o checklist ESCOLHIDO no cadastro (obrigatório).
       const { data: auth } = await supabase.auth.getUser();
-      if (criado && auth.user) {
+      if (criado && auth.user && data.checklist_template_id) {
         try {
-          return await aplicarChecklistNoEvento(criado, auth.user.id);
+          const r = await definirChecklistDoEvento(
+            { id: criado.id, nome: criado.nome, data: criado.data },
+            data.checklist_template_id,
+            auth.user.id,
+          );
+          return { aplicado: true, ...r };
         } catch (e: any) {
-          toast.warning("Evento criado, mas o checklist falhou: " + e.message);
+          // Sem data ainda: vincula o modelo, mas os prazos só são gerados ao definir a data.
+          await supabase.from("eventos")
+            .update({ checklist_template_id: data.checklist_template_id })
+            .eq("id", criado.id);
+          toast.warning(
+            "Evento criado e checklist vinculado. Defina a data do evento para gerar os prazos das tarefas.",
+          );
         }
       }
       return null;
@@ -219,12 +243,17 @@ const Eventos = () => {
       descricao: e.descricao || "", pago: e.pago || false, valor: e.valor ? String(e.valor) : "",
       comunidade: e.comunidade || false, vincular_turma: !!(e.produto_id && !e.comunidade),
       produto_id: e.produto_id || "", turma_id: e.turma_id || "",
+      checklist_template_id: e.checklist_template_id || "",
     });
     setEditingId(e.id); setDialogOpen(true);
   };
 
   const save = () => {
     if (!form.nome.trim()) { toast.error("Nome é obrigatório"); return; }
+    if (!editingId && !form.checklist_template_id) {
+      toast.error("Escolha o checklist do evento para prosseguir.");
+      return;
+    }
     if (editingId) updateMutation.mutate({ id: editingId, data: form });
     else insertMutation.mutate(form);
   };
@@ -252,6 +281,7 @@ const Eventos = () => {
           produtos={produtosEvento}
           turmas={turmasEvento}
           profissionais={profissionais}
+          checklistModelos={modelosChecklist}
         />
       </>
     );
