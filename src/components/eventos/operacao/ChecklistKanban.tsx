@@ -154,8 +154,17 @@ function Funil({ tarefas, hojeISO }: { tarefas: any[]; hojeISO: string }) {
   );
 }
 
-export function ChecklistKanban({ eventoId, tarefas: todasTarefas }: { eventoId: string; tarefas: any[] }) {
+export function ChecklistKanban({
+  eventoId,
+  turmaId,
+  tarefas: todasTarefas,
+}: {
+  eventoId?: string;
+  turmaId?: string;
+  tarefas: any[];
+}) {
   const queryClient = useQueryClient();
+  const invalidateKey = eventoId ? ["tarefas-evento", eventoId] : ["tarefas-turma", turmaId];
   const [areaFiltro, setAreaFiltro] = useState<AreaEvento | "todas">("todas");
   const tarefas = areaFiltro === "todas" ? todasTarefas : todasTarefas.filter((t) => t.area === areaFiltro);
   const sensors = useSensors(
@@ -179,7 +188,7 @@ export function ChecklistKanban({ eventoId, tarefas: todasTarefas }: { eventoId:
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tarefas-evento", eventoId] });
+      queryClient.invalidateQueries({ queryKey: invalidateKey });
       queryClient.invalidateQueries({ queryKey: ["tarefas"] });
     },
     onError: (err: any) => toast.error("Erro: " + err.message),

@@ -172,6 +172,7 @@ export type Database = {
       }
       checklist_template_items: {
         Row: {
+          ancora: string
           area: string
           deleted_at: string | null
           fase: string
@@ -184,6 +185,7 @@ export type Database = {
           template_id: string
         }
         Insert: {
+          ancora?: string
           area?: string
           deleted_at?: string | null
           fase?: string
@@ -196,6 +198,7 @@ export type Database = {
           template_id: string
         }
         Update: {
+          ancora?: string
           area?: string
           deleted_at?: string | null
           fase?: string
@@ -2706,6 +2709,7 @@ export type Database = {
           status: string
           tipo: string
           titulo: string
+          turma_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2729,6 +2733,7 @@ export type Database = {
           status?: string
           tipo?: string
           titulo: string
+          turma_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2752,6 +2757,7 @@ export type Database = {
           status?: string
           tipo?: string
           titulo?: string
+          turma_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2774,6 +2780,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarefas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
@@ -2858,6 +2871,8 @@ export type Database = {
       }
       turmas: {
         Row: {
+          checklist_template_id: string | null
+          checklist_template_versao: number | null
           cidade: string
           created_at: string
           data_fim: string | null
@@ -2872,6 +2887,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          checklist_template_id?: string | null
+          checklist_template_versao?: number | null
           cidade: string
           created_at?: string
           data_fim?: string | null
@@ -2886,6 +2903,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          checklist_template_id?: string | null
+          checklist_template_versao?: number | null
           cidade?: string
           created_at?: string
           data_fim?: string | null
@@ -2900,6 +2919,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "turmas_checklist_template_id_fkey"
+            columns: ["checklist_template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "turmas_produto_id_fkey"
             columns: ["produto_id"]

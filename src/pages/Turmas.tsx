@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
@@ -20,6 +20,7 @@ import { TurmaPresencaTab } from "@/components/turmas/TurmaPresencaTab";
 import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { TurmaFinanceiroTab } from "@/components/turmas/TurmaFinanceiroTab";
 import { TurmaMetricasTab } from "@/components/turmas/TurmaMetricasTab";
+import { TurmaOperacaoTab } from "@/components/turmas/TurmaOperacaoTab";
 import { formatDate } from "@/lib/formatters";
 import { NOMES_MES } from "@/components/agenda/agendaUtils";
 
@@ -260,6 +261,7 @@ const Turmas = () => {
             <TabsTrigger value="presenca"><ClipboardCheck className="h-4 w-4 mr-1" />Controle de Presença</TabsTrigger>
             <TabsTrigger value="financeiro"><DollarSign className="h-4 w-4 mr-1" />Financeiro</TabsTrigger>
             <TabsTrigger value="metricas"><TrendingUp className="h-4 w-4 mr-1" />Métricas</TabsTrigger>
+            <TabsTrigger value="operacao"><ListChecks className="h-4 w-4 mr-1" />Operação</TabsTrigger>
           </TabsList>
           <TabsContent value="alunos">
             <TurmaAlunosTab turma={selectedTurma} />
@@ -272,6 +274,9 @@ const Turmas = () => {
           </TabsContent>
           <TabsContent value="metricas">
             <TurmaMetricasTab turma={selectedTurma} />
+          </TabsContent>
+          <TabsContent value="operacao">
+            <TurmaOperacaoTab turma={selectedTurma} />
           </TabsContent>
         </Tabs>
       </div>

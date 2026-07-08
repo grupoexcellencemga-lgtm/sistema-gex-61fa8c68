@@ -13,6 +13,14 @@ import { Plus, Pencil, Trash2, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { AREA_LABELS, type AreaEvento } from "@/lib/checklistEvento";
 
+// Âncoras disponíveis hoje na UI (evento de data única funciona só com a
+// primeira; "cada sessão" ainda não está pronta — Parte 2).
+const ANCORAS_DISPONIVEIS: { value: string; label: string }[] = [
+  { value: "evento_inteiro", label: "Data do evento/início" },
+  { value: "primeira_sessao", label: "1ª sessão da turma" },
+  { value: "ultima_sessao", label: "Última sessão da turma" },
+];
+
 // Itens em edição no dialog (id null = novo)
 interface ItemDraft {
   id: string | null;
@@ -23,11 +31,13 @@ interface ItemDraft {
   prioridade: string;
   obrigatoria: boolean;
   area: string;
+  ancora: string;
 }
 
 const novoItem = (): ItemDraft => ({
   id: null, nome_tarefa: "", fase: "pre_evento", offset_valor: "1",
   offset_unidade: "dias", prioridade: "media", obrigatoria: true, area: "operacao",
+  ancora: "evento_inteiro",
 });
 
 export function ChecklistTemplatesSection() {
@@ -75,6 +85,7 @@ export function ChecklistTemplatesSection() {
       id: r.id, nome_tarefa: r.nome_tarefa, fase: r.fase,
       offset_valor: String(r.offset_valor), offset_unidade: r.offset_unidade,
       prioridade: r.prioridade, obrigatoria: r.obrigatoria, area: r.area || "operacao",
+      ancora: r.ancora || "evento_inteiro",
     })));
     setRemovidos([]); setDialogOpen(true);
   };
@@ -86,11 +97,12 @@ export function ChecklistTemplatesSection() {
 
       if (editingId) {
         // Versionamento (Fase 4.4, preparado na 1.2): template já usado em
-        // evento não muda retroativamente — incrementa a versão.
-        const { count } = await sb.from("eventos")
-          .select("id", { count: "exact", head: true })
-          .eq("checklist_template_id", editingId);
-        const bump = (count || 0) > 0;
+        // evento/turma não muda retroativamente — incrementa a versão.
+        const [{ count: countEventos }, { count: countTurmas }] = await Promise.all([
+          sb.from("eventos").select("id", { count: "exact", head: true }).eq("checklist_template_id", editingId),
+          sb.from("turmas").select("id", { count: "exact", head: true }).eq("checklist_template_id", editingId),
+        ]);
+        const bump = (countEventos || 0) > 0 || (countTurmas || 0) > 0;
 
         const { data: atual } = await sb.from("checklist_templates")
           .select("versao").eq("id", editingId).single();
@@ -124,6 +136,7 @@ export function ChecklistTemplatesSection() {
           prioridade: item.prioridade,
           obrigatoria: item.obrigatoria,
           area: item.area,
+          ancora: item.ancora,
         };
         if (item.id) {
           const { error } = await sb.from("checklist_template_items").update(payload).eq("id", item.id);
@@ -250,7 +263,9 @@ export function ChecklistTemplatesSection() {
               </div>
               <p className="text-[11px] text-muted-foreground">
                 "Quando" = quanto tempo <strong>antes</strong> do evento (ou{" "}
-                <strong>depois</strong>, se a fase for Pós-evento).
+                <strong>depois</strong>, se a fase for Pós-evento). "Referência" = a partir
+                de qual data contar — só importa em <strong>turmas</strong> com várias
+                sessões (em eventos de data única, é sempre a mesma data).
               </p>
               {itens.map((item, i) => (
                 <div key={i} className="rounded-md border p-3 space-y-2.5">
@@ -315,6 +330,17 @@ export function ChecklistTemplatesSection() {
                         <SelectContent>
                           {(Object.keys(AREA_LABELS) as AreaEvento[]).map((a) => (
                             <SelectItem key={a} value={a}>{AREA_LABELS[a]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Referência (turmas)</Label>
+                      <Select value={item.ancora} onValueChange={(v) => setItem(i, { ancora: v })}>
+                        <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ANCORAS_DISPONIVEIS.map((a) => (
+                            <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

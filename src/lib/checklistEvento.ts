@@ -9,6 +9,19 @@ export type OffsetUnidade = "minutos" | "horas" | "dias";
 export type FaseEvento = "pre_evento" | "dia_evento" | "pos_evento";
 export type AreaEvento = "comercial" | "marketing" | "operacao";
 
+// A quê a tarefa se refere, quando o checklist é de uma TURMA (várias
+// sessões/encontros) em vez de um evento de data única.
+// 'cada_sessao' é reconhecida mas ainda tratada como 'evento_inteiro' — a
+// repetição por sessão entra na Parte 2.
+export type AncoraTarefa = "evento_inteiro" | "primeira_sessao" | "ultima_sessao" | "cada_sessao";
+
+export const ANCORA_LABELS: Record<AncoraTarefa, string> = {
+  evento_inteiro: "Evento/curso inteiro",
+  primeira_sessao: "Primeira sessão",
+  ultima_sessao: "Última sessão",
+  cada_sessao: "Cada sessão (em breve)",
+};
+
 export const AREA_LABELS: Record<AreaEvento, string> = {
   comercial: "Comercial",
   marketing: "Marketing",
@@ -252,6 +265,143 @@ export async function removerChecklistDoEvento(eventoId: string): Promise<number
       checklist_template_versao: null,
     } as any)
     .eq("id", eventoId);
+  if (updErr) throw updErr;
+
+  return apagadas?.length || 0;
+}
+
+// ─── Turmas (várias sessões) ───────────────────────────────────────────────
+
+// Resolve a data de referência de UMA âncora para uma turma, usando as datas
+// reais dos encontros quando existem (mais precisas que o planejamento).
+async function resolverDataAncoraTurma(
+  turma: { id: string; data_inicio: string | null; data_fim: string | null },
+  ancora: AncoraTarefa,
+): Promise<string | null> {
+  if (ancora === "evento_inteiro") return turma.data_inicio;
+
+  const { data: encontros, error } = await supabase
+    .from("encontros")
+    .select("data")
+    .eq("turma_id", turma.id)
+    .not("data", "is", null)
+    .order("data", { ascending: true });
+  if (error) throw error;
+
+  if (encontros && encontros.length > 0) {
+    return ancora === "primeira_sessao"
+      ? encontros[0].data
+      : encontros[encontros.length - 1].data;
+  }
+
+  // Sem encontros cadastrados ainda: usa o planejamento da turma.
+  return ancora === "primeira_sessao"
+    ? turma.data_inicio
+    : (turma.data_fim || turma.data_inicio);
+}
+
+async function gerarTarefasDaTurma(
+  turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
+  templateId: string,
+  responsavelId: string,
+) {
+  const { data: itens, error } = await supabase
+    .from("checklist_template_items")
+    .select("*")
+    .eq("template_id", templateId)
+    .is("deleted_at", null);
+  if (error) throw error;
+
+  const rows: any[] = [];
+  for (const item of itens || []) {
+    const dataRef = await resolverDataAncoraTurma(turma, (item.ancora || "evento_inteiro") as AncoraTarefa);
+    if (!dataRef) continue; // sem data de referência ainda — pula (turma sem data_inicio nem encontros)
+
+    const prazo = calcularPrazoTarefa(
+      dataRef,
+      item.fase as FaseEvento,
+      item.offset_valor,
+      item.offset_unidade as OffsetUnidade,
+    );
+    rows.push({
+      titulo: item.nome_tarefa,
+      descricao: `Checklist da turma "${turma.nome}"${item.obrigatoria ? "" : " (opcional)"}`,
+      tipo: "outro",
+      prioridade: item.prioridade || "media",
+      status: "pendente",
+      responsavel_id: responsavelId,
+      data_vencimento: prazo.data_vencimento,
+      hora: prazo.hora,
+      recorrencia: "nenhuma",
+      turma_id: turma.id,
+      origem_tarefa: "template",
+      fase_evento: item.fase,
+      area: item.area || "operacao",
+    });
+  }
+  return rows;
+}
+
+// Define (aplica ou TROCA) um checklist ESCOLHIDO na turma — mesma lógica de
+// "troca limpa" de definirChecklistDoEvento, mas resolvendo cada tarefa pela
+// sua âncora (evento inteiro / primeira sessão / última sessão).
+export async function definirChecklistDaTurma(
+  turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
+  templateId: string,
+  responsavelId: string,
+): Promise<{ tarefasCriadas: number; templateNome: string }> {
+  if (!turma.data_inicio)
+    throw new Error("Defina a data de início da turma antes de aplicar o checklist.");
+
+  const { data: tpl, error: tplErr } = await supabase
+    .from("checklist_templates")
+    .select("id, nome, versao")
+    .eq("id", templateId)
+    .single();
+  if (tplErr) throw tplErr;
+
+  const rows = await gerarTarefasDaTurma(turma, templateId, responsavelId);
+
+  const { error: delErr } = await supabase
+    .from("tarefas")
+    .delete()
+    .eq("turma_id", turma.id)
+    .eq("origem_tarefa", "template");
+  if (delErr) throw delErr;
+
+  if (rows.length) {
+    const { error: insErr } = await supabase.from("tarefas").insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  const { error: markErr } = await supabase
+    .from("turmas")
+    .update({
+      checklist_template_id: tpl.id,
+      checklist_template_versao: tpl.versao,
+    } as any)
+    .eq("id", turma.id);
+  if (markErr) throw markErr;
+
+  return { tarefasCriadas: rows.length, templateNome: tpl.nome };
+}
+
+export async function removerChecklistDaTurma(turmaId: string): Promise<number> {
+  const { data: apagadas, error } = await supabase
+    .from("tarefas")
+    .delete()
+    .eq("turma_id", turmaId)
+    .eq("origem_tarefa", "template")
+    .select("id");
+  if (error) throw error;
+
+  const { error: updErr } = await supabase
+    .from("turmas")
+    .update({
+      checklist_template_id: null,
+      checklist_template_versao: null,
+    } as any)
+    .eq("id", turmaId);
   if (updErr) throw updErr;
 
   return apagadas?.length || 0;
