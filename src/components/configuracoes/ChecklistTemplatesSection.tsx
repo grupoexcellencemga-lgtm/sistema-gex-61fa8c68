@@ -219,16 +219,19 @@ export function ChecklistTemplatesSection() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2 space-y-1.5">
-                <Label>Nome do modelo</Label>
+                <Label>Nome do modelo <span className="text-destructive">*</span></Label>
                 <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Checklist Palestra" />
               </div>
               <div className="space-y-1.5">
-                <Label>Tipo de evento</Label>
+                <Label>Tipo de evento <span className="text-destructive">*</span></Label>
                 <Input value={tipoEvento} onChange={(e) => setTipoEvento(e.target.value)}
                   placeholder="palestra, workshop..." list="tipos-evento-existentes" />
                 <datalist id="tipos-evento-existentes">
                   {tiposExistentes.map((t) => <option key={t} value={t} />)}
                 </datalist>
+                <p className="text-[11px] text-muted-foreground">
+                  Obrigatório: liga o modelo ao tipo do evento para aplicar sozinho.
+                </p>
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -283,8 +286,14 @@ export function ChecklistTemplatesSection() {
               ))}
             </div>
 
-            <Button className="w-full" disabled={!nome.trim() || !tipoEvento.trim() || saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}>
+            <Button className="w-full" disabled={saveMutation.isPending}
+              onClick={() => {
+                if (!nome.trim()) return toast.error('Dê um nome ao modelo (ex.: "Checklist Palestra").');
+                if (!tipoEvento.trim()) return toast.error('Preencha o "Tipo de evento" (ex.: palestra).');
+                if (!itens.some((i) => i.nome_tarefa.trim()))
+                  return toast.error("Adicione pelo menos uma tarefa com nome.");
+                saveMutation.mutate();
+              }}>
               {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {editingId ? "Salvar Modelo" : "Criar Modelo"}
             </Button>
