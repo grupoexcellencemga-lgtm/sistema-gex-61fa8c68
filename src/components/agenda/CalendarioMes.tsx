@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   AgendaItem,
   TIPO_CONFIG,
+  corTexto,
   gridDoMes,
   isoDoDia,
   itensPorDia,
@@ -29,11 +30,17 @@ function ChipItem({
   onClick: () => void;
 }) {
   const cfg = TIPO_CONFIG[item.tipo];
+  // Eventos do Google usam a cor real definida na agenda; os demais mantêm a cor do tipo.
+  const usaCor = item.tipo === "google" && !!item.cor;
+  const style = usaCor
+    ? { backgroundColor: item.cor, color: corTexto(item.cor), borderColor: item.cor }
+    : undefined;
   return (
     <button
       onClick={onClick}
       title={item.titulo}
-      className={`w-full text-left truncate rounded px-1.5 py-0.5 text-[11px] leading-tight border transition-colors ${cfg.chip} ${item.concluida ? "line-through opacity-60" : ""} ${item.atrasada ? "ring-1 ring-red-400" : ""}`}
+      style={style}
+      className={`w-full text-left truncate rounded px-1.5 py-0.5 text-[11px] leading-tight border transition-colors ${usaCor ? "hover:brightness-95" : cfg.chip} ${item.concluida ? "line-through opacity-60" : ""} ${item.atrasada ? "ring-1 ring-red-400" : ""}`}
     >
       {item.titulo}
     </button>

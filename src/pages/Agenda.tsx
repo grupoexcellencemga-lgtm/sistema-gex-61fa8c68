@@ -83,7 +83,7 @@ const Agenda = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("google_agenda_eventos")
-        .select("id, titulo, data, hora")
+        .select("id, titulo, data, hora, cor")
         .gte("data", inicio)
         .lte("data", fim);
       if (error) throw error;
@@ -141,6 +141,7 @@ const Agenda = () => {
           titulo: g.hora ? `${g.hora} ${g.titulo}` : g.titulo,
           data: g.data,
           url: "", // espelho do Google é só visualização
+          cor: g.cor || undefined,
         }),
       );
     }

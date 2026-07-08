@@ -17,6 +17,17 @@ export interface AgendaItem {
   url: string; // para onde navegar ao clicar
   concluida?: boolean; // tarefas concluídas ficam esmaecidas
   atrasada?: boolean;
+  cor?: string; // cor real do evento no Google (hex), quando tipo === "google"
+}
+
+// Texto legível (escuro/claro) para um fundo hex, pela luminância percebida.
+export function corTexto(bg?: string): string {
+  if (!bg || bg.length < 7) return "inherit";
+  const r = parseInt(bg.slice(1, 3), 16);
+  const g = parseInt(bg.slice(3, 5), 16);
+  const b = parseInt(bg.slice(5, 7), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 150 ? "#1f2937" : "#ffffff";
 }
 
 export const TIPO_CONFIG: Record<
