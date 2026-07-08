@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
@@ -21,6 +21,7 @@ import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { TurmaFinanceiroTab } from "@/components/turmas/TurmaFinanceiroTab";
 import { TurmaMetricasTab } from "@/components/turmas/TurmaMetricasTab";
 import { formatDate } from "@/lib/formatters";
+import { NOMES_MES } from "@/components/agenda/agendaUtils";
 
 interface TurmaForm {
   nome: string;
@@ -69,6 +70,20 @@ const Turmas = () => {
   const [filters, setFilters] = useState<Record<string, string>>({ turma: "", produto: "", cidade: "", modalidade: "", periodo: "", responsavel: "" });
   const [statusFilter, setStatusFilter] = useState<string>("ativa");
   const [selectedTurma, setSelectedTurma] = useState<any | null>(null);
+
+  // Navegação por mês (pela data de início da turma)
+  const [verTodosMeses, setVerTodosMeses] = useState(false);
+  const [mesRef, setMesRef] = useState(() => {
+    const h = new Date(Date.now() - 3 * 3_600_000);
+    return new Date(h.getFullYear(), h.getMonth(), 1);
+  });
+  const irMesTurma = (delta: number) =>
+    setMesRef((r) => new Date(r.getFullYear(), r.getMonth() + delta, 1));
+  const irHojeTurma = () => {
+    const h = new Date(Date.now() - 3 * 3_600_000);
+    setMesRef(new Date(h.getFullYear(), h.getMonth(), 1));
+    setVerTodosMeses(false);
+  };
 
   const { filterByResponsavel } = useDataFilter();
 
@@ -263,6 +278,21 @@ const Turmas = () => {
     );
   }
 
+  const refMesStr = `${mesRef.getFullYear()}-${String(mesRef.getMonth() + 1).padStart(2, "0")}`;
+  const turmasVisiveis = turmas.filter((t: any) => {
+    if (statusFilter !== "todas" && (t.status || "ativa") !== statusFilter) return false;
+    if (!verTodosMeses && (!t.data_inicio || t.data_inicio.slice(0, 7) !== refMesStr)) return false;
+    const m = (val: string, f: string) => !f.trim() || val.toLowerCase().includes(f.toLowerCase());
+    return (
+      m(t.nome || "", filters.turma) &&
+      m(t.produtos?.nome || "", filters.produto) &&
+      m(t.cidade || "", filters.cidade) &&
+      m(t.modalidade || "", filters.modalidade) &&
+      m(`${formatDate(t.data_inicio)} ${formatDate(t.data_fim)}`, filters.periodo) &&
+      m(t.responsavel || "", filters.responsavel)
+    );
+  });
+
   return (
     <div>
       <PageHeader title="Turmas" description="Gerencie as turmas dos produtos">
@@ -305,10 +335,28 @@ const Turmas = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="flex gap-2 mb-4">
-        <Button variant={statusFilter === "ativa" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("ativa")}>Ativas</Button>
-        <Button variant={statusFilter === "finalizada" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("finalizada")}>Finalizadas</Button>
-        <Button variant={statusFilter === "todas" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("todas")}>Todas</Button>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex gap-2">
+          <Button variant={statusFilter === "ativa" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("ativa")}>Ativas</Button>
+          <Button variant={statusFilter === "finalizada" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("finalizada")}>Finalizadas</Button>
+          <Button variant={statusFilter === "todas" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("todas")}>Todas</Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={irHojeTurma}>Hoje</Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => irMesTurma(-1)} disabled={verTodosMeses}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => irMesTurma(1)} disabled={verTodosMeses}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold min-w-[120px] text-center">
+            {verTodosMeses ? "Todos os meses" : `${NOMES_MES[mesRef.getMonth()]} ${mesRef.getFullYear()}`}
+          </span>
+          <span className="text-sm text-muted-foreground">{turmasVisiveis.length}</span>
+          <Button variant={verTodosMeses ? "default" : "outline"} size="sm" onClick={() => setVerTodosMeses((v) => !v)}>
+            {verTodosMeses ? "Ver por mês" : "Ver todos"}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -340,18 +388,7 @@ const Turmas = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {turmas.filter((t: any) => {
-                  if (statusFilter !== "todas" && (t.status || "ativa") !== statusFilter) return false;
-                  const m = (val: string, f: string) => !f.trim() || val.toLowerCase().includes(f.toLowerCase());
-                  return (
-                    m(t.nome || "", filters.turma) &&
-                    m(t.produtos?.nome || "", filters.produto) &&
-                    m(t.cidade || "", filters.cidade) &&
-                    m(t.modalidade || "", filters.modalidade) &&
-                    m(`${formatDate(t.data_inicio)} ${formatDate(t.data_fim)}`, filters.periodo) &&
-                    m(t.responsavel || "", filters.responsavel)
-                  );
-                }).map((t: any) => (
+                {turmasVisiveis.map((t: any) => (
                   <TableRow key={t.id} className={`transition-snappy hover:bg-secondary/50 cursor-pointer ${(t.status || "ativa") === "finalizada" ? "opacity-60" : ""}`} onClick={() => openTurmaDetail(t)}>
                     <TableCell className="font-medium text-sm">
                       {t.nome}
@@ -369,8 +406,10 @@ const Turmas = () => {
                     </TableCell>
                   </TableRow>
                 ))}
-                {turmas.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma turma cadastrada</TableCell></TableRow>
+                {turmasVisiveis.length === 0 && (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    {verTodosMeses ? "Nenhuma turma encontrada" : "Nenhuma turma começando neste mês. Use ◀ ▶ ou \"Ver todos\"."}
+                  </TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
