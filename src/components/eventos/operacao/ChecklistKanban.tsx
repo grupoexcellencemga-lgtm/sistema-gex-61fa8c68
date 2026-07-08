@@ -79,6 +79,11 @@ function TarefaCard({ tarefa, atrasada }: { tarefa: any; atrasada: boolean }) {
             {AREA_LABELS[tarefa.area as AreaEvento] || tarefa.area}
           </Badge>
         )}
+        {tarefa.sessao_numero != null && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 border-indigo-200">
+            Sessão {tarefa.sessao_numero}
+          </Badge>
+        )}
         <Badge
           variant="outline"
           className={`text-[10px] px-1.5 py-0 ${PRIORIDADE_CLASS[tarefa.prioridade] || ""}`}
@@ -166,7 +171,15 @@ export function ChecklistKanban({
   const queryClient = useQueryClient();
   const invalidateKey = eventoId ? ["tarefas-evento", eventoId] : ["tarefas-turma", turmaId];
   const [areaFiltro, setAreaFiltro] = useState<AreaEvento | "todas">("todas");
-  const tarefas = areaFiltro === "todas" ? todasTarefas : todasTarefas.filter((t) => t.area === areaFiltro);
+  const [sessaoFiltro, setSessaoFiltro] = useState<number | "todas">("todas");
+
+  // Sessões só existem em turmas com tarefas "cada sessão" — o filtro só aparece se houver alguma.
+  const sessoesDisponiveis = Array.from(
+    new Set(todasTarefas.filter((t) => t.sessao_numero != null).map((t) => t.sessao_numero as number)),
+  ).sort((a, b) => a - b);
+
+  const tarefasPorArea = areaFiltro === "todas" ? todasTarefas : todasTarefas.filter((t) => t.area === areaFiltro);
+  const tarefas = sessaoFiltro === "todas" ? tarefasPorArea : tarefasPorArea.filter((t) => t.sessao_numero === sessaoFiltro);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -236,6 +249,27 @@ export function ChecklistKanban({
           );
         })}
       </div>
+
+      {sessoesDisponiveis.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          <span className="text-xs text-muted-foreground mr-1">Sessão:</span>
+          <button
+            onClick={() => setSessaoFiltro("todas")}
+            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${sessaoFiltro === "todas" ? "bg-secondary font-medium" : "opacity-60 hover:opacity-100"}`}
+          >
+            Todas
+          </button>
+          {sessoesDisponiveis.map((n) => (
+            <button
+              key={n}
+              onClick={() => setSessaoFiltro(n)}
+              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${sessaoFiltro === n ? "bg-indigo-100 text-indigo-700 border-indigo-200 font-medium" : "opacity-60 hover:opacity-100"}`}
+            >
+              Sessão {n}
+            </button>
+          ))}
+        </div>
+      )}
 
       <Tabs defaultValue="pre_evento" className="w-full">
         <TabsList className="flex-wrap h-auto">

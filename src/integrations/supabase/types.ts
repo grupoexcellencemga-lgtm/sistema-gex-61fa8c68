@@ -2696,6 +2696,7 @@ export type Database = {
           created_by: string | null
           data_vencimento: string | null
           descricao: string | null
+          encontro_id: string | null
           evento_id: string | null
           fase_evento: string | null
           hora: string | null
@@ -2720,6 +2721,7 @@ export type Database = {
           created_by?: string | null
           data_vencimento?: string | null
           descricao?: string | null
+          encontro_id?: string | null
           evento_id?: string | null
           fase_evento?: string | null
           hora?: string | null
@@ -2744,6 +2746,7 @@ export type Database = {
           created_by?: string | null
           data_vencimento?: string | null
           descricao?: string | null
+          encontro_id?: string | null
           evento_id?: string | null
           fase_evento?: string | null
           hora?: string | null
@@ -2766,6 +2769,13 @@ export type Database = {
             columns: ["aluno_id"]
             isOneToOne: false
             referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarefas_encontro_id_fkey"
+            columns: ["encontro_id"]
+            isOneToOne: false
+            referencedRelation: "encontros"
             referencedColumns: ["id"]
           },
           {

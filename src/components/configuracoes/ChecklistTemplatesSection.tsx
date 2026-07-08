@@ -13,12 +13,13 @@ import { Plus, Pencil, Trash2, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { AREA_LABELS, type AreaEvento } from "@/lib/checklistEvento";
 
-// Âncoras disponíveis hoje na UI (evento de data única funciona só com a
-// primeira; "cada sessão" ainda não está pronta — Parte 2).
+// Âncoras disponíveis na UI. Em eventos (data única) todas se comportam
+// igual; em turmas com várias sessões cada uma resolve uma data diferente.
 const ANCORAS_DISPONIVEIS: { value: string; label: string }[] = [
   { value: "evento_inteiro", label: "Data do evento/início" },
   { value: "primeira_sessao", label: "1ª sessão da turma" },
   { value: "ultima_sessao", label: "Última sessão da turma" },
+  { value: "cada_sessao", label: "Cada sessão (repete)" },
 ];
 
 // Itens em edição no dialog (id null = novo)
@@ -265,7 +266,9 @@ export function ChecklistTemplatesSection() {
                 "Quando" = quanto tempo <strong>antes</strong> do evento (ou{" "}
                 <strong>depois</strong>, se a fase for Pós-evento). "Referência" = a partir
                 de qual data contar — só importa em <strong>turmas</strong> com várias
-                sessões (em eventos de data única, é sempre a mesma data).
+                sessões (em eventos de data única, é sempre a mesma data).{" "}
+                <strong>"Cada sessão"</strong> gera uma tarefa por sessão da turma
+                (ex.: "Verificar slides" vira uma tarefa para cada encontro).
               </p>
               {itens.map((item, i) => (
                 <div key={i} className="rounded-md border p-3 space-y-2.5">

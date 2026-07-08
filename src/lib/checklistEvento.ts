@@ -11,15 +11,16 @@ export type AreaEvento = "comercial" | "marketing" | "operacao";
 
 // A quê a tarefa se refere, quando o checklist é de uma TURMA (várias
 // sessões/encontros) em vez de um evento de data única.
-// 'cada_sessao' é reconhecida mas ainda tratada como 'evento_inteiro' — a
-// repetição por sessão entra na Parte 2.
+// 'cada_sessao' repete a tarefa para CADA encontro da turma (uma tarefa por
+// sessão, cada uma com sua própria data). Em Eventos (data única), não há
+// o que repetir — se comporta como 'evento_inteiro'.
 export type AncoraTarefa = "evento_inteiro" | "primeira_sessao" | "ultima_sessao" | "cada_sessao";
 
 export const ANCORA_LABELS: Record<AncoraTarefa, string> = {
   evento_inteiro: "Evento/curso inteiro",
   primeira_sessao: "Primeira sessão",
   ultima_sessao: "Última sessão",
-  cada_sessao: "Cada sessão (em breve)",
+  cada_sessao: "Cada sessão (repete)",
 };
 
 export const AREA_LABELS: Record<AreaEvento, string> = {
@@ -272,58 +273,41 @@ export async function removerChecklistDoEvento(eventoId: string): Promise<number
 
 // ─── Turmas (várias sessões) ───────────────────────────────────────────────
 
-// Resolve a data de referência de UMA âncora para uma turma, usando as datas
-// reais dos encontros quando existem (mais precisas que o planejamento).
-async function resolverDataAncoraTurma(
-  turma: { id: string; data_inicio: string | null; data_fim: string | null },
-  ancora: AncoraTarefa,
-): Promise<string | null> {
-  if (ancora === "evento_inteiro") return turma.data_inicio;
-
-  const { data: encontros, error } = await supabase
-    .from("encontros")
-    .select("data")
-    .eq("turma_id", turma.id)
-    .not("data", "is", null)
-    .order("data", { ascending: true });
-  if (error) throw error;
-
-  if (encontros && encontros.length > 0) {
-    return ancora === "primeira_sessao"
-      ? encontros[0].data
-      : encontros[encontros.length - 1].data;
-  }
-
-  // Sem encontros cadastrados ainda: usa o planejamento da turma.
-  return ancora === "primeira_sessao"
-    ? turma.data_inicio
-    : (turma.data_fim || turma.data_inicio);
+interface EncontroRef {
+  id: string;
+  data: string;
+  sessao_numero: number | null;
 }
 
 async function gerarTarefasDaTurma(
   turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
   templateId: string,
   responsavelId: string,
-) {
-  const { data: itens, error } = await supabase
-    .from("checklist_template_items")
-    .select("*")
-    .eq("template_id", templateId)
-    .is("deleted_at", null);
-  if (error) throw error;
+): Promise<{ rows: any[]; itensSemSessao: number }> {
+  const [{ data: itens, error: itensErr }, { data: encontrosRaw, error: encErr }] = await Promise.all([
+    supabase.from("checklist_template_items").select("*").eq("template_id", templateId).is("deleted_at", null),
+    supabase
+      .from("encontros")
+      .select("id, data, sessao_numero")
+      .eq("turma_id", turma.id)
+      .not("data", "is", null)
+      .order("data", { ascending: true }),
+  ]);
+  if (itensErr) throw itensErr;
+  if (encErr) throw encErr;
 
-  const rows: any[] = [];
-  for (const item of itens || []) {
-    const dataRef = await resolverDataAncoraTurma(turma, (item.ancora || "evento_inteiro") as AncoraTarefa);
-    if (!dataRef) continue; // sem data de referência ainda — pula (turma sem data_inicio nem encontros)
+  const encontros = (encontrosRaw || []) as EncontroRef[];
+  const primeira = encontros[0]?.data ?? turma.data_inicio;
+  const ultima = encontros[encontros.length - 1]?.data ?? (turma.data_fim || turma.data_inicio);
 
+  const montarLinha = (item: any, dataRef: string, encontroId: string | null) => {
     const prazo = calcularPrazoTarefa(
       dataRef,
       item.fase as FaseEvento,
       item.offset_valor,
       item.offset_unidade as OffsetUnidade,
     );
-    rows.push({
+    return {
       titulo: item.nome_tarefa,
       descricao: `Checklist da turma "${turma.nome}"${item.obrigatoria ? "" : " (opcional)"}`,
       tipo: "outro",
@@ -334,12 +318,35 @@ async function gerarTarefasDaTurma(
       hora: prazo.hora,
       recorrencia: "nenhuma",
       turma_id: turma.id,
+      encontro_id: encontroId,
       origem_tarefa: "template",
       fase_evento: item.fase,
       area: item.area || "operacao",
-    });
+    };
+  };
+
+  const rows: any[] = [];
+  let itensSemSessao = 0;
+  for (const item of itens || []) {
+    const ancora = (item.ancora || "evento_inteiro") as AncoraTarefa;
+
+    if (ancora === "cada_sessao") {
+      if (encontros.length === 0) { itensSemSessao++; continue; } // sem sessões cadastradas ainda
+      for (const enc of encontros) {
+        rows.push(montarLinha(item, enc.data, enc.id));
+      }
+      continue;
+    }
+
+    const dataRef =
+      ancora === "primeira_sessao" ? primeira :
+      ancora === "ultima_sessao" ? ultima :
+      turma.data_inicio;
+    if (!dataRef) continue; // turma sem data_inicio nem encontros — nada a calcular
+
+    rows.push(montarLinha(item, dataRef, null));
   }
-  return rows;
+  return { rows, itensSemSessao };
 }
 
 // Define (aplica ou TROCA) um checklist ESCOLHIDO na turma — mesma lógica de
@@ -349,7 +356,7 @@ export async function definirChecklistDaTurma(
   turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
   templateId: string,
   responsavelId: string,
-): Promise<{ tarefasCriadas: number; templateNome: string }> {
+): Promise<{ tarefasCriadas: number; templateNome: string; itensSemSessao: number }> {
   if (!turma.data_inicio)
     throw new Error("Defina a data de início da turma antes de aplicar o checklist.");
 
@@ -360,7 +367,7 @@ export async function definirChecklistDaTurma(
     .single();
   if (tplErr) throw tplErr;
 
-  const rows = await gerarTarefasDaTurma(turma, templateId, responsavelId);
+  const { rows, itensSemSessao } = await gerarTarefasDaTurma(turma, templateId, responsavelId);
 
   const { error: delErr } = await supabase
     .from("tarefas")
@@ -383,7 +390,7 @@ export async function definirChecklistDaTurma(
     .eq("id", turma.id);
   if (markErr) throw markErr;
 
-  return { tarefasCriadas: rows.length, templateNome: tpl.nome };
+  return { tarefasCriadas: rows.length, templateNome: tpl.nome, itensSemSessao };
 }
 
 export async function removerChecklistDaTurma(turmaId: string): Promise<number> {

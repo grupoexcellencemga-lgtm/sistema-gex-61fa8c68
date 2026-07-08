@@ -40,11 +40,12 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
-        .select("*")
+        .select("*, encontros(sessao_numero)")
         .eq("turma_id", turma.id)
         .order("data_vencimento", { ascending: true, nullsFirst: false });
       if (error) throw error;
-      return data || [];
+      // Achata a sessão pro Kanban filtrar sem precisar saber do join.
+      return (data || []).map((t: any) => ({ ...t, sessao_numero: t.encontros?.sessao_numero ?? null }));
     },
   });
 
@@ -92,6 +93,11 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
     onSuccess: (r) => {
       invalidateAll();
       toast.success(`Checklist "${r.templateNome}" aplicado — ${r.tarefasCriadas} tarefa(s).`);
+      if (r.itensSemSessao > 0) {
+        toast.warning(
+          `${r.itensSemSessao} tarefa(s) do tipo "cada sessão" foram puladas — esta turma ainda não tem sessões cadastradas. Cadastre os encontros e aplique de novo.`,
+        );
+      }
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
