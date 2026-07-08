@@ -11,6 +11,7 @@ import {
   useDroppable,
   closestCenter,
 } from "@dnd-kit/core";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { CalendarDays, GripVertical } from "lucide-react";
@@ -21,6 +22,13 @@ const COLUNAS = [
   { id: "pendente", titulo: "Pendente" },
   { id: "concluida", titulo: "Concluída" },
   { id: "cancelada", titulo: "Cancelada" },
+];
+
+// Uma aba por fase do evento; cada atividade cai na aba da sua fase.
+const FASES = [
+  { id: "pre_evento", label: "Pré-evento" },
+  { id: "dia_evento", label: "No dia" },
+  { id: "pos_evento", label: "Pós-evento" },
 ];
 
 const FASE_LABEL: Record<string, string> = {
@@ -115,6 +123,30 @@ function Coluna({ id, titulo, tarefas, hojeISO }: { id: string; titulo: string; 
   );
 }
 
+// Funil (colunas por status) de uma fase.
+function Funil({ tarefas, hojeISO }: { tarefas: any[]; hojeISO: string }) {
+  if (tarefas.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-6">
+        Nenhuma atividade nesta fase.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col sm:flex-row gap-3">
+      {COLUNAS.map((c) => (
+        <Coluna
+          key={c.id}
+          id={c.id}
+          titulo={c.titulo}
+          hojeISO={hojeISO}
+          tarefas={tarefas.filter((t) => t.status === c.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ChecklistKanban({ eventoId, tarefas }: { eventoId: string; tarefas: any[] }) {
   const queryClient = useQueryClient();
   const sensors = useSensors(
@@ -154,23 +186,40 @@ export function ChecklistKanban({ eventoId, tarefas }: { eventoId: string; taref
     moverMutation.mutate({ id: String(active.id), status: novoStatus });
   };
 
+  const porFase = (fase: string) => tarefas.filter((t) => t.fase_evento === fase);
+  const semFase = tarefas.filter(
+    (t) => !FASES.some((f) => f.id === t.fase_evento),
+  );
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col sm:flex-row gap-3">
-        {COLUNAS.map((c) => (
-          <Coluna
-            key={c.id}
-            id={c.id}
-            titulo={c.titulo}
-            hojeISO={hojeISO}
-            tarefas={tarefas.filter((t) => t.status === c.id)}
-          />
+      <Tabs defaultValue="pre_evento" className="w-full">
+        <TabsList className="flex-wrap h-auto">
+          {FASES.map((f) => (
+            <TabsTrigger key={f.id} value={f.id}>
+              {f.label} ({porFase(f.id).length})
+            </TabsTrigger>
+          ))}
+          {semFase.length > 0 && (
+            <TabsTrigger value="sem_fase">Outras ({semFase.length})</TabsTrigger>
+          )}
+        </TabsList>
+
+        {FASES.map((f) => (
+          <TabsContent key={f.id} value={f.id} className="mt-3">
+            <Funil tarefas={porFase(f.id)} hojeISO={hojeISO} />
+          </TabsContent>
         ))}
-      </div>
+        {semFase.length > 0 && (
+          <TabsContent value="sem_fase" className="mt-3">
+            <Funil tarefas={semFase} hojeISO={hojeISO} />
+          </TabsContent>
+        )}
+      </Tabs>
     </DndContext>
   );
 }
