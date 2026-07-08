@@ -71,7 +71,9 @@ export function useDataFilter() {
 
   /**
    * Filters records by `responsavel` field (for profissional-linked tables).
-   * Profissionais see only their records. Comerciais see nothing. Admins/unrestricted see all.
+   * Profissionais see only their records. Comerciais see all (Eventos/Turmas são
+   * liberados por padrão para o papel comercial — sem escopo por profissional).
+   * Admins/unrestricted see all.
    */
   function filterByResponsavel<T extends { responsavel?: string | null }>(records: T[]): T[] {
     if (isAdmin) return records;
@@ -80,8 +82,7 @@ export function useDataFilter() {
         (r) => r.responsavel?.toLowerCase() === profissionalNome.toLowerCase()
       );
     }
-    if (isComercial) return []; // Comercial shouldn't see profissional-linked data
-    return records; // Unrestricted
+    return records; // Comercial e demais casos: sem escopo por profissional, vê tudo.
   }
 
   /**
