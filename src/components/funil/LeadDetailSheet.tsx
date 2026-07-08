@@ -39,25 +39,9 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   const [convertForm, setConvertForm] = useState({ produto_id: "", turma_id: "" });
   const [whatsappOpen, setWhatsappOpen] = useState(false);
 
-  if (!lead) return null;
-
-  const comercialNome = lead.responsavel_id ? comerciais.find((c: any) => c.id === lead.responsavel_id)?.nome : null;
-  const currentIdx = etapaOrder.indexOf(lead.etapa);
-
-  const startEdit = () => {
-    setEditForm({
-      nome: lead.nome || "",
-      email: lead.email || "",
-      telefone: lead.telefone || "",
-      cidade: lead.cidade || "",
-      produto_interesse: lead.produto_interesse || "",
-      origem: lead.origem || "",
-      observacoes: lead.observacoes || "",
-      responsavel_id: lead.responsavel_id || "",
-    });
-    setEditing(true);
-  };
-
+  // Hooks precisam rodar sempre na mesma ordem/quantidade, mesmo quando o
+  // sheet ainda não tem lead selecionado (fica montado com lead=null antes
+  // do primeiro clique) — por isso ficam TODOS antes do "if (!lead)" abaixo.
   const saveEdit = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("leads").update({
@@ -80,10 +64,12 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const currentIdxForMutation = lead ? etapaOrder.indexOf(lead.etapa) : -1;
+
   const advanceMutation = useMutation({
     mutationFn: async () => {
-      if (currentIdx < 0 || currentIdx >= etapaOrder.length - 1) return;
-      const nextEtapa = etapaOrder[currentIdx + 1];
+      if (currentIdxForMutation < 0 || currentIdxForMutation >= etapaOrder.length - 1) return;
+      const nextEtapa = etapaOrder[currentIdxForMutation + 1];
       const { error } = await supabase.from("leads").update({ etapa: nextEtapa }).eq("id", lead.id);
       if (error) throw error;
       await logActivity({ tipo: "avanco_etapa", descricao: `Lead avançou de ${etapaLabels[lead.etapa]} para ${etapaLabels[nextEtapa]}`, lead_id: lead.id });
@@ -94,8 +80,8 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
 
   const retrocederMutation = useMutation({
     mutationFn: async () => {
-      if (currentIdx <= 0) return;
-      const prevEtapa = etapaOrder[currentIdx - 1];
+      if (currentIdxForMutation <= 0) return;
+      const prevEtapa = etapaOrder[currentIdxForMutation - 1];
       const { error } = await supabase.from("leads").update({ etapa: prevEtapa }).eq("id", lead.id);
       if (error) throw error;
       await logActivity({ tipo: "avanco_etapa", descricao: `Lead retrocedeu de ${etapaLabels[lead.etapa]} para ${etapaLabels[prevEtapa]}`, lead_id: lead.id });
@@ -172,6 +158,25 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
+
+  if (!lead) return null;
+
+  const comercialNome = lead.responsavel_id ? comerciais.find((c: any) => c.id === lead.responsavel_id)?.nome : null;
+  const currentIdx = currentIdxForMutation;
+
+  const startEdit = () => {
+    setEditForm({
+      nome: lead.nome || "",
+      email: lead.email || "",
+      telefone: lead.telefone || "",
+      cidade: lead.cidade || "",
+      produto_interesse: lead.produto_interesse || "",
+      origem: lead.origem || "",
+      observacoes: lead.observacoes || "",
+      responsavel_id: lead.responsavel_id || "",
+    });
+    setEditing(true);
+  };
 
   const turmasFiltradas = convertForm.produto_id
     ? turmas.filter((t: any) => t.produto_id === convertForm.produto_id)
