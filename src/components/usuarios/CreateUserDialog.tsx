@@ -43,32 +43,14 @@ export function CreateUserDialog() {
       if (!senha || senha.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres");
       if (senha !== confirmarSenha) throw new Error("As senhas não coincidem");
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: senha,
-        options: { data: { nome } },
+      // Criação via Edge Function (Admin API): não dispara e-mail de confirmação,
+      // então não esbarra no limite de envio do provedor padrão do Supabase,
+      // e não troca a sessão do admin pela do usuário recém-criado.
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: { nome, email, senha, tipoAcesso, profissionalId, comercialId },
       });
       if (error) throw error;
-      if (!data.user) throw new Error("Erro ao criar usuário");
-
-      const role = tipoAcesso === "admin" ? "admin" : tipoAcesso === "comercial" ? "comercial" : "profissional";
-      const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: data.user.id,
-        role: role as any,
-      });
-      if (roleError) throw roleError;
-
-      if (tipoAcesso === "profissional" && profissionalId) {
-        await supabase
-          .from("profiles")
-          .update({ profissional_id: profissionalId } as any)
-          .eq("user_id", data.user.id);
-      } else if (tipoAcesso === "comercial" && comercialId) {
-        await supabase
-          .from("profiles")
-          .update({ comercial_id: comercialId } as any)
-          .eq("user_id", data.user.id);
-      }
+      if ((data as any)?.error) throw new Error((data as any).error);
     },
     onSuccess: () => {
       toast.success("Usuário criado com sucesso!");
