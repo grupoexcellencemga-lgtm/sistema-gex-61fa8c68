@@ -20,6 +20,9 @@ function PWAUpdatePromptInner() {
     immediate: true,
     onRegisteredSW(_swUrl, registration) {
       registrationRef.current = registration ?? null;
+      // Se já havia uma atualização em espera (app ficou fechado quando saiu a
+      // versão nova), mostra o aviso assim que registra.
+      if (registration?.waiting) setNeedRefresh(true);
     },
     onRegisterError(error) {
       console.error("[SW] Registration error:", error);
@@ -29,7 +32,11 @@ function PWAUpdatePromptInner() {
   useEffect(() => {
     const checkForUpdates = () => {
       if (document.visibilityState !== "visible") return;
-      registrationRef.current?.update();
+      const reg = registrationRef.current;
+      if (!reg) return;
+      reg.update().catch(() => {});
+      // Rede de segurança: se um worker novo já está esperando, garante o aviso.
+      if (reg.waiting) setNeedRefresh(true);
     };
 
     checkForUpdates();
@@ -47,7 +54,7 @@ function PWAUpdatePromptInner() {
       window.removeEventListener("pageshow", checkForUpdates);
       document.removeEventListener("visibilitychange", checkForUpdates);
     };
-  }, []);
+  }, [setNeedRefresh]);
 
   if (!needRefresh) return null;
 

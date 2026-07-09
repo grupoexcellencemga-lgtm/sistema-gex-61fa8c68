@@ -24,11 +24,14 @@ export default defineConfig(({ mode }) => ({
     //   renderLegacyChunks: true,
     // }),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": o service worker novo fica em espera e avisamos o usuário
+      // (banner "Nova versão disponível") em vez de trocar por baixo dos panos.
+      // NÃO use skipWaiting aqui: ele pula a fase de espera e faz o aviso nunca
+      // disparar, deixando o usuário preso na versão antiga a cada deploy.
+      registerType: "prompt",
       includeAssets: ["apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
       workbox: {
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
