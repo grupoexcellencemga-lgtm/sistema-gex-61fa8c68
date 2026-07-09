@@ -16,8 +16,13 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Avisos internos (sino) ligados; e-mails automáticos para ALUNOS ficam
+    // desligados até revisão dos textos. Trocar para true quando aprovado.
+    const ENVIAR_EMAILS_ALUNOS = false;
+
     // Helper to send email via enviar-email function
     const sendEmail = async (to: string, templateNome: string, variaveis: Record<string, string>) => {
+      if (!ENVIAR_EMAILS_ALUNOS) return null;
       try {
         const res = await fetch(`${supabaseUrl}/functions/v1/enviar-email`, {
           method: "POST",
@@ -222,13 +227,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Leads sem interação há 3+ dias
-    const { data: leadsInativos } = await supabase
+    // 3. Leads sem interação há 3+ dias.
+    // (Funil migrou de leads.etapa[texto] para leads.etapa_id -> funil_etapas.
+    //  Ignora quem já está em etapa do tipo "ganho" ou "perdido".)
+    const { data: etapasFunil } = await supabase.from("funil_etapas").select("id, tipo");
+    const etapasFinalizadasIds = (etapasFunil || [])
+      .filter((e: any) => e.tipo === "ganho" || e.tipo === "perdido")
+      .map((e: any) => e.id);
+
+    let leadsInativosQuery = supabase
       .from("leads")
       .select("id, nome, responsavel_id, updated_at")
       .is("deleted_at", null)
-      .not("etapa", "in", "(matricula,perdido)")
       .lt("updated_at", tresDiasAtras.toISOString());
+    if (etapasFinalizadasIds.length > 0) {
+      leadsInativosQuery = leadsInativosQuery.not("etapa_id", "in", `(${etapasFinalizadasIds.join(",")})`);
+    }
+    const { data: leadsInativos } = await leadsInativosQuery;
 
     if (leadsInativos && leadsInativos.length > 0) {
       // Group by responsavel_id
@@ -337,6 +352,50 @@ Deno.serve(async (req) => {
              }
           }
         }
+      }
+    }
+
+    // 6. Tarefas pendentes (checklist de eventos/turmas e demais tarefas) que
+    //    vencem hoje ou já estão atrasadas — um aviso por responsável.
+    const { data: tarefasPendentes } = await supabase
+      .from("tarefas")
+      .select("id, titulo, data_vencimento, responsavel_id")
+      .eq("status", "pendente")
+      .not("responsavel_id", "is", null)
+      .not("data_vencimento", "is", null)
+      .lte("data_vencimento", hojeStr);
+
+    if (tarefasPendentes && tarefasPendentes.length > 0) {
+      const porResponsavel = new Map<string, { hoje: number; atrasadas: number }>();
+      for (const t of tarefasPendentes as any[]) {
+        if (!porResponsavel.has(t.responsavel_id)) porResponsavel.set(t.responsavel_id, { hoje: 0, atrasadas: 0 });
+        const b = porResponsavel.get(t.responsavel_id)!;
+        if (t.data_vencimento < hojeStr) b.atrasadas++;
+        else b.hoje++;
+      }
+
+      for (const [uid, b] of porResponsavel) {
+        if (!shouldNotify(uid, "notif_tarefas")) continue;
+        // Não duplicar o aviso no mesmo dia.
+        const { data: existing } = await supabase
+          .from("notificacoes")
+          .select("id")
+          .eq("user_id", uid)
+          .eq("tipo", "tarefas_dia")
+          .gte("created_at", hojeStr + "T00:00:00Z")
+          .limit(1);
+        if (existing && existing.length > 0) continue;
+
+        const partes: string[] = [];
+        if (b.hoje > 0) partes.push(`${b.hoje} para hoje`);
+        if (b.atrasadas > 0) partes.push(`${b.atrasadas} atrasada(s)`);
+        notifications.push({
+          user_id: uid,
+          tipo: "tarefas_dia",
+          titulo: `📋 ${b.hoje + b.atrasadas} tarefa(s) pendente(s)`,
+          mensagem: `Você tem ${partes.join(" e ")}.`,
+          link: "/tarefas",
+        });
       }
     }
 
