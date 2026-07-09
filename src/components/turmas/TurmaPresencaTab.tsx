@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Loader2, Check, X, AlertTriangle, CheckCheck, MessageCircle, Trophy, Trash2 } from "lucide-react";
+import { Plus, Loader2, Check, X, AlertTriangle, CheckCheck, MessageCircle, Trophy, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { recalcularPrazosDaTurma } from "@/lib/checklistEvento";
 
 interface Props {
   turma: any;
@@ -37,6 +38,44 @@ const frequencyBadge = (pct: number) => {
   if (pct >= 50) return <Badge className="bg-amber-100 text-amber-700 border-amber-200">🟡 Irregular ({pct}%)</Badge>;
   return <Badge className="bg-red-100 text-red-700 border-red-200">🔴 Baixa presença ({pct}%)</Badge>;
 };
+
+// Data da sessão editável no lugar — reagenda sem apagar as presenças já
+// marcadas (diferente de excluir e recriar o encontro).
+function EncontroDataEditavel({ data, onSave }: { data: string | null; onSave: (novaData: string) => void }) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(data || "");
+
+  if (editando) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        onBlur={() => {
+          setEditando(false);
+          if (valor && valor !== data) onSave(valor);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") { setValor(data || ""); setEditando(false); }
+        }}
+        className="text-[10px] w-[86px] border rounded px-0.5"
+      />
+    );
+  }
+
+  return (
+    <button
+      className="text-[10px] text-muted-foreground hover:text-foreground hover:underline flex items-center gap-0.5"
+      title="Clique para mudar a data (feriado, imprevisto...)"
+      onClick={() => { setValor(data || ""); setEditando(true); }}
+    >
+      {data ? formatDate(data) : "sem data"}
+      <Pencil className="h-2.5 w-2.5" />
+    </button>
+  );
+}
 
 export function TurmaPresencaTab({ turma }: Props) {
   const queryClient = useQueryClient();
@@ -98,6 +137,18 @@ export function TurmaPresencaTab({ turma }: Props) {
     },
   });
 
+  // Recalcula os prazos do checklist da turma após qualquer mudança de data
+  // de sessão (nova, editada ou removida) — silencioso, sem travar a ação.
+  const recalcularChecklistDaTurma = async () => {
+    try {
+      const r = await recalcularPrazosDaTurma(turma.id);
+      queryClient.invalidateQueries({ queryKey: ["tarefas-turma", turma.id] });
+      if (r.atualizadas || r.criadas) {
+        toast.info(`Checklist: ${r.atualizadas} prazo(s) reajustado(s), ${r.criadas} tarefa(s) nova(s).`);
+      }
+    } catch { /* checklist é conveniência — não trava o controle de presença */ }
+  };
+
   // Add encontro
   const addEncontroMut = useMutation({
     mutationFn: async () => {
@@ -110,11 +161,27 @@ export function TurmaPresencaTab({ turma }: Props) {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["encontros", turma.id] });
       toast.success("Encontro adicionado");
       setAddEncontroOpen(false);
       setNewEncontro({ data: "", descricao: "" });
+      await recalcularChecklistDaTurma();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Edita a data de um encontro já existente — preserva as presenças já
+  // marcadas (diferente de excluir e recriar, que apagaria tudo).
+  const updateEncontroDataMut = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: string }) => {
+      const { error } = await supabase.from("encontros").update({ data }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["encontros", turma.id] });
+      toast.success("Data do encontro atualizada");
+      await recalcularChecklistDaTurma();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -125,10 +192,11 @@ export function TurmaPresencaTab({ turma }: Props) {
       const { error } = await supabase.from("encontros").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["encontros", turma.id] });
       queryClient.invalidateQueries({ queryKey: ["presencas", turma.id] });
       toast.success("Encontro removido");
+      await recalcularChecklistDaTurma();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -313,7 +381,10 @@ export function TurmaPresencaTab({ turma }: Props) {
                       <TableHead key={e.id} className="text-center min-w-[80px]">
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-xs font-medium">S{e.sessao_numero}</span>
-                          {e.data && <span className="text-[10px] text-muted-foreground">{formatDate(e.data)}</span>}
+                          <EncontroDataEditavel
+                            data={e.data}
+                            onSave={(novaData) => updateEncontroDataMut.mutate({ id: e.id, data: novaData })}
+                          />
                           <div className="flex gap-0.5">
                             <TooltipProvider>
                               <Tooltip>

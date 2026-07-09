@@ -149,6 +149,7 @@ export async function aplicarChecklistNoEvento(
       origem_tarefa: "template",
       fase_evento: item.fase,
       area: item.area || "operacao",
+      checklist_item_id: item.id,
     };
   });
 
@@ -196,6 +197,7 @@ async function gerarTarefasDoTemplate(
       origem_tarefa: "template",
       fase_evento: item.fase,
       area: item.area || "operacao",
+      checklist_item_id: item.id,
     };
   });
 }
@@ -322,6 +324,7 @@ async function gerarTarefasDaTurma(
       origem_tarefa: "template",
       fase_evento: item.fase,
       area: item.area || "operacao",
+      checklist_item_id: item.id,
     };
   };
 
@@ -391,6 +394,161 @@ export async function definirChecklistDaTurma(
   if (markErr) throw markErr;
 
   return { tarefasCriadas: rows.length, templateNome: tpl.nome, itensSemSessao };
+}
+
+// Recalcula os prazos das tarefas do checklist de um EVENTO depois que a data
+// do evento muda. Só toca tarefas ainda 'pendente' — concluídas/canceladas
+// ficam intocadas, preservando o que já foi feito.
+export async function recalcularPrazosDoEvento(eventoId: string): Promise<{ atualizadas: number }> {
+  const { data: evento, error: evErr } = await supabase
+    .from("eventos")
+    .select("id, data")
+    .eq("id", eventoId)
+    .single();
+  if (evErr) throw evErr;
+  if (!evento?.data) return { atualizadas: 0 };
+
+  const { data: tarefas, error: tErr } = await supabase
+    .from("tarefas")
+    .select("id, data_vencimento, hora, checklist_template_items(fase, offset_valor, offset_unidade)")
+    .eq("evento_id", eventoId)
+    .eq("origem_tarefa", "template")
+    .eq("status", "pendente")
+    .not("checklist_item_id", "is", null);
+  if (tErr) throw tErr;
+
+  let atualizadas = 0;
+  for (const t of (tarefas || []) as any[]) {
+    const item = t.checklist_template_items;
+    if (!item) continue;
+    const prazo = calcularPrazoTarefa(evento.data, item.fase, item.offset_valor, item.offset_unidade);
+    if (prazo.data_vencimento !== t.data_vencimento || prazo.hora !== t.hora) {
+      const { error } = await supabase
+        .from("tarefas")
+        .update({ data_vencimento: prazo.data_vencimento, hora: prazo.hora })
+        .eq("id", t.id);
+      if (error) throw error;
+      atualizadas++;
+    }
+  }
+  return { atualizadas };
+}
+
+// Recalcula os prazos das tarefas do checklist de uma TURMA depois que
+// datas mudaram (início/fim da turma, ou data de uma sessão). Além de
+// recalcular, também cria as tarefas "cada sessão" que faltam para sessões
+// novas — nunca deleta nada aqui (sessão removida já leva as tarefas dela
+// junto, via ON DELETE CASCADE em tarefas.encontro_id).
+export async function recalcularPrazosDaTurma(
+  turmaId: string,
+): Promise<{ atualizadas: number; criadas: number }> {
+  const { data: turma, error: turmaErr } = await supabase
+    .from("turmas")
+    .select("id, nome, data_inicio, data_fim, checklist_template_id")
+    .eq("id", turmaId)
+    .single();
+  if (turmaErr) throw turmaErr;
+  if (!turma?.checklist_template_id) return { atualizadas: 0, criadas: 0 };
+
+  const [{ data: encontrosRaw, error: encErr }, { data: itensTemplate, error: itErr }, { data: tarefasExistentes, error: tErr }] =
+    await Promise.all([
+      supabase
+        .from("encontros")
+        .select("id, data, sessao_numero")
+        .eq("turma_id", turmaId)
+        .not("data", "is", null)
+        .order("data", { ascending: true }),
+      supabase
+        .from("checklist_template_items")
+        .select("*")
+        .eq("template_id", turma.checklist_template_id as string)
+        .is("deleted_at", null),
+      supabase
+        .from("tarefas")
+        .select("id, data_vencimento, hora, status, encontro_id, checklist_item_id, responsavel_id")
+        .eq("turma_id", turmaId)
+        .eq("origem_tarefa", "template"),
+    ]);
+  if (encErr) throw encErr;
+  if (itErr) throw itErr;
+  if (tErr) throw tErr;
+
+  const encontros = (encontrosRaw || []) as EncontroRef[];
+  const primeira = encontros[0]?.data ?? turma.data_inicio;
+  const ultima = encontros[encontros.length - 1]?.data ?? (turma.data_fim || turma.data_inicio);
+  const itensById = new Map((itensTemplate || []).map((i: any) => [i.id, i]));
+
+  let atualizadas = 0;
+  const existentesChave = new Set<string>();
+  const responsavelPorItem = new Map<string, string>();
+
+  for (const t of (tarefasExistentes || []) as any[]) {
+    existentesChave.add(`${t.checklist_item_id}|${t.encontro_id ?? ""}`);
+    if (t.checklist_item_id && t.responsavel_id && !responsavelPorItem.has(t.checklist_item_id)) {
+      responsavelPorItem.set(t.checklist_item_id, t.responsavel_id);
+    }
+
+    if (t.status !== "pendente" || !t.checklist_item_id) continue;
+    const item = itensById.get(t.checklist_item_id);
+    if (!item) continue; // item foi removido do modelo — não recalcula uma tarefa órfã
+
+    const ancora = (item.ancora || "evento_inteiro") as AncoraTarefa;
+    let dataRef: string | null;
+    if (ancora === "cada_sessao") {
+      dataRef = encontros.find((e) => e.id === t.encontro_id)?.data ?? null;
+    } else if (ancora === "primeira_sessao") dataRef = primeira ?? null;
+    else if (ancora === "ultima_sessao") dataRef = ultima ?? null;
+    else dataRef = turma.data_inicio;
+    if (!dataRef) continue;
+
+    const prazo = calcularPrazoTarefa(dataRef, item.fase, item.offset_valor, item.offset_unidade);
+    if (prazo.data_vencimento !== t.data_vencimento || prazo.hora !== t.hora) {
+      const { error } = await supabase
+        .from("tarefas")
+        .update({ data_vencimento: prazo.data_vencimento, hora: prazo.hora })
+        .eq("id", t.id);
+      if (error) throw error;
+      atualizadas++;
+    }
+  }
+
+  // Sessões novas: gera as tarefas "cada sessão" que ainda não existem.
+  const novasLinhas: any[] = [];
+  for (const item of (itensTemplate || []) as any[]) {
+    if ((item.ancora || "evento_inteiro") !== "cada_sessao") continue;
+    const responsavelId = responsavelPorItem.get(item.id);
+    if (!responsavelId) continue; // sem histórico de quem é o responsável — precisa aplicar/trocar manualmente
+    for (const enc of encontros) {
+      if (existentesChave.has(`${item.id}|${enc.id}`)) continue;
+      const prazo = calcularPrazoTarefa(enc.data, item.fase, item.offset_valor, item.offset_unidade);
+      novasLinhas.push({
+        titulo: item.nome_tarefa,
+        descricao: `Checklist da turma "${turma.nome}"${item.obrigatoria ? "" : " (opcional)"}`,
+        tipo: "outro",
+        prioridade: item.prioridade || "media",
+        status: "pendente",
+        responsavel_id: responsavelId,
+        data_vencimento: prazo.data_vencimento,
+        hora: prazo.hora,
+        recorrencia: "nenhuma",
+        turma_id: turmaId,
+        encontro_id: enc.id,
+        origem_tarefa: "template",
+        fase_evento: item.fase,
+        area: item.area || "operacao",
+        checklist_item_id: item.id,
+      });
+    }
+  }
+
+  let criadas = 0;
+  if (novasLinhas.length) {
+    const { error } = await supabase.from("tarefas").insert(novasLinhas);
+    if (error) throw error;
+    criadas = novasLinhas.length;
+  }
+
+  return { atualizadas, criadas };
 }
 
 export async function removerChecklistDaTurma(turmaId: string): Promise<number> {

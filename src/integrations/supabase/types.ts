@@ -2691,6 +2691,7 @@ export type Database = {
         Row: {
           aluno_id: string | null
           area: string | null
+          checklist_item_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -2716,6 +2717,7 @@ export type Database = {
         Insert: {
           aluno_id?: string | null
           area?: string | null
+          checklist_item_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -2741,6 +2743,7 @@ export type Database = {
         Update: {
           aluno_id?: string | null
           area?: string | null
+          checklist_item_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -2769,6 +2772,13 @@ export type Database = {
             columns: ["aluno_id"]
             isOneToOne: false
             referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarefas_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_template_items"
             referencedColumns: ["id"]
           },
           {

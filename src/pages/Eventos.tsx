@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { definirChecklistDoEvento } from "@/lib/checklistEvento";
+import { definirChecklistDoEvento, recalcularPrazosDoEvento } from "@/lib/checklistEvento";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -207,10 +207,24 @@ const Eventos = () => {
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
       }).eq("id", id);
       if (error) throw error;
+
+      // A data pode ter mudado (feriado, imprevisto...) — recalcula os prazos
+      // das tarefas do checklist ainda pendentes para acompanhar a nova data.
+      try {
+        const r = await recalcularPrazosDoEvento(id);
+        return r.atualizadas;
+      } catch {
+        return 0; // não trava a edição do evento por causa disso
+      }
     },
-    onSuccess: () => {
+    onSuccess: (atualizadas) => {
       queryClient.invalidateQueries({ queryKey: ["eventos"] });
+      queryClient.invalidateQueries({ queryKey: ["tarefas-evento", editingId] });
+      queryClient.invalidateQueries({ queryKey: ["tarefas"] });
       toast.success("Evento atualizado"); setDialogOpen(false);
+      if (atualizadas) {
+        toast.info(`Checklist: ${atualizadas} prazo(s) reajustado(s) pela nova data.`);
+      }
       if (selectedEvento && editingId === selectedEvento.id) {
         setSelectedEvento((prev: any) => ({
           ...prev, nome: form.nome, data: form.data || null, local: form.local || null,

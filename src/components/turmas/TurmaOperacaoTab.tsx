@@ -11,11 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LayoutDashboard, ListChecks, Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, ListChecks, Loader2, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   definirChecklistDaTurma,
   removerChecklistDaTurma,
+  recalcularPrazosDaTurma,
 } from "@/lib/checklistEvento";
 import { ChecklistKanban } from "@/components/eventos/operacao/ChecklistKanban";
 
@@ -111,6 +112,22 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const recalcularMutation = useMutation({
+    mutationFn: () => recalcularPrazosDaTurma(turma.id),
+    onSuccess: (r) => {
+      invalidateAll();
+      if (r.atualizadas > 0 || r.criadas > 0) {
+        const partes = [];
+        if (r.atualizadas > 0) partes.push(`${r.atualizadas} ajustada(s)`);
+        if (r.criadas > 0) partes.push(`${r.criadas} criada(s)`);
+        toast.success(`Prazos recalculados — ${partes.join(", ")}.`);
+      } else {
+        toast.info("Nenhum prazo precisou de ajuste.");
+      }
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
   const hojeISO = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
   const pendentes = tarefas.filter((t: any) => t.status === "pendente");
   const concluidas = tarefas.filter((t: any) => t.status === "concluida");
@@ -165,6 +182,22 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
               )}
               {temChecklist ? "Trocar por este" : "Aplicar"}
             </Button>
+            {temChecklist && (
+              <Button
+                variant="outline"
+                disabled={recalcularMutation.isPending}
+                onClick={() => recalcularMutation.mutate()}
+                title="Recalcula as datas das tarefas pendentes com base nas datas atuais da turma e das sessões (útil após mudar uma data por feriado ou imprevisto)"
+                className="gap-2"
+              >
+                {recalcularMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Recalcular prazos
+              </Button>
+            )}
             {temChecklist && (
               <Button
                 variant="outline"

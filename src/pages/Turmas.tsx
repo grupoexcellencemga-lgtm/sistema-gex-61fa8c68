@@ -21,6 +21,7 @@ import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { TurmaFinanceiroTab } from "@/components/turmas/TurmaFinanceiroTab";
 import { TurmaMetricasTab } from "@/components/turmas/TurmaMetricasTab";
 import { TurmaOperacaoTab } from "@/components/turmas/TurmaOperacaoTab";
+import { recalcularPrazosDaTurma } from "@/lib/checklistEvento";
 import { formatDate } from "@/lib/formatters";
 import { NOMES_MES } from "@/components/agenda/agendaUtils";
 
@@ -174,8 +175,25 @@ const Turmas = () => {
         responsavel: data.responsavel || null, produto_id: data.produto_id || null,
       }).eq("id", id);
       if (error) throw error;
+
+      // Início/fim podem ter mudado (feriado, imprevisto...) — recalcula os
+      // prazos das tarefas do checklist ainda pendentes.
+      try {
+        return await recalcularPrazosDaTurma(id);
+      } catch {
+        return { atualizadas: 0, criadas: 0 };
+      }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["turmas"] }); toast.success("Turma atualizada"); setDialogOpen(false); },
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ["turmas"] });
+      queryClient.invalidateQueries({ queryKey: ["tarefas-turma", editingId] });
+      queryClient.invalidateQueries({ queryKey: ["tarefas"] });
+      toast.success("Turma atualizada");
+      setDialogOpen(false);
+      if (r.atualizadas || r.criadas) {
+        toast.info(`Checklist: ${r.atualizadas} prazo(s) reajustado(s), ${r.criadas} tarefa(s) nova(s).`);
+      }
+    },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 

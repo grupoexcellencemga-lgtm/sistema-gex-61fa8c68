@@ -21,11 +21,13 @@ import {
   Loader2,
   Sparkles,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   definirChecklistDoEvento,
   removerChecklistDoEvento,
+  recalcularPrazosDoEvento,
 } from "@/lib/checklistEvento";
 import { ChecklistKanban } from "./operacao/ChecklistKanban";
 import { EventoMateriaisTab } from "./operacao/EventoMateriaisTab";
@@ -160,6 +162,19 @@ export function EventoDetailSheet({
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const recalcularMutation = useMutation({
+    mutationFn: () => recalcularPrazosDoEvento(evento.id),
+    onSuccess: (r) => {
+      invalidateAll();
+      if (r.atualizadas > 0) {
+        toast.success(`Prazos recalculados — ${r.atualizadas} tarefa(s) ajustada(s).`);
+      } else {
+        toast.info("Nenhum prazo precisou de ajuste.");
+      }
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
   const statusMutation = useMutation({
     mutationFn: async (novoStatus: string) => {
       const anterior = eventoAtual.status || "planejado";
@@ -264,6 +279,22 @@ export function EventoDetailSheet({
                 )}
                 {temChecklist ? "Trocar por este" : "Aplicar"}
               </Button>
+              {temChecklist && (
+                <Button
+                  variant="outline"
+                  disabled={recalcularMutation.isPending}
+                  onClick={() => recalcularMutation.mutate()}
+                  title="Recalcula as datas das tarefas pendentes com base na data atual do evento (útil após mudar a data por feriado ou imprevisto)"
+                  className="gap-2"
+                >
+                  {recalcularMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Recalcular prazos
+                </Button>
+              )}
               {temChecklist && (
                 <Button
                   variant="outline"
