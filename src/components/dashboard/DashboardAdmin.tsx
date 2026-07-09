@@ -2,16 +2,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Users, UserPlus, CreditCard, AlertTriangle, Calendar, TrendingUp, TrendingDown, Landmark, Target, Briefcase, CheckSquare } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Progress } from "@/components/ui/progress";
 import { MetricDetailDialog, MetricDetailItem } from "@/components/MetricDetailDialog";
 import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
-import type { DashboardMetrics, MetaRow, TarefaRow } from "@/types";
+import type { DashboardMetrics, MetaRow } from "@/types";
 
 const colors = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
 
@@ -21,24 +21,39 @@ interface Props {
 }
 
 export function DashboardAdmin({ mes, ano }: Props) {
-  const { user } = useAuth();
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
 
-  const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
-    queryKey: ["minhas-tarefas-dashboard", user?.id],
+  // Checklists de eventos/turmas com tarefas em aberto — visão geral da empresa,
+  // agrupada por evento/turma para apontar onde agir primeiro.
+  const { data: checklistPendentes = [] } = useQuery({
+    queryKey: ["checklist-pendentes-dashboard"],
     queryFn: async () => {
-      if (!user) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("tarefas")
-        .select("id, titulo, prioridade, data_vencimento, status")
-        .eq("responsavel_id", user.id)
-        .in("status", ["pendente", "em_andamento"])
-        .order("data_vencimento", { ascending: true, nullsFirst: false })
-        .limit(5);
+        .select("evento_id, turma_id, data_vencimento, eventos(nome), turmas(nome)")
+        .eq("origem_tarefa", "template")
+        .eq("status", "pendente");
+      if (error) throw error;
       return data || [];
     },
-    enabled: !!user,
   });
+
+  const gruposChecklist = (() => {
+    const hojeISO = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+    const map = new Map<string, { tipo: "evento" | "turma"; id: string; nome: string; pendentes: number; atrasadas: number }>();
+    for (const t of checklistPendentes as any[]) {
+      const tipo: "evento" | "turma" = t.evento_id ? "evento" : "turma";
+      const id = t.evento_id || t.turma_id;
+      if (!id) continue;
+      const nome = t.eventos?.nome || t.turmas?.nome || "—";
+      const key = `${tipo}:${id}`;
+      if (!map.has(key)) map.set(key, { tipo, id, nome, pendentes: 0, atrasadas: 0 });
+      const g = map.get(key)!;
+      g.pendentes++;
+      if (t.data_vencimento && t.data_vencimento < hojeISO) g.atrasadas++;
+    }
+    return Array.from(map.values()).sort((a, b) => b.atrasadas - a.atrasadas || b.pendentes - a.pendentes);
+  })();
 
   const { data: metrics, isLoading } = useQuery<DashboardMetrics>({
     queryKey: ["dashboard-metrics", mes, ano],
@@ -208,36 +223,40 @@ export function DashboardAdmin({ mes, ano }: Props) {
         </Card>
       )}
 
-      {minhasTarefas.length > 0 && (
+      {gruposChecklist.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Minhas Tarefas</CardTitle>
+              <CardTitle className="text-base font-semibold flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Checklists em Aberto</CardTitle>
               <Link to="/tarefas" className="text-xs text-primary hover:underline">Ver todas →</Link>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {minhasTarefas.map((t) => {
-                const isVencida = t.data_vencimento && new Date(t.data_vencimento + "T23:59:59") < new Date();
-                const prioridadeColors: Record<string, string> = {
-                  urgente: "text-destructive", alta: "text-orange-600 dark:text-orange-400",
-                  media: "text-blue-600 dark:text-blue-400", baixa: "text-muted-foreground",
-                };
-                return (
-                  <Link key={t.id} to="/tarefas" className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`text-xs font-medium ${prioridadeColors[t.prioridade] || ""}`}>●</span>
-                      <span className="text-sm truncate">{t.titulo}</span>
-                    </div>
-                    {t.data_vencimento && (
-                      <span className={`text-xs shrink-0 ${isVencida ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                        {new Date(t.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+              {gruposChecklist.slice(0, 8).map((g) => (
+                <Link
+                  key={`${g.tipo}-${g.id}`}
+                  to={g.tipo === "evento" ? `/eventos?evento=${g.id}&tab=operacao&sub=checklist` : `/turmas?turma=${g.id}&tab=operacao&sub=checklist`}
+                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="text-[10px] shrink-0 font-normal">
+                      {g.tipo === "evento" ? "Evento" : "Turma"}
+                    </Badge>
+                    <span className="text-sm truncate">{g.nome}</span>
+                  </div>
+                  <span className="text-xs shrink-0 space-x-1.5">
+                    {g.atrasadas > 0 && (
+                      <span className="text-destructive font-medium">
+                        {g.atrasadas} atrasada{g.atrasadas > 1 ? "s" : ""}
                       </span>
                     )}
-                  </Link>
-                );
-              })}
+                    <span className="text-muted-foreground">
+                      {g.pendentes} pendente{g.pendentes > 1 ? "s" : ""}
+                    </span>
+                  </span>
+                </Link>
+              ))}
             </div>
           </CardContent>
         </Card>

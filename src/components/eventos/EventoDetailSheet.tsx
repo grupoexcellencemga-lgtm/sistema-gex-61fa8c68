@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,13 @@ export function EventoDetailSheet({
 }) {
   const queryClient = useQueryClient();
   const [templateEscolhido, setTemplateEscolhido] = useState<string>("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSubTab = searchParams.get("sub") || "resumo";
+  const handleSubTabChange = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("sub", v);
+    setSearchParams(next, { replace: true });
+  };
 
   // Busca o evento fresco: os campos de checklist/status mudam dentro do painel.
   const { data: eventoAtual } = useQuery({
@@ -210,7 +218,7 @@ export function EventoDetailSheet({
 
   return (
     <div className="space-y-4">
-      <Tabs defaultValue="resumo" className="w-full">
+      <Tabs value={activeSubTab} onValueChange={handleSubTabChange} className="w-full">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="resumo" className="gap-1"><LayoutDashboard className="h-4 w-4" /> Resumo</TabsTrigger>
           <TabsTrigger value="checklist" className="gap-1"><ListChecks className="h-4 w-4" /> Checklist</TabsTrigger>

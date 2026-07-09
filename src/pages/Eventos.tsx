@@ -84,6 +84,8 @@ const Eventos = () => {
     setSelectedEvento(evento);
     const next = new URLSearchParams(searchParams);
     next.set("evento", evento.id);
+    next.delete("tab");
+    next.delete("sub");
     setSearchParams(next, { replace: false });
   };
 
@@ -91,6 +93,8 @@ const Eventos = () => {
     setSelectedEvento(null);
     const next = new URLSearchParams(searchParams);
     next.delete("evento");
+    next.delete("tab");
+    next.delete("sub");
     setSearchParams(next, { replace: true });
   };
 

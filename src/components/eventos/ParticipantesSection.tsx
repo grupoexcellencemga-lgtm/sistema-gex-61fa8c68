@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Receipt, ListChecks } from "lucide-react";
@@ -48,6 +49,14 @@ export function ParticipantesSection({
   turmas,
 }: Props) {
   const { data: formasPagamento = [] } = useFormasPagamento();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "participantes";
+  const handleTabChange = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", v);
+    setSearchParams(next, { replace: true });
+  };
 
   const [addParticipanteOpen, setAddParticipanteOpen] = useState(false);
   const [partForm, setPartForm] = useState({ ...emptyPartForm });
@@ -260,7 +269,7 @@ export function ParticipantesSection({
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="participantes" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="participantes" className="gap-1">
             <Users className="h-4 w-4" /> Participantes

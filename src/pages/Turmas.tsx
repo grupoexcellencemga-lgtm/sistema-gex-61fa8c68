@@ -46,6 +46,7 @@ const Turmas = () => {
     const next = new URLSearchParams(searchParams);
     next.set("turma", turmaId);
     next.set("tab", tab);
+    next.delete("sub");
     setSearchParams(next, { replace: false });
   };
 
@@ -53,6 +54,7 @@ const Turmas = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("turma");
     next.delete("tab");
+    next.delete("sub");
     setSearchParams(next, { replace: true });
   };
 
