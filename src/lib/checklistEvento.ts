@@ -28,6 +28,31 @@ export const AREA_LABELS: Record<AreaEvento, string> = {
   marketing: "Marketing",
   operacao: "Operação",
 };
+
+// Responsável padrão de cada área (configurável em Configurações → Checklists).
+// Ao gerar tarefas, cada uma vai para o responsável da sua área; se a área não
+// tiver responsável definido, cai no responsável padrão (quem aplicou).
+export type MapaResponsavelArea = Partial<Record<AreaEvento, string>>;
+
+export async function carregarResponsaveisPorArea(): Promise<MapaResponsavelArea> {
+  const { data } = await (supabase as any)
+    .from("checklist_area_responsaveis")
+    .select("area, responsavel_id");
+  const mapa: MapaResponsavelArea = {};
+  for (const r of data || []) {
+    if (r.responsavel_id) mapa[r.area as AreaEvento] = r.responsavel_id as string;
+  }
+  return mapa;
+}
+
+function responsavelDaArea(
+  area: string | null | undefined,
+  mapa: MapaResponsavelArea,
+  padrao: string,
+): string {
+  const a = (area || "operacao") as AreaEvento;
+  return mapa[a] || padrao;
+}
 export const AREA_BADGE: Record<AreaEvento, string> = {
   comercial: "bg-blue-100 text-blue-700 border-blue-200",
   marketing: "bg-purple-100 text-purple-700 border-purple-200",
@@ -128,6 +153,7 @@ export async function aplicarChecklistNoEvento(
     return { aplicado: true, tarefasCriadas: 0, templateNome: template.nome };
   }
 
+  const mapaArea = await carregarResponsaveisPorArea();
   const rows = itens.map((item: any) => {
     const prazo = calcularPrazoTarefa(
       evento.data as string,
@@ -141,7 +167,7 @@ export async function aplicarChecklistNoEvento(
       tipo: "outro",
       prioridade: item.prioridade || "media",
       status: "pendente",
-      responsavel_id: responsavelId,
+      responsavel_id: responsavelDaArea(item.area, mapaArea, responsavelId),
       data_vencimento: prazo.data_vencimento,
       hora: prazo.hora,
       recorrencia: "nenhuma",
@@ -176,6 +202,7 @@ async function gerarTarefasDoTemplate(
     .is("deleted_at", null);
   if (error) throw error;
 
+  const mapaArea = await carregarResponsaveisPorArea();
   return (itens || []).map((item: any) => {
     const prazo = calcularPrazoTarefa(
       evento.data,
@@ -189,7 +216,7 @@ async function gerarTarefasDoTemplate(
       tipo: "outro",
       prioridade: item.prioridade || "media",
       status: "pendente",
-      responsavel_id: responsavelId,
+      responsavel_id: responsavelDaArea(item.area, mapaArea, responsavelId),
       data_vencimento: prazo.data_vencimento,
       hora: prazo.hora,
       recorrencia: "nenhuma",
@@ -298,6 +325,7 @@ async function gerarTarefasDaTurma(
   if (itensErr) throw itensErr;
   if (encErr) throw encErr;
 
+  const mapaArea = await carregarResponsaveisPorArea();
   const encontros = (encontrosRaw || []) as EncontroRef[];
   const primeira = encontros[0]?.data ?? turma.data_inicio;
   const ultima = encontros[encontros.length - 1]?.data ?? (turma.data_fim || turma.data_inicio);
@@ -315,7 +343,7 @@ async function gerarTarefasDaTurma(
       tipo: "outro",
       prioridade: item.prioridade || "media",
       status: "pendente",
-      responsavel_id: responsavelId,
+      responsavel_id: responsavelDaArea(item.area, mapaArea, responsavelId),
       data_vencimento: prazo.data_vencimento,
       hora: prazo.hora,
       recorrencia: "nenhuma",

@@ -4,6 +4,7 @@ import { TaxasSection } from "@/components/configuracoes/TaxasSection";
 import { FormasPagamentoSection } from "@/components/configuracoes/FormasPagamentoSection";
 import { CategoriasSection } from "@/components/configuracoes/CategoriasSection";
 import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistTemplatesSection";
+import { ChecklistAreaResponsaveisSection } from "@/components/configuracoes/ChecklistAreaResponsaveisSection";
 import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -634,6 +635,7 @@ const Configuracoes = () => {
         </TabsContent>
 
         <TabsContent value="checklists" className="max-w-5xl space-y-6">
+          <ChecklistAreaResponsaveisSection />
           <ChecklistTemplatesSection />
         </TabsContent>
 
