@@ -80,7 +80,7 @@ const MindMap = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mindmaps")
-        .select("id, nome, updated_at")
+        .select("id, nome, updated_at, user_id")
         .is("deleted_at", null)
         .order("updated_at", { ascending: false });
       if (error) throw error;
@@ -518,12 +518,17 @@ const MindMap = () => {
                 ) : (
                   <>
                     <span className="flex-1 truncate" onClick={() => setSelectedMapId(map.id)}>{map.nome}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => { setEditingMapId(map.id); setEditingName(map.nome); }}>
-                      <Edit2 className="h-3 w-3" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => deleteMap.mutate(map.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    {/* Só o dono renomeia/exclui o quadro; os demais editam o conteúdo. */}
+                    {map.user_id === user?.id && (
+                      <>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => { setEditingMapId(map.id); setEditingName(map.nome); }}>
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => deleteMap.mutate(map.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
