@@ -6,10 +6,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, CheckCheck, Loader2, AlertTriangle, Clock } from "lucide-react";
+import { Bell, CheckCheck, Loader2, AlertTriangle, Clock, Volume2, VolumeX } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { playNotificationSound, somNotificacaoLigado, definirSomNotificacao } from "@/lib/notificationSound";
 
 const tipoIcons: Record<string, string> = {
   pagamento_vencido: "💰",
@@ -26,6 +27,7 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [hasNew, setHasNew] = useState(false);
+  const [somLigado, setSomLigado] = useState(somNotificacaoLigado());
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notificacoes", user?.id],
@@ -87,6 +89,7 @@ export function NotificationBell() {
         () => {
           queryClient.invalidateQueries({ queryKey: ["notificacoes", user.id] });
           setHasNew(true);
+          playNotificationSound();
           setTimeout(() => setHasNew(false), 3000);
         }
       )
@@ -138,18 +141,34 @@ export function NotificationBell() {
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h4 className="text-sm font-semibold">Notificações</h4>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
+              size="icon"
+              className="h-7 w-7"
+              title={somLigado ? "Som ligado — clique para silenciar" : "Som desligado — clique para ativar"}
+              onClick={() => {
+                const novo = !somLigado;
+                setSomLigado(novo);
+                definirSomNotificacao(novo);
+                if (novo) playNotificationSound(); // toca uma prévia ao ligar
+              }}
             >
-              <CheckCheck className="h-3.5 w-3.5" />
-              Marcar todas
+              {somLigado ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
             </Button>
-          )}
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Marcar todas
+              </Button>
+            )}
+          </div>
         </div>
         {tarefasEvento.length > 0 && (
           <div className="border-b bg-amber-50/60 dark:bg-amber-950/20">
