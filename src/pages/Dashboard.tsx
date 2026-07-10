@@ -7,6 +7,7 @@ import { DashboardComercial } from "@/components/dashboard/DashboardComercial";
 import { DashboardFinanceiro } from "@/components/dashboard/DashboardFinanceiro";
 import { DashboardProfissional } from "@/components/dashboard/DashboardProfissional";
 import { DashboardSuporte } from "@/components/dashboard/DashboardSuporte";
+import { ProximosEventosCard } from "@/components/dashboard/ProximosEventosCard";
 import { Loader2 } from "lucide-react";
 
 const roleDescriptions: Record<string, string> = {
@@ -45,6 +46,7 @@ const Dashboard = () => {
         <PageHeader title="Dashboard" description={description} />
         <MonthFilter mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
       </div>
+      <ProximosEventosCard />
       {role === "comercial" && <DashboardComercial mes={mes} ano={ano} />}
       {role === "financeiro" && <DashboardFinanceiro mes={mes} ano={ano} />}
       {role === "profissional" && <DashboardProfissional mes={mes} ano={ano} />}
