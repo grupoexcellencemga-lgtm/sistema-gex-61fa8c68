@@ -8,12 +8,96 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Loader2, Check, X, AlertTriangle, CheckCheck, MessageCircle, Trophy, Trash2, Pencil } from "lucide-react";
+import { Plus, Loader2, Check, X, AlertTriangle, CheckCheck, MessageCircle, Trophy, Trash2, Pencil, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { recalcularPrazosDaTurma } from "@/lib/checklistEvento";
+
+// Formatos reais de turma. Só "semanal" pede o número de sessões; os demais
+// já sabem quantas são (dias seguidos a partir da data de início).
+type FormatoTurma = "1dia" | "2dias" | "3dias" | "semanal" | "quinzenal" | "personalizado";
+const FORMATOS: { value: FormatoTurma; label: string }[] = [
+  { value: "1dia", label: "1 dia" },
+  { value: "2dias", label: "2 dias seguidos" },
+  { value: "3dias", label: "3 dias seguidos" },
+  { value: "semanal", label: "1x por semana" },
+  { value: "quinzenal", label: "Quinzenal (a cada 2 semanas)" },
+  { value: "personalizado", label: "Personalizado (escolher as datas)" },
+];
+
+// Formatos com cadência fixa geram por intervalo em dias; os demais têm
+// contagem fixa (dias seguidos) ou datas escolhidas na mão (personalizado).
+function intervaloDias(formato: FormatoTurma): number | null {
+  if (formato === "semanal") return 7;
+  if (formato === "quinzenal") return 14;
+  return null;
+}
+const PEDE_NUMERO_SESSOES = (f: FormatoTurma) => f === "semanal" || f === "quinzenal";
+
+// Soma dias a uma data "YYYY-MM-DD" com matemática pura em UTC (imune a fuso).
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+// Calcula APENAS as sessões novas a acrescentar (aditivo, nunca recria as que
+// já existem). Para "1x semana", continua a cadência a partir da última sessão
+// já cadastrada — assim datas ajustadas na mão (feriado) não são perdidas.
+function novasSessoes(
+  formato: FormatoTurma,
+  dataInicio: string,
+  nSessoes: number,
+  encontros: any[],
+  datasCustom: string[] = [],
+): { sessao_numero: number; data: string }[] {
+  const existentes = encontros.length;
+  const datasExistentes = encontros
+    .map((e) => e.data as string | null)
+    .filter((d): d is string => !!d)
+    .sort();
+
+  // Personalizado: usa exatamente as datas escolhidas, ignorando as que já existem.
+  if (formato === "personalizado") {
+    const jaTem = new Set(datasExistentes);
+    const limpas = Array.from(new Set(datasCustom.filter(Boolean)))
+      .filter((d) => !jaTem.has(d))
+      .sort();
+    return limpas.map((data, idx) => ({ sessao_numero: existentes + idx + 1, data }));
+  }
+
+  if (!dataInicio) return [];
+  const ultimaData = datasExistentes[datasExistentes.length - 1] || null;
+  const intervalo = intervaloDias(formato); // 7, 14 ou null (dias seguidos)
+
+  const total =
+    intervalo ? Math.max(0, Math.floor(nSessoes || 0)) :
+    formato === "3dias" ? 3 :
+    formato === "2dias" ? 2 : 1;
+
+  const novas: { sessao_numero: number; data: string }[] = [];
+  for (let i = existentes; i < total; i++) {
+    let data: string;
+    if (intervalo) {
+      // Continua a cadência a partir da última sessão já cadastrada (preserva
+      // datas ajustadas na mão); se não houver, conta a partir do início.
+      data = ultimaData
+        ? addDaysISO(ultimaData, intervalo * (i - existentes + 1))
+        : addDaysISO(dataInicio, intervalo * i);
+    } else {
+      data = addDaysISO(dataInicio, i); // dias seguidos
+    }
+    novas.push({ sessao_numero: i + 1, data });
+  }
+  return novas;
+}
 
 interface Props {
   turma: any;
@@ -82,6 +166,13 @@ export function TurmaPresencaTab({ turma }: Props) {
   const [addEncontroOpen, setAddEncontroOpen] = useState(false);
   const [newEncontro, setNewEncontro] = useState({ data: "", descricao: "" });
   const [obsDialog, setObsDialog] = useState<{ presencaId: string; obs: string } | null>(null);
+  const [gerarOpen, setGerarOpen] = useState(false);
+  const [gerarForm, setGerarForm] = useState<{ formato: FormatoTurma; data: string; nSessoes: number; datasCustom: string[] }>({
+    formato: "semanal",
+    data: turma.data_inicio || "",
+    nSessoes: 8,
+    datasCustom: [""],
+  });
 
   // Fetch encontros
   const { data: encontros = [], isLoading: loadingEncontros } = useQuery({
@@ -166,6 +257,42 @@ export function TurmaPresencaTab({ turma }: Props) {
       toast.success("Encontro adicionado");
       setAddEncontroOpen(false);
       setNewEncontro({ data: "", descricao: "" });
+      await recalcularChecklistDaTurma();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Gera as sessões automaticamente pelo formato da turma. Aditivo: só cria as
+  // que faltam, atualiza data_fim (e data_inicio se estava vazia) e re-alimenta
+  // o checklist para as sessões novas.
+  const gerarSessoesMut = useMutation({
+    mutationFn: async () => {
+      const novas = novasSessoes(gerarForm.formato, gerarForm.data, gerarForm.nSessoes, encontros, gerarForm.datasCustom);
+      if (novas.length === 0) throw new Error("Nenhuma sessão nova para gerar.");
+
+      const rows = novas.map((n) => ({
+        turma_id: turma.id,
+        sessao_numero: n.sessao_numero,
+        data: n.data,
+      }));
+      const { error } = await supabase.from("encontros").insert(rows);
+      if (error) throw error;
+
+      const todas = [
+        ...encontros.map((e: any) => e.data).filter(Boolean),
+        ...novas.map((n) => n.data),
+      ].sort();
+      const patch: any = { data_fim: todas[todas.length - 1] };
+      if (!turma.data_inicio) patch.data_inicio = todas[0];
+      await supabase.from("turmas").update(patch).eq("id", turma.id);
+
+      return novas.length;
+    },
+    onSuccess: async (qtd: number) => {
+      queryClient.invalidateQueries({ queryKey: ["encontros", turma.id] });
+      queryClient.invalidateQueries({ queryKey: ["turmas"] });
+      toast.success(`${qtd} sessão(ões) gerada(s)`);
+      setGerarOpen(false);
       await recalcularChecklistDaTurma();
     },
     onError: (e: any) => toast.error(e.message),
@@ -326,6 +453,8 @@ export function TurmaPresencaTab({ turma }: Props) {
     return `https://wa.me/55${clean}`;
   };
 
+  const previewNovas = novasSessoes(gerarForm.formato, gerarForm.data, gerarForm.nSessoes, encontros, gerarForm.datasCustom);
+
   if (loadingEncontros) return <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   return (
@@ -362,9 +491,14 @@ export function TurmaPresencaTab({ turma }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">Controle de Presença</CardTitle>
-          <Button size="sm" onClick={() => setAddEncontroOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />Novo Encontro
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => { setGerarForm((p) => ({ ...p, data: turma.data_inicio || p.data })); setGerarOpen(true); }}>
+              <CalendarPlus className="h-4 w-4 mr-1" />Gerar sessões
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setAddEncontroOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />Novo Encontro
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {encontros.length === 0 ? (
@@ -503,6 +637,109 @@ export function TurmaPresencaTab({ turma }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* Gerar Sessões Dialog */}
+      <Dialog open={gerarOpen} onOpenChange={setGerarOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Gerar sessões automaticamente</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Formato da turma</Label>
+              <Select value={gerarForm.formato} onValueChange={(v) => setGerarForm((p) => ({ ...p, formato: v as FormatoTurma }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FORMATOS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {gerarForm.formato === "personalizado" ? (
+              <div>
+                <Label>Datas das sessões</Label>
+                <div className="space-y-2 mt-1">
+                  {gerarForm.datasCustom.map((d, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        type="date"
+                        value={d}
+                        onChange={(e) =>
+                          setGerarForm((p) => {
+                            const datasCustom = [...p.datasCustom];
+                            datasCustom[i] = e.target.value;
+                            return { ...p, datasCustom };
+                          })
+                        }
+                      />
+                      {gerarForm.datasCustom.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setGerarForm((p) => ({ ...p, datasCustom: p.datasCustom.filter((_, j) => j !== i) }))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setGerarForm((p) => ({ ...p, datasCustom: [...p.datasCustom, ""] }))}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />Adicionar data
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label>Data da 1ª sessão</Label>
+                  <Input type="date" value={gerarForm.data} onChange={(e) => setGerarForm((p) => ({ ...p, data: e.target.value }))} />
+                </div>
+                {PEDE_NUMERO_SESSOES(gerarForm.formato) && (
+                  <div>
+                    <Label>Número de sessões</Label>
+                    <Input type="number" min={1} value={gerarForm.nSessoes} onChange={(e) => setGerarForm((p) => ({ ...p, nSessoes: Number(e.target.value) }))} />
+                  </div>
+                )}
+              </>
+            )}
+
+            {encontros.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Esta turma já tem {encontros.length} sessão(ões). Serão adicionadas apenas as que faltam.
+              </p>
+            )}
+
+            <div className="rounded-lg border p-3 bg-muted/30">
+              <div className="text-xs font-medium mb-2">
+                {previewNovas.length > 0
+                  ? `${previewNovas.length} sessão(ões) nova(s):`
+                  : "Nenhuma sessão nova a criar com esses valores."}
+              </div>
+              {previewNovas.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {previewNovas.map((n) => (
+                    <Badge key={n.sessao_numero} variant="outline" className="text-[11px]">
+                      S{n.sessao_numero} · {formatDate(n.data)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={() => gerarSessoesMut.mutate()}
+              disabled={gerarSessoesMut.isPending || previewNovas.length === 0}
+            >
+              {gerarSessoesMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Gerar {previewNovas.length > 0 ? previewNovas.length : ""} sessão(ões)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Encontro Dialog */}
       <Dialog open={addEncontroOpen} onOpenChange={setAddEncontroOpen}>

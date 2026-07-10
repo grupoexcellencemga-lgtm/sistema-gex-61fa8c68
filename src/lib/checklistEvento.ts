@@ -478,7 +478,7 @@ export async function recalcularPrazosDaTurma(
   if (turmaErr) throw turmaErr;
   if (!turma?.checklist_template_id) return { atualizadas: 0, criadas: 0 };
 
-  const [{ data: encontrosRaw, error: encErr }, { data: itensTemplate, error: itErr }, { data: tarefasExistentes, error: tErr }] =
+  const [{ data: encontrosRaw, error: encErr }, { data: itensTemplate, error: itErr }, { data: tarefasExistentes, error: tErr }, mapaArea, userRes] =
     await Promise.all([
       supabase
         .from("encontros")
@@ -496,10 +496,17 @@ export async function recalcularPrazosDaTurma(
         .select("id, data_vencimento, hora, status, encontro_id, checklist_item_id, responsavel_id")
         .eq("turma_id", turmaId)
         .eq("origem_tarefa", "template"),
+      carregarResponsaveisPorArea(),
+      supabase.auth.getUser(),
     ]);
   if (encErr) throw encErr;
   if (itErr) throw itErr;
   if (tErr) throw tErr;
+
+  // Fallback de responsável para tarefas "cada sessão" que nascem agora (ex.:
+  // checklist aplicado ANTES de existirem sessões): usa o responsável da área
+  // e, na falta dele, o usuário atual.
+  const fallbackResponsavel = userRes?.data?.user?.id ?? null;
 
   const encontros = (encontrosRaw || []) as EncontroRef[];
   const primeira = encontros[0]?.data ?? turma.data_inicio;
@@ -544,8 +551,11 @@ export async function recalcularPrazosDaTurma(
   const novasLinhas: any[] = [];
   for (const item of (itensTemplate || []) as any[]) {
     if ((item.ancora || "evento_inteiro") !== "cada_sessao") continue;
-    const responsavelId = responsavelPorItem.get(item.id);
-    if (!responsavelId) continue; // sem histórico de quem é o responsável — precisa aplicar/trocar manualmente
+    const responsavelId =
+      responsavelPorItem.get(item.id) ||
+      mapaArea[(item.area || "operacao") as AreaEvento] ||
+      fallbackResponsavel;
+    if (!responsavelId) continue; // nem histórico, nem área, nem usuário — não há para quem atribuir
     for (const enc of encontros) {
       if (existentesChave.has(`${item.id}|${enc.id}`)) continue;
       const prazo = calcularPrazoTarefa(enc.data, item.fase, item.offset_valor, item.offset_unidade);
