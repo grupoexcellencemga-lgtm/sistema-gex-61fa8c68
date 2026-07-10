@@ -56,6 +56,35 @@ function PWAUpdatePromptInner() {
     };
   }, [setNeedRefresh]);
 
+  // Atualização à prova de falha: recarrega assim que o worker novo assume o
+  // controle; se nada acontecer (banner preso, sem worker realmente em espera),
+  // uma rede de segurança força o reload pra não deixar o usuário travado.
+  const handleAtualizar = () => {
+    let recarregou = false;
+    const recarregar = () => {
+      if (recarregou) return;
+      recarregou = true;
+      window.location.reload();
+    };
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("controllerchange", recarregar, { once: true });
+    }
+    // Manda o worker em espera assumir (o plugin também faz isso, é idempotente).
+    registrationRef.current?.waiting?.postMessage({ type: "SKIP_WAITING" });
+
+    try {
+      const p = updateServiceWorker(true) as unknown as Promise<void> | void;
+      if (p && typeof (p as Promise<void>).catch === "function") {
+        (p as Promise<void>).catch(() => {});
+      }
+    } catch {
+      /* segue pro fallback */
+    }
+
+    window.setTimeout(recarregar, 3000);
+  };
+
   if (!needRefresh) return null;
 
   return (
@@ -70,7 +99,7 @@ function PWAUpdatePromptInner() {
           <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)} className="h-8 w-8 p-0">
             <X className="h-4 w-4" />
           </Button>
-          <Button size="sm" onClick={() => updateServiceWorker(true)} className="h-8">
+          <Button size="sm" onClick={handleAtualizar} className="h-8">
             Atualizar
           </Button>
         </div>
