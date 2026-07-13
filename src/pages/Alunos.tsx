@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -100,6 +101,57 @@ const Alunos = () => {
       return data;
     },
   });
+
+  // Deep-link vindo de "Matricular na turma" (participante de evento): abre a
+  // matrícula já preenchida com o produto + turma do evento. Espera produtos e
+  // turmas carregarem para conseguir preencher valor/datas.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const alunoId = searchParams.get("matricular_aluno");
+    if (!alunoId || produtos.length === 0 || turmas.length === 0) return;
+
+    const turmaParam = searchParams.get("turma") || "";
+    const produtoParam = searchParams.get("produto") || "";
+    let cancelado = false;
+
+    (async () => {
+      const { data: aluno } = await supabase
+        .from("alunos")
+        .select("*")
+        .eq("id", alunoId)
+        .maybeSingle();
+      if (cancelado || !aluno) return;
+
+      const turma = turmas.find((t: any) => t.id === turmaParam);
+      const produtoId = produtoParam || turma?.produto_id || "";
+      const produto = produtos.find((p: any) => p.id === produtoId);
+
+      setSelectedAluno(aluno);
+      setEditingMatriculaId(null);
+      setMatriculaForm({
+        ...emptyMatriculaForm,
+        produto_id: produtoId,
+        turma_id: turmaParam,
+        valor_total:
+          produto?.valor !== null && produto?.valor !== undefined
+            ? String(produto.valor)
+            : "",
+        data_inicio: turma?.data_inicio || "",
+        data_fim: turma?.data_fim || "",
+      });
+      setMatriculaDialogOpen(true);
+
+      const next = new URLSearchParams(searchParams);
+      next.delete("matricular_aluno");
+      next.delete("produto");
+      next.delete("turma");
+      setSearchParams(next, { replace: true });
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [searchParams, produtos, turmas]);
 
   const { data: contasBancarias = [] } = useQuery({
     queryKey: ["contas_bancarias"],

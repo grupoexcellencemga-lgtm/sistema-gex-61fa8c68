@@ -19,6 +19,10 @@ interface Props {
   onDelete: (id: string) => void;
   onVirarAluno: (p: any) => void;
   onTogglePresenca: (id: string, presenca: boolean) => void;
+  podeMatricular?: boolean;
+  matriculando?: boolean;
+  onMatricular?: (p: any) => void;
+  jaMatriculado?: boolean;
 }
 
 export function ParticipanteRow({
@@ -31,6 +35,10 @@ export function ParticipanteRow({
   onDelete,
   onVirarAluno,
   onTogglePresenca,
+  podeMatricular,
+  matriculando,
+  onMatricular,
+  jaMatriculado,
 }: Props) {
   return (
     <TableRow
@@ -87,6 +95,26 @@ export function ParticipanteRow({
       </TableCell>
       <TableCell onClick={(ev) => ev.stopPropagation()}>
         <div className="flex flex-wrap justify-end gap-1">
+          {podeMatricular && jaMatriculado && (
+            <Badge className="h-7 px-2 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400">
+              Matriculado(a)
+            </Badge>
+          )}
+          {podeMatricular && onMatricular && !jaMatriculado && (
+            <Button
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={matriculando}
+              onClick={() => onMatricular(p)}
+              title="Vira aluno (se preciso) e abre a matrícula na turma do evento"
+            >
+              {matriculando ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Matricular na turma"
+              )}
+            </Button>
+          )}
           <Button
             variant={alunoVinculado ? "secondary" : "outline"}
             size="sm"

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Receipt, ListChecks } from "lucide-react";
@@ -119,6 +119,23 @@ export function ParticipantesSection({
     },
   });
 
+  // Alunos já matriculados na turma vinculada ao evento — usado para esconder o
+  // botão "Matricular na turma" de quem já entrou e para a métrica de matriculados.
+  const { data: matriculadosTurma = [] } = useQuery({
+    queryKey: ["matriculas-turma-evento", evento.turma_id],
+    enabled: !!evento.turma_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("matriculas")
+        .select("aluno_id")
+        .eq("turma_id", evento.turma_id)
+        .is("deleted_at", null);
+      if (error) throw error;
+      return data;
+    },
+  });
+  const matriculadosAlunoIds = (matriculadosTurma || []).map((m: any) => m.aluno_id);
+
   const encontrarAlunoDoParticipante = useCallback(
     (participante: any) => {
       const email = normalizarTexto(participante?.email);
@@ -166,6 +183,37 @@ export function ParticipantesSection({
     setAddParticipanteOpen,
     resetPartForm: () => setPartForm({ ...emptyPartForm }),
   });
+
+  // "Matricular na turma": vira aluno (acha ou cria) e leva para a tela de
+  // Alunos com a matrícula já aberta e pré-preenchida (produto + turma do evento).
+  const navigate = useNavigate();
+  const [matriculandoId, setMatriculandoId] = useState<string | null>(null);
+  const podeMatricular = !!evento?.turma_id && !evento?.comunidade;
+
+  const estaMatriculado = (participante: any) => {
+    const aluno = encontrarAlunoDoParticipante(participante);
+    return !!aluno && matriculadosAlunoIds.includes(aluno.id);
+  };
+  const qtdMatriculados = podeMatricular
+    ? participantes.filter((p: any) => estaMatriculado(p)).length
+    : 0;
+
+  const handleMatricularNaTurma = async (participante: any) => {
+    setMatriculandoId(participante.id);
+    try {
+      const { aluno } = await virarAlunoMutation.mutateAsync(participante);
+      const params = new URLSearchParams({
+        matricular_aluno: aluno.id,
+        produto: evento.produto_id || "",
+        turma: evento.turma_id || "",
+      });
+      navigate(`/alunos?${params.toString()}`);
+    } catch {
+      /* o erro já é sinalizado pelo toast da mutation */
+    } finally {
+      setMatriculandoId(null);
+    }
+  };
 
   // Helpers
   const openParticipanteDetail = (p: any) => {
@@ -283,6 +331,16 @@ export function ParticipantesSection({
         </TabsList>
 
         <TabsContent value="participantes">
+          {podeMatricular && (
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 px-4 py-2">
+                <div className="text-2xl font-bold text-emerald-600 leading-none">{qtdMatriculados}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  matriculado(s) na turma · de {participantes.length} participante(s)
+                </div>
+              </div>
+            </div>
+          )}
           <ParticipantesTable
             evento={evento}
             participantes={participantes}
@@ -298,6 +356,10 @@ export function ParticipantesSection({
             onTogglePresenca={(id, presenca) =>
               togglePresencaMutation.mutate({ id, presenca })
             }
+            podeMatricular={podeMatricular}
+            matriculandoId={matriculandoId}
+            onMatricular={handleMatricularNaTurma}
+            matriculadosAlunoIds={matriculadosAlunoIds}
           />
         </TabsContent>
 

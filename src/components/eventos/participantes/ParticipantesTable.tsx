@@ -32,6 +32,10 @@ interface Props {
   onDelete: (id: string) => void;
   onVirarAluno: (p: any) => void;
   onTogglePresenca: (id: string, presenca: boolean) => void;
+  podeMatricular?: boolean;
+  matriculandoId?: string | null;
+  onMatricular?: (p: any) => void;
+  matriculadosAlunoIds?: string[];
 }
 
 export function ParticipantesTable({
@@ -44,6 +48,10 @@ export function ParticipantesTable({
   onDelete,
   onVirarAluno,
   onTogglePresenca,
+  podeMatricular,
+  matriculandoId,
+  onMatricular,
+  matriculadosAlunoIds,
 }: Props) {
   const [partBusca, setPartBusca] = useState("");
   const [partFilters, setPartFilters] = useState<{
@@ -303,6 +311,14 @@ export function ParticipantesTable({
                   onDelete={onDelete}
                   onVirarAluno={onVirarAluno}
                   onTogglePresenca={onTogglePresenca}
+                  podeMatricular={podeMatricular}
+                  matriculando={matriculandoId === p.id}
+                  onMatricular={onMatricular}
+                  jaMatriculado={
+                    matriculadosAlunoIds?.includes(
+                      encontrarAlunoDoParticipante(p)?.id,
+                    ) ?? false
+                  }
                 />
               ))
             )}
