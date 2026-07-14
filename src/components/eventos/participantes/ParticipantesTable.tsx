@@ -303,6 +303,7 @@ export function ParticipantesTable({
                 <ParticipanteRow
                   key={p.id}
                   p={p}
+                  isPago={!!evento.pago}
                   isComunidade={!!evento.comunidade}
                   alunoVinculado={encontrarAlunoDoParticipante(p)}
                   virarAlunoPending={virarAlunoPending}

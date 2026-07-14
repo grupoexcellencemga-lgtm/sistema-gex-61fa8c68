@@ -53,9 +53,10 @@ export function ParticipantesHeader({
   const ausentes = Math.max(total - presentes, 0);
   const percentualPresenca =
     total > 0 ? Math.round((presentes / total) * 100) : 0;
-  const pagos = isPago
-    ? participantes.filter((p: any) => p.status_pagamento === "pago").length
-    : 0;
+  const pagantes = isPago
+    ? participantes.filter((p: any) => p.status_pagamento !== "gratuito" && p.status_pagamento !== "isento")
+    : [];
+  const pagos = pagantes.filter((p: any) => p.status_pagamento === "pago").length;
 
   return (
     <>
@@ -124,11 +125,11 @@ export function ParticipantesHeader({
                 : ""}
             </span>
           </div>
-          {isPago && total > 0 && (
+          {isPago && pagantes.length > 0 && (
             <span className="text-sm text-muted-foreground">
-              {pagos}/{total} pagos •{" "}
+              {pagos}/{pagantes.length} pagos •{" "}
               {formatCurrency(
-                participantes
+                pagantes
                   .filter((p: any) => p.status_pagamento === "pago")
                   .reduce((sum: number, p: any) => sum + (p.valor || 0), 0),
               )}{" "}

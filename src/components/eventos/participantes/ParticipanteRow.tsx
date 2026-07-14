@@ -9,8 +9,11 @@ import {
 } from "@/lib/formatters";
 import { getStatusBadge } from "./participantesUtils";
 
+const PROBONO = ["gratuito", "isento"];
+
 interface Props {
   p: any;
+  isPago?: boolean;
   isComunidade: boolean;
   alunoVinculado: any;
   virarAlunoPending: boolean;
@@ -27,6 +30,7 @@ interface Props {
 
 export function ParticipanteRow({
   p,
+  isPago,
   isComunidade,
   alunoVinculado,
   virarAlunoPending,
@@ -88,8 +92,12 @@ export function ParticipanteRow({
           {!p.tipo_participante && "—"}
         </TableCell>
       )}
-      <TableCell className="text-sm">{formatCurrency(p.valor)}</TableCell>
-      <TableCell>{getStatusBadge(p.status_pagamento)}</TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {isPago && PROBONO.includes(p.status_pagamento) ? "—" : formatCurrency(p.valor)}
+      </TableCell>
+      <TableCell>
+        {isPago && PROBONO.includes(p.status_pagamento) ? <span className="text-muted-foreground">—</span> : getStatusBadge(p.status_pagamento)}
+      </TableCell>
       <TableCell className="text-sm text-muted-foreground">
         {p.adicionado_por_nome || "—"}
       </TableCell>
