@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Package, GraduationCap, Calendar,
-  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays
+  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays, Home
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,8 @@ const menuGroups = [
   {
     label: "Principal",
     items: [
-      { title: "Dashboard", url: "/", icon: LayoutDashboard, pageKey: "dashboard" as PageKey },
+      { title: "Início", url: "/", icon: Home, pageKey: "dashboard" as PageKey },
+      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, pageKey: "dashboard" as PageKey },
       { title: "Alunos", url: "/alunos", icon: Users, pageKey: "alunos" as PageKey },
       { title: "Jornada", url: "/jornada", icon: Route, pageKey: "jornada" as PageKey },
       { title: "Produtos", url: "/produtos", icon: Package, pageKey: "produtos" as PageKey },

@@ -85,7 +85,7 @@ export function ProximosEventosCard() {
           .lte("data", limite),
         (supabase as any)
           .from("turmas")
-          .select("id, nome, data_inicio, encontros(data)")
+          .select("id, nome, data_inicio, produtos(nome), encontros(data)")
           .is("deleted_at", null)
           .not("checklist_template_id", "is", null),
       ]);
@@ -144,11 +144,12 @@ export function ProximosEventosCard() {
         if (tarefas.length === 0) continue;
         const r = resumirTarefas(tarefas, hoje);
         const totalSessoes = (t.encontros || []).filter((e: any) => e.data).length;
+        const cursoNome = t.produtos?.nome as string | undefined;
         itens.push({
           key: `tur-${t.id}`,
           kind: "Turma",
-          nome: t.nome,
-          subtitulo: `Turma${totalSessoes ? ` · ${totalSessoes} sessões` : ""} · próxima ${formatDate(t.dataRef)}`,
+          nome: cursoNome || t.nome,
+          subtitulo: `${cursoNome ? `${t.nome} · ` : "Turma · "}${totalSessoes ? `${totalSessoes} sessões · ` : ""}próxima ${formatDate(t.dataRef)}`,
           dataRef: t.dataRef,
           dias: diffDiasISO(hoje, t.dataRef),
           ...r,

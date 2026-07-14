@@ -18,6 +18,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 
 // Lazy-load all authenticated pages
+const Inicio = lazy(() => import("./pages/Inicio"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Jornada = lazy(() => import("./pages/Jornada"));
 const Alunos = lazy(() => import("./pages/Alunos"));
@@ -82,7 +83,8 @@ const AppRoutes = () => {
       <ErrorBoundary inline resetKey={location.pathname}>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-          <Route path="/" element={<PR path="/"><Dashboard /></PR>} />
+          <Route path="/" element={<PR path="/"><Inicio /></PR>} />
+          <Route path="/dashboard" element={<PR path="/dashboard"><Dashboard /></PR>} />
           <Route path="/alunos" element={<PR path="/alunos"><Alunos /></PR>} />
           <Route path="/jornada" element={<PR path="/jornada"><Jornada /></PR>} />
           <Route path="/produtos" element={<PR path="/produtos"><Produtos /></PR>} />
