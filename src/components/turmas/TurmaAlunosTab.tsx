@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check } from "lucide-react";
+import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { emptyMatriculaForm } from "@/components/alunos/alunosUtils";
@@ -32,6 +33,50 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
   const [buscaDialogOpen, setBuscaDialogOpen] = useState(false);
   const [buscaDialog, setBuscaDialog] = useState("");
   const [alunoSelecionado, setAlunoSelecionado] = useState<any>(null);
+
+  // Criar novo aluno inline
+  const [criarAlunoOpen, setCriarAlunoOpen] = useState(false);
+  const [novoAlunoForm, setNovoAlunoForm] = useState({ nome: "", email: "", telefone: "" });
+
+  const criarAlunoMutation = useMutation({
+    mutationFn: async () => {
+      if (!novoAlunoForm.nome.trim()) throw new Error("Nome é obrigatório.");
+      const { data, error } = await supabase
+        .from("alunos")
+        .insert({
+          nome: novoAlunoForm.nome.trim(),
+          email: novoAlunoForm.email.trim() || null,
+          telefone: novoAlunoForm.telefone.trim() || null,
+        })
+        .select("id, nome, email, telefone")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (aluno) => {
+      queryClient.invalidateQueries({ queryKey: ["alunos-lista-basica"] });
+      queryClient.invalidateQueries({ queryKey: ["alunos"] });
+      setAlunoSelecionado(aluno);
+      setCriarAlunoOpen(false);
+      setNovoAlunoForm({ nome: "", email: "", telefone: "" });
+      // Avança direto para o financeiro
+      const produto = produtos.find((p: any) => p.id === turma.produto_id);
+      setMatriculaForm({
+        ...emptyMatriculaForm,
+        turma_id: turma.id,
+        produto_id: turma.produto_id || "",
+        valor_total:
+          produto?.valor !== null && produto?.valor !== undefined
+            ? String(produto.valor)
+            : "",
+        data_inicio: turma.data_inicio || "",
+        data_fim: turma.data_fim || "",
+      });
+      setBuscaDialogOpen(false);
+      setMatriculaDialogOpen(true);
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
 
   // Step 2: formulário financeiro
   const [matriculaDialogOpen, setMatriculaDialogOpen] = useState(false);
@@ -85,7 +130,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
       if (error) throw error;
       return data;
     },
-    enabled: matriculaDialogOpen,
+    enabled: matriculaDialogOpen || buscaDialogOpen,
   });
 
   const { data: contasBancarias = [] } = useQuery({
@@ -384,61 +429,146 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
         open={buscaDialogOpen}
         onOpenChange={(open) => {
           setBuscaDialogOpen(open);
-          if (!open) { setAlunoSelecionado(null); setBuscaDialog(""); }
+          if (!open) {
+            setAlunoSelecionado(null);
+            setBuscaDialog("");
+            setCriarAlunoOpen(false);
+            setNovoAlunoForm({ nome: "", email: "", telefone: "" });
+          }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Adicionar aluno à turma</DialogTitle>
             <DialogDescription>
-              Busque e selecione um aluno já cadastrado no sistema.
+              Busque um aluno cadastrado ou crie um novo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Command className="border rounded-md" shouldFilter={false}>
-              <CommandInput
-                placeholder="Buscar por nome, e-mail ou telefone..."
-                value={buscaDialog}
-                onValueChange={setBuscaDialog}
-              />
-              <CommandList className="max-h-60">
-                <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
-                <CommandGroup>
-                  {alunosDisponiveis.slice(0, 50).map((a: any) => (
-                    <CommandItem
-                      key={a.id}
-                      value={a.id}
-                      onSelect={() => setAlunoSelecionado(a)}
-                      className="cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {alunoSelecionado?.id === a.id
-                          ? <Check className="h-4 w-4 text-primary shrink-0" />
-                          : <div className="w-4 shrink-0" />}
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{a.nome}</p>
-                          {a.email && (
-                            <p className="text-xs text-muted-foreground truncate">{a.email}</p>
-                          )}
-                        </div>
+            {!criarAlunoOpen ? (
+              <>
+                <Command className="border rounded-md" shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Buscar por nome, e-mail ou telefone..."
+                    value={buscaDialog}
+                    onValueChange={(v) => { setBuscaDialog(v); setAlunoSelecionado(null); }}
+                  />
+                  <CommandList className="max-h-60">
+                    <CommandEmpty>
+                      <div className="py-2 text-center text-sm text-muted-foreground">
+                        Nenhum aluno encontrado.
                       </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-            {alunoSelecionado && (
-              <div className="rounded-md bg-muted px-3 py-2 text-sm">
-                Selecionado: <span className="font-semibold">{alunoSelecionado.nome}</span>
-              </div>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {alunosDisponiveis.slice(0, 50).map((a: any) => (
+                        <CommandItem
+                          key={a.id}
+                          value={a.id}
+                          onSelect={() => setAlunoSelecionado(a)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {alunoSelecionado?.id === a.id
+                              ? <Check className="h-4 w-4 text-primary shrink-0" />
+                              : <div className="w-4 shrink-0" />}
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{a.nome}</p>
+                              {a.email && (
+                                <p className="text-xs text-muted-foreground truncate">{a.email}</p>
+                              )}
+                            </div>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+
+                {alunoSelecionado && (
+                  <div className="rounded-md bg-muted px-3 py-2 text-sm">
+                    Selecionado: <span className="font-semibold">{alunoSelecionado.nome}</span>
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  disabled={!alunoSelecionado}
+                  onClick={avancarParaFinanceiro}
+                >
+                  Próximo: Definir pagamento →
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">ou</span>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setNovoAlunoForm({ nome: buscaDialog, email: "", telefone: "" });
+                    setCriarAlunoOpen(true);
+                  }}
+                >
+                  <UserRoundPlus className="h-4 w-4 mr-2" />
+                  Criar novo aluno
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Nome *</Label>
+                    <Input
+                      autoFocus
+                      placeholder="Nome completo"
+                      value={novoAlunoForm.nome}
+                      onChange={(e) => setNovoAlunoForm((f) => ({ ...f, nome: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>E-mail</Label>
+                    <Input
+                      type="email"
+                      placeholder="email@exemplo.com"
+                      value={novoAlunoForm.email}
+                      onChange={(e) => setNovoAlunoForm((f) => ({ ...f, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Telefone</Label>
+                    <Input
+                      placeholder="(44) 99999-9999"
+                      value={novoAlunoForm.telefone}
+                      onChange={(e) => setNovoAlunoForm((f) => ({ ...f, telefone: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => { setCriarAlunoOpen(false); setNovoAlunoForm({ nome: "", email: "", telefone: "" }); }}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    disabled={!novoAlunoForm.nome.trim() || criarAlunoMutation.isPending}
+                    onClick={() => criarAlunoMutation.mutate()}
+                  >
+                    {criarAlunoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Criar e continuar →
+                  </Button>
+                </div>
+              </>
             )}
-            <Button
-              className="w-full"
-              disabled={!alunoSelecionado}
-              onClick={avancarParaFinanceiro}
-            >
-              Próximo: Definir pagamento →
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
