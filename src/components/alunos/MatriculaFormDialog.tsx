@@ -80,8 +80,9 @@ export const MatriculaFormDialog = ({
   const isLink = matriculaForm.forma_pagamento === "link";
   const isBoleto = matriculaForm.forma_pagamento === "boleto";
 
+  // Boleto NÃO tem taxa de máquina — só cartão, débito e link.
   const showTaxa =
-    formaAtual?.abre_taxa || isCredito || isDebito || isLink || isBoleto;
+    !isBoleto && (formaAtual?.abre_taxa || isCredito || isDebito || isLink);
 
   const showParcelas =
     formaAtual?.abre_parcelas || isCredito || isLink || isBoleto;

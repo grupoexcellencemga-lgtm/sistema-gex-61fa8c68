@@ -127,6 +127,7 @@ const Alunos = () => {
       const produto = produtos.find((p: any) => p.id === produtoId);
 
       setSelectedAluno(aluno);
+      setSheetOpen(true); // abre a ficha do próprio aluno como fundo da matrícula
       setEditingMatriculaId(null);
       setMatriculaForm({
         ...emptyMatriculaForm,
@@ -139,7 +140,11 @@ const Alunos = () => {
         data_inicio: turma?.data_inicio || "",
         data_fim: turma?.data_fim || "",
       });
-      setMatriculaDialogOpen(true);
+      // Abre a matrícula no tick seguinte para o modal ficar ACIMA da ficha
+      // (senão o painel do aluno, que monta depois, cobriria a matrícula).
+      // Sem guard de `cancelado`: a limpeza dos params abaixo re-dispara o efeito
+      // (que marcaria cancelado), mas aqui queremos abrir mesmo assim.
+      setTimeout(() => setMatriculaDialogOpen(true), 0);
 
       const next = new URLSearchParams(searchParams);
       next.delete("matricular_aluno");
@@ -456,8 +461,8 @@ const Alunos = () => {
         );
         const isDebito = matriculaForm.forma_pagamento === "debito";
         const isLink = matriculaForm.forma_pagamento === "link";
-        const isBoleto = matriculaForm.forma_pagamento === "boleto";
-        const temTaxaMaquina = isCartao || isDebito || isLink || isBoleto;
+        // Boleto NÃO tem taxa de máquina (só cartão, débito e link).
+        const temTaxaMaquina = isCartao || isDebito || isLink;
         // Cartão, débito e link entram integralmente: um único lançamento.
         // Boleto é recebido parcela a parcela: um lançamento por mês.
         const recebeIntegral = isCartao || isDebito || isLink;
@@ -722,7 +727,8 @@ const Alunos = () => {
       const isCartao = ["credito", "cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
       const isDebito = novoPagForm.forma_pagamento === "debito";
       const isLinkBoleto = ["link", "boleto"].includes(novoPagForm.forma_pagamento);
-      const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
+      // Boleto NÃO tem taxa de máquina (só cartão, débito e link).
+      const temTaxaMaquina = isCartao || isDebito || novoPagForm.forma_pagamento === "link";
       const taxaCartao = temTaxaMaquina ? parseFloat(novoPagForm.taxa_cartao) || 0 : 0;
       const parcelasCartao = isCartao || isLinkBoleto ? parseInt(novoPagForm.parcelas_cartao) || 1 : null;
       const taxaCalc = calcTaxaMaquina(
@@ -833,11 +839,8 @@ const Alunos = () => {
     const isDebito = matriculaForm.forma_pagamento === "debito";
     const isLink = matriculaForm.forma_pagamento === "link";
 
-    const isLinkBoleto = ["link", "boleto"].includes(
-      matriculaForm.forma_pagamento
-    );
-
-    const temTaxaMaquina = isCartao || isDebito || isLinkBoleto;
+    // Boleto NÃO tem taxa de máquina (só cartão, débito e link).
+    const temTaxaMaquina = isCartao || isDebito || isLink;
 
     const taxaCartao = temTaxaMaquina
       ? parseFloat(matriculaForm.taxa_cartao) || 0
@@ -878,20 +881,63 @@ const Alunos = () => {
     if (pagamentosError) throw pagamentosError;
 
     const pagamentosDaMatricula = pagamentosExistentes || [];
+    const recebeIntegral = isCartao || isDebito || isLink;
+    const desiredCount = recebeIntegral ? 1 : parcelasInformadas;
+    const existingCount = pagamentosDaMatricula.length;
+    const formaMudou = pagamentosDaMatricula.some(
+      (p: any) => p.forma_pagamento !== formaPagamento
+    );
 
-    if (pagamentosDaMatricula.length > 0) {
-      const quantidadePagamentos = pagamentosDaMatricula.length;
+    const taxaCalc = calcTaxaMaquina(
+      valorFinal,
+      temTaxaMaquina ? taxaCartao : 0,
+      !!matriculaForm.repassar_taxa
+    );
 
-      const taxaCalc = calcTaxaMaquina(
-        valorFinal,
-        temTaxaMaquina ? taxaCartao : 0,
-        !!matriculaForm.repassar_taxa
-      );
+    const valorBase = matriculaForm.repassar_taxa
+      ? taxaCalc.valorCobrado
+      : taxaCalc.valorLiquido;
 
-      const valorBase = matriculaForm.repassar_taxa
-        ? taxaCalc.valorCobrado
-        : taxaCalc.valorLiquido;
+    if (existingCount === 0 || existingCount !== desiredCount || formaMudou) {
+      // Nº de parcelas ou forma mudou → regenera do zero (apaga e recria).
+      const alunoIdMat = pagamentosDaMatricula[0]?.aluno_id || selectedAluno?.id;
 
+      const { error: delErr } = await supabase
+        .from("pagamentos")
+        .delete()
+        .eq("matricula_id", editingMatriculaId);
+      if (delErr) throw delErr;
+
+      if (valorFinal > 0 && alunoIdMat) {
+        const valorParcela = valorBase / desiredCount;
+        const baseVenc =
+          dataPagamentoOuVencimento || new Date().toISOString().split("T")[0];
+
+        const rows = Array.from({ length: desiredCount }, (_, i) => {
+          const d = new Date(baseVenc + "T12:00:00");
+          if (!recebeIntegral) d.setMonth(d.getMonth() + i);
+          return {
+            aluno_id: alunoIdMat,
+            produto_id: matriculaForm.produto_id || null,
+            matricula_id: editingMatriculaId,
+            valor: Math.round(valorParcela * 100) / 100,
+            forma_pagamento: formaPagamento,
+            parcelas: recebeIntegral ? 1 : desiredCount,
+            parcela_atual: recebeIntegral ? 1 : i + 1,
+            parcelas_cartao: isCartao || isLink ? parcelasInformadas : null,
+            taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
+            data_vencimento: d.toISOString().split("T")[0],
+            status: "pendente",
+            conta_bancaria_id: matriculaForm.conta_bancaria_id || null,
+          };
+        });
+
+        const { error: insErr } = await supabase.from("pagamentos").insert(rows);
+        if (insErr) throw insErr;
+      }
+    } else {
+      // Mesmo nº e forma → atualiza as parcelas existentes (preserva as pagas).
+      const quantidadePagamentos = existingCount;
       const valorPorRegistro =
         isCartao || isDebito || quantidadePagamentos === 1
           ? valorBase
