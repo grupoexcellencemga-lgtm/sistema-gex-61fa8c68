@@ -103,6 +103,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["despesas_evento", eventoId] });
+      queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast.success("Despesa adicionada");
       setDialogOpen(false);
     },
@@ -125,6 +126,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["despesas_evento", eventoId] });
+      queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast.success("Despesa atualizada");
       setDialogOpen(false);
     },
@@ -138,6 +140,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["despesas_evento", eventoId] });
+      queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast.success("Despesa excluída");
     },
     onError: (err: any) => toast.error("Erro: " + err.message),

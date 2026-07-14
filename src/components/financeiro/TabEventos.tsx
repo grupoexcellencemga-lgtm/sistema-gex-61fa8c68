@@ -11,7 +11,7 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
   const [expandedEvento, setExpandedEvento] = useState<string | null>(null);
 
   const { data: eventos = [], isLoading } = useQuery({
-    queryKey: ["eventos-financeiro"],
+    queryKey: ["eventos", "financeiro"],
     queryFn: async () => {
       const { data, error } = await supabase.from("eventos").select("*, produtos(nome)").is("deleted_at", null).order("data", { ascending: false });
       if (error) throw error;
@@ -19,53 +19,62 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
     },
   });
 
+  // Busca todos os participantes pagos sem filtro de data.
+  // O filtro por mês é feito em getEventoData usando data_pagamento com fallback para a data do evento.
   const { data: participantes = [] } = useQuery({
-    queryKey: ["participantes-financeiro"],
+    queryKey: ["participantes_eventos", "financeiro"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("participantes_eventos").select("*, contas_bancarias(nome)");
+      const { data, error } = await supabase
+        .from("participantes_eventos")
+        .select("*, contas_bancarias(nome)")
+        .eq("status_pagamento", "pago");
       if (error) throw error;
       return data;
     },
   });
 
   const { data: despesas = [] } = useQuery({
-    queryKey: ["despesas-financeiro-eventos"],
+    queryKey: ["despesas", "financeiro-eventos", mes, ano],
     queryFn: async () => {
-      const { data, error } = await supabase.from("despesas").select("*, contas_bancarias(nome)").is("deleted_at", null);
+      const inicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const fim = new Date(ano, mes, 0).toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("despesas")
+        .select("*, contas_bancarias(nome)")
+        .is("deleted_at", null)
+        .not("evento_id", "is", null)
+        .gte("data", inicio)
+        .lte("data", fim);
       if (error) throw error;
       return data;
     },
   });
 
-  const despMes = despesas.filter((d: any) => isInMonth(d.data, mes, ano));
+  const getEventoData = (evento: any) => {
+    const eventoId = evento.id;
+    // Usa data_pagamento se preenchida; caso null, atribui ao mês do evento
+    const partEntries = participantes
+      .filter((p: any) => {
+        if (p.evento_id !== eventoId) return false;
+        const dataRef = p.data_pagamento || evento.data;
+        return isInMonth(dataRef, mes, ano);
+      })
+      .map((p: any) => ({
+        nome: p.nome || "—",
+        valor: Number(p.valor) || 0,
+        conta: p.contas_bancarias?.nome || "—",
+        forma: p.forma_pagamento || "—",
+        data: p.data_pagamento,
+      }));
 
-  const getEventoData = (eventoId: string) => {
-    const eventoParts = participantes.filter((p: any) => p.evento_id === eventoId);
-    const partsComPagamento = eventoParts.filter((p: any) => p.status_pagamento === "pago");
-    
-    const partEntries = partsComPagamento.map((p: any) => ({
-      nome: p.nome || "—",
-      valor: Number(p.valor) || 0,
-      conta: p.contas_bancarias?.nome || "—",
-      forma: p.forma_pagamento || "—",
-      data: p.data_pagamento,
-    }));
-
-    // Filter by month
-    const partEntriesMes = partEntries.filter((p) => {
-      if (!p.data) return false;
-      return isInMonth(p.data, mes, ano);
-    });
-
-    const totalEntradas = partEntriesMes.reduce((s, a) => s + a.valor, 0);
-    const despesasEvento = despMes.filter((d: any) => d.evento_id === eventoId);
+    const totalEntradas = partEntries.reduce((s, a) => s + a.valor, 0);
+    const despesasEvento = despesas.filter((d: any) => d.evento_id === eventoId);
     const totalDespesas = despesasEvento.reduce((s: number, d: any) => s + Number(d.valor), 0);
     const liquido = totalEntradas - totalDespesas;
 
     return {
-      partEntries: partEntriesMes,
-      totalParticipantes: eventoParts.length,
-      totalPagos: partsComPagamento.length,
+      partEntries,
+      totalPagos: partEntries.length,
       totalEntradas,
       totalDespesas,
       liquido,
@@ -86,9 +95,9 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
           </CardContent>
         </Card>
       ) : (
-        eventos.map((evento: any) => {
+        eventos.filter((evento: any) => isInMonth(evento.data, mes, ano)).map((evento: any) => {
           const isExpanded = expandedEvento === evento.id;
-          const data = isExpanded ? getEventoData(evento.id) : null;
+          const data = isExpanded ? getEventoData(evento) : null;
 
           return (
             <Card key={evento.id} className="overflow-hidden">
@@ -129,7 +138,7 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground">Participantes</p>
-                      <p className="font-bold text-sm">{data.totalPagos}/{data.totalParticipantes} pagos</p>
+                      <p className="font-bold text-sm">{data.totalPagos} pagos</p>
                     </div>
                   </div>
 

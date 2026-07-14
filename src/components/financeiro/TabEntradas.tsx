@@ -337,6 +337,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["participantes_eventos_entradas"] });
+      queryClient.invalidateQueries({ queryKey: ["participantes_eventos"] });
       setEditEvtPagOpen(false);
       setEditingEvtPag(null);
       toast({ title: "Entrada de evento atualizada" });
