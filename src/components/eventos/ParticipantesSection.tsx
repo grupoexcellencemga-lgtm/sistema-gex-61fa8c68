@@ -127,7 +127,7 @@ export function ParticipantesSection({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
-        .select("aluno_id")
+        .select("aluno_id, valor_final")
         .eq("turma_id", evento.turma_id)
         .is("deleted_at", null);
       if (error) throw error;
@@ -197,6 +197,28 @@ export function ParticipantesSection({
   const qtdMatriculados = podeMatricular
     ? participantes.filter((p: any) => estaMatriculado(p)).length
     : 0;
+
+  // Funil de conversão do evento (para as métricas). Receita em matrículas =
+  // soma do valor_final das matrículas na turma cujos alunos vieram do evento.
+  const conversao = podeMatricular
+    ? (() => {
+        const compareceram = participantes.filter((p: any) => p.presenca).length;
+        const alunosDoEvento = new Set(
+          participantes
+            .map((p: any) => encontrarAlunoDoParticipante(p)?.id)
+            .filter(Boolean),
+        );
+        const receitaMatriculas = (matriculadosTurma || [])
+          .filter((m: any) => alunosDoEvento.has(m.aluno_id))
+          .reduce((s: number, m: any) => s + Number(m.valor_final || 0), 0);
+        return {
+          inscritos: participantes.length,
+          compareceram,
+          matriculados: qtdMatriculados,
+          receitaMatriculas,
+        };
+      })()
+    : null;
 
   const handleMatricularNaTurma = async (participante: any) => {
     setMatriculandoId(participante.id);
@@ -428,6 +450,7 @@ export function ParticipantesSection({
         onOpenChange={setMetricsOpen}
         participantes={participantes}
         evento={evento}
+        conversao={conversao}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Users, DollarSign, TrendingUp, UserCheck, Receipt, TrendingDown } from "lucide-react";
+import { Users, DollarSign, TrendingUp, UserCheck, Receipt, TrendingDown, GraduationCap } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,11 +14,19 @@ interface Participante {
   convidado_por: string | null;
 }
 
+interface Conversao {
+  inscritos: number;
+  compareceram: number;
+  matriculados: number;
+  receitaMatriculas: number;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   participantes: Participante[];
   evento: any;
+  conversao?: Conversao | null;
 }
 
 const TIPO_COLORS: Record<string, string> = {
@@ -67,7 +75,7 @@ const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
   );
 };
 
-export function EventoMetricsDialog({ open, onOpenChange, participantes, evento }: Props) {
+export function EventoMetricsDialog({ open, onOpenChange, participantes, evento, conversao }: Props) {
   const total = participantes.length;
   const isComunidade = evento?.comunidade;
   const isPago = evento?.pago;
@@ -167,6 +175,49 @@ export function EventoMetricsDialog({ open, onOpenChange, participantes, evento 
               <MetricMini icon={Receipt} label="Despesas" value={formatCurrency(totalDespesas)} variant="destructive" />
               <MetricMini icon={TrendingUp} label="Lucro" value={formatCurrency(totalArrecadado - totalDespesas)} variant={totalArrecadado - totalDespesas >= 0 ? "success" : "destructive"} />
             </div>
+
+            {/* Conversão do evento (funil) */}
+            {conversao && (
+              <div className="rounded-lg border bg-card p-4 space-y-4">
+                <h4 className="text-sm font-semibold text-card-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" /> Conversão do evento
+                </h4>
+                {(() => {
+                  const { inscritos, compareceram, matriculados, receitaMatriculas } = conversao;
+                  const pct = (n: number) => (inscritos > 0 ? Math.round((n / inscritos) * 100) : 0);
+                  const pctPresentes = compareceram > 0 ? Math.round((matriculados / compareceram) * 100) : 0;
+                  const resultado = receitaMatriculas - totalDespesas;
+                  const ticket = matriculados > 0 ? receitaMatriculas / matriculados : 0;
+                  return (
+                    <>
+                      <div className="space-y-2">
+                        <FunilEtapa icon={Users} label="Inscritos" value={inscritos} unidade="pessoas" pct={100} width={100} />
+                        <p className="text-[11px] text-center text-muted-foreground">
+                          ↓ {inscritos - compareceram} não compareceram · presença de {pct(compareceram)}%
+                        </p>
+                        <FunilEtapa icon={UserCheck} label="Compareceram" value={compareceram} unidade="pessoas" pct={pct(compareceram)} width={pct(compareceram)} />
+                        <p className="text-[11px] text-center text-muted-foreground">
+                          ↓ {compareceram - matriculados} não compraram · {pctPresentes}% dos presentes viraram aluno
+                        </p>
+                        <FunilEtapa icon={GraduationCap} label="Matrículas na turma" value={matriculados} unidade="aluno(s)" pct={pct(matriculados)} width={pct(matriculados)} highlight />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <MetricMini icon={UserCheck} label="Comparecimento" value={`${pct(compareceram)}%`} />
+                        <MetricMini icon={TrendingUp} label="Conversão" value={`${pct(matriculados)}%`} />
+                        <MetricMini icon={DollarSign} label="Vendido em cursos" value={formatCurrency(receitaMatriculas)} variant="success" />
+                        <MetricMini icon={TrendingUp} label="Resultado do evento" value={formatCurrency(resultado)} variant={resultado >= 0 ? "success" : "destructive"} />
+                      </div>
+                      {matriculados > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Ticket médio dos matriculados:{" "}
+                          <span className="font-semibold text-card-foreground">{formatCurrency(ticket)}</span>
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Charts row */}
             <div className={`grid gap-4 ${isComunidade ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
@@ -303,6 +354,51 @@ function MetricMini({ icon: Icon, label, value, variant }: { icon: any; label: s
       <Icon className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
+    </div>
+  );
+}
+
+function FunilEtapa({
+  icon: Icon,
+  label,
+  value,
+  unidade,
+  pct,
+  width,
+  highlight,
+}: {
+  icon: any;
+  label: string;
+  value: number;
+  unidade: string;
+  pct: number;
+  width: number;
+  highlight?: boolean;
+}) {
+  // Rótulo e número ficam FORA da barra (em cima), então nunca são cortados;
+  // a barra embaixo só mostra a proporção.
+  return (
+    <div
+      className={`rounded-lg border p-3 ${
+        highlight
+          ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900"
+          : "bg-card"
+      }`}
+    >
+      <div className={`text-sm font-medium flex items-center gap-1.5 ${highlight ? "text-emerald-700 dark:text-emerald-400" : "text-card-foreground"}`}>
+        <Icon className="h-4 w-4 shrink-0" />
+        {label}
+      </div>
+      <div className="my-1.5">
+        <span className={`text-2xl font-bold ${highlight ? "text-emerald-600" : "text-card-foreground"}`}>{value}</span>
+        <span className="text-xs text-muted-foreground"> {unidade} · {pct}%</span>
+      </div>
+      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className={`h-full rounded-full ${highlight ? "bg-emerald-500" : "bg-primary"}`}
+          style={{ width: `${Math.max(width, 3)}%`, minWidth: value > 0 ? "8px" : "0px" }}
+        />
+      </div>
     </div>
   );
 }
