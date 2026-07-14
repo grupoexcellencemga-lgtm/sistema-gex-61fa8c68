@@ -15,7 +15,7 @@ import { TarefaCard } from "@/components/tarefas/TarefaCard";
 import { TarefaKanbanColumn } from "@/components/tarefas/TarefaKanbanColumn";
 import {
   Plus, Loader2, Kanban, List, CalendarDays, CheckCircle2, Circle, Clock,
-  AlertTriangle, Search
+  AlertTriangle, Search, ChevronDown, ChevronRight, Pencil, Trash2
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,12 +31,46 @@ const statusColumns = [
 
 const prioridadeOrder = { urgente: 0, alta: 1, media: 2, baixa: 3 };
 
+// Cor por área (bolinha discreta no lugar dos badges repetidos).
+const AREA_DOT: Record<string, string> = {
+  comercial: "#378ADD",
+  marketing: "#7F77DD",
+  operacao: "#1D9E75",
+};
+
+// Grupos por prazo da Lista. depois/semData/concluidas começam recolhidos.
+const GRUPOS_PRAZO: { key: string; label: string; danger?: boolean; muted?: boolean }[] = [
+  { key: "atrasadas", label: "Atrasadas", danger: true },
+  { key: "hoje", label: "Hoje" },
+  { key: "semana", label: "Esta semana" },
+  { key: "depois", label: "Mais tarde" },
+  { key: "semData", label: "Sem data" },
+  { key: "concluidas", label: "Concluídas", muted: true },
+];
+
+// Identifica de qual evento/turma (curso) a tarefa veio, para agrupar por origem.
+function origemDaTarefa(t: any): { key: string; label: string } {
+  if (t.turma_id) {
+    const curso = t.turmas?.produtos?.nome as string | undefined;
+    const turmaNome = (t.turmas?.nome as string) || "Turma";
+    return { key: `t-${t.turma_id}`, label: curso ? `${curso} · ${turmaNome}` : turmaNome };
+  }
+  if (t.evento_id) return { key: `e-${t.evento_id}`, label: (t.eventos?.nome as string) || "Evento" };
+  return { key: "avulsas", label: "Avulsas" };
+}
+
 const Tarefas = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarefa, setEditTarefa] = useState<any>(null);
-  const [view, setView] = useState<"kanban" | "lista" | "calendario">("kanban");
+  const [view, setView] = useState<"kanban" | "lista" | "calendario">("lista");
+  const [colapsados, setColapsados] = useState<Record<string, boolean>>({
+    depois: true,
+    semData: true,
+    concluidas: true,
+  });
+  const [filterOrigem, setFilterOrigem] = useState<string>("todos");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
   const [filterTipo, setFilterTipo] = useState("todos");
   const [filterPrioridade, setFilterPrioridade] = useState("todos");
@@ -46,9 +80,9 @@ const Tarefas = () => {
   const { data: tarefas = [], isLoading, refetch } = useQuery({
     queryKey: ["tarefas"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("tarefas")
-        .select("*")
+        .select("*, turmas(nome, produtos(nome)), eventos(nome)")
         .neq("status", "cancelada")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -89,10 +123,11 @@ const Tarefas = () => {
       if (filterResponsavel !== "todos" && t.responsavel_id !== filterResponsavel) return false;
       if (filterTipo !== "todos" && t.tipo !== filterTipo) return false;
       if (filterPrioridade !== "todos" && t.prioridade !== filterPrioridade) return false;
+      if (filterOrigem !== "todos" && origemDaTarefa(t).key !== filterOrigem) return false;
       if (search && !t.titulo.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [tarefas, filterResponsavel, filterTipo, filterPrioridade, search]);
+  }, [tarefas, filterResponsavel, filterTipo, filterPrioridade, filterOrigem, search]);
 
   const sortedFiltered = useMemo(() => {
     return [...filtered].sort((a: any, b: any) => {
@@ -105,6 +140,40 @@ const Tarefas = () => {
       return 0;
     });
   }, [filtered]);
+
+  // Agrupa as tarefas por prazo para a Lista (Atrasadas / Hoje / Esta semana / …).
+  const gruposPrazo = useMemo(() => {
+    const hojeISO = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+    const d7 = (() => {
+      const [y, m, dd] = hojeISO.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, dd + 7)).toISOString().slice(0, 10);
+    })();
+    const g: Record<string, any[]> = { atrasadas: [], hoje: [], semana: [], depois: [], semData: [], concluidas: [] };
+    for (const t of sortedFiltered) {
+      if (t.status === "concluida") { g.concluidas.push(t); continue; }
+      const dv = t.data_vencimento as string | null;
+      if (!dv) g.semData.push(t);
+      else if (dv < hojeISO) g.atrasadas.push(t);
+      else if (dv === hojeISO) g.hoje.push(t);
+      else if (dv <= d7) g.semana.push(t);
+      else g.depois.push(t);
+    }
+    return { g, hojeISO };
+  }, [sortedFiltered]);
+
+  // Abas de evento/turma: uma por origem que tem tarefa (com contagem de pendentes).
+  const origens = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; count: number }>();
+    for (const t of tarefas) {
+      if (t.status === "concluida") continue;
+      const o = origemDaTarefa(t);
+      if (!map.has(o.key)) map.set(o.key, { key: o.key, label: o.label, count: 0 });
+      map.get(o.key)!.count++;
+    }
+    return [...map.values()].sort((a, b) =>
+      a.key === "avulsas" ? 1 : b.key === "avulsas" ? -1 : a.label.localeCompare(b.label, "pt-BR"),
+    );
+  }, [tarefas]);
 
   const tipoLabels: Record<string, string> = { follow_up: "Follow-up", cobranca: "Cobrança", lembrete: "Lembrete", reuniao: "Reunião", outro: "Outro" };
   const prioridadeColors: Record<string, string> = {
@@ -197,6 +266,34 @@ const Tarefas = () => {
           {renderFilters()}
         </div>
 
+        {origens.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+            <button
+              onClick={() => setFilterOrigem("todos")}
+              className={cn(
+                "shrink-0 px-3 py-1.5 rounded-full border text-xs whitespace-nowrap transition-colors",
+                filterOrigem === "todos" ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              Todos
+            </button>
+            {origens.map((o) => (
+              <button
+                key={o.key}
+                onClick={() => setFilterOrigem(o.key)}
+                title={o.label}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1 max-w-[240px] px-3 py-1.5 rounded-full border text-xs transition-colors",
+                  filterOrigem === o.key ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-muted/50",
+                )}
+              >
+                <span className="truncate">{o.label}</span>
+                <span className="opacity-70 shrink-0">({o.count})</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* KANBAN VIEW */}
         <TabsContent value="kanban">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -220,62 +317,74 @@ const Tarefas = () => {
 
         {/* LIST VIEW */}
         <TabsContent value="lista">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Responsável</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead className="w-20"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedFiltered.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma tarefa encontrada</TableCell></TableRow>
-                  ) : sortedFiltered.map((t: any) => {
-                    const resp = profiles.find((p: any) => p.user_id === t.responsavel_id);
-                    const isVencida = t.data_vencimento && new Date(t.data_vencimento + "T23:59:59") < new Date() && t.status !== "concluida";
-                    return (
-                      <TableRow key={t.id} className={cn(t.status === "concluida" && "opacity-60")}>
-                        <TableCell className="font-medium">{t.titulo}</TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs">{tipoLabels[t.tipo] || t.tipo}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className={cn("text-xs", prioridadeColors[t.prioridade])}>{t.prioridade}</Badge></TableCell>
-                        <TableCell>
-                          <Select value={t.status} onValueChange={v => updateStatusMutation.mutate({ id: t.id, status: v })}>
-                            <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pendente">Pendente</SelectItem>
-                              <SelectItem value="em_andamento">Em Andamento</SelectItem>
-                              <SelectItem value="concluida">Concluída</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="text-sm">{resp?.nome?.split(" ")[0] || "—"}</TableCell>
-                        <TableCell className={cn("text-sm", isVencida && "text-destructive font-medium")}>
-                          {t.data_vencimento ? format(new Date(t.data_vencimento + "T12:00:00"), "dd/MM/yyyy") : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarefa(t); setFormOpen(true); }}>
-                              <Clock className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(t.id)}>
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {sortedFiltered.length === 0 ? (
+            <Card><CardContent className="text-center text-muted-foreground py-10 text-sm">Nenhuma tarefa encontrada</CardContent></Card>
+          ) : (
+            <div className="space-y-2.5">
+              {GRUPOS_PRAZO.map((grp) => {
+                const itens = gruposPrazo.g[grp.key] || [];
+                if (itens.length === 0) return null;
+                const aberto = !colapsados[grp.key];
+                return (
+                  <div key={grp.key} className={cn("rounded-lg border overflow-hidden", grp.danger && "border-red-200 dark:border-red-900")}>
+                    <button
+                      onClick={() => setColapsados((p) => ({ ...p, [grp.key]: !p[grp.key] }))}
+                      className={cn("w-full flex items-center justify-between px-3 py-2 text-left", grp.danger ? "bg-red-50 dark:bg-red-950/20" : "bg-muted/40")}
+                    >
+                      <span className={cn("text-sm font-medium flex items-center gap-1.5 min-w-0", grp.danger && "text-destructive", grp.muted && "text-muted-foreground")}>
+                        {grp.danger && <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+                        <span className="truncate">{grp.label}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                        {itens.length}
+                        {aberto ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                    {aberto && (
+                      <div className="bg-card">
+                        {itens.map((t: any) => {
+                          const resp = profiles.find((p: any) => p.user_id === t.responsavel_id);
+                          const atrasada = t.data_vencimento && t.data_vencimento < gruposPrazo.hojeISO && t.status !== "concluida";
+                          const concluida = t.status === "concluida";
+                          return (
+                            <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 border-t text-sm">
+                              <button
+                                onClick={() => updateStatusMutation.mutate({ id: t.id, status: concluida ? "pendente" : "concluida" })}
+                                title={concluida ? "Reabrir" : "Concluir"}
+                                className="shrink-0"
+                              >
+                                {concluida ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-muted-foreground hover:text-foreground" />}
+                              </button>
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: AREA_DOT[t.area] || "hsl(var(--muted-foreground))" }} title={t.area || ""} />
+                              <button
+                                onClick={() => { setEditTarefa(t); setFormOpen(true); }}
+                                className="flex-1 min-w-0 text-left"
+                              >
+                                <div className={cn("truncate", concluida && "line-through text-muted-foreground")}>{t.titulo}</div>
+                                {filterOrigem === "todos" && (t.turma_id || t.evento_id) && (
+                                  <div className="text-[11px] text-muted-foreground truncate">{origemDaTarefa(t).label}</div>
+                                )}
+                              </button>
+                              <span className={cn("text-xs whitespace-nowrap shrink-0", atrasada ? "text-destructive font-medium" : "text-muted-foreground")}>
+                                {t.data_vencimento ? format(new Date(t.data_vencimento + "T12:00:00"), "dd/MM") : "—"}
+                              </span>
+                              <span className="text-xs text-muted-foreground w-14 truncate hidden sm:block">{resp?.nome?.split(" ")[0] || "—"}</span>
+                              <button onClick={() => { setEditTarefa(t); setFormOpen(true); }} className="shrink-0 text-muted-foreground/60 hover:text-foreground" title="Editar">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => deleteMutation.mutate(t.id)} className="shrink-0 text-muted-foreground/60 hover:text-destructive" title="Excluir">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
         {/* CALENDAR VIEW */}
