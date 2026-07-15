@@ -1,2 +1,2 @@
-declare const __COMMIT_COUNT__: string;
-export const APP_VERSION = `0.${__COMMIT_COUNT__}`;
+declare const __BUILD_DATE__: string;
+export const APP_VERSION = __BUILD_DATE__;
