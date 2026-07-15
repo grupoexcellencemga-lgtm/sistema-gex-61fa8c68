@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProximosEventosCard } from "@/components/dashboard/ProximosEventosCard";
@@ -23,6 +24,7 @@ function saudacao(): string {
 
 const Inicio = () => {
   const navigate = useNavigate();
+  const { canAccess } = usePermissions();
   const hoje = hojeBrasilISO();
 
   const dataExtenso = new Date(hoje + "T12:00:00").toLocaleDateString("pt-BR", {
@@ -94,24 +96,28 @@ const Inicio = () => {
     },
   });
 
+  const temAcessoFinanceiro = canAccess("financeiro");
+
   const { data: atencao } = useQuery({
-    queryKey: ["inicio-atencao", hoje],
+    queryKey: ["inicio-atencao", hoje, temAcessoFinanceiro],
     queryFn: async () => {
       const mmdd = hoje.slice(5); // "MM-DD"
-      const [{ data: vencidos }, { data: alunosNasc }] = await Promise.all([
-        (supabase as any)
-          .from("pagamentos")
-          .select("valor")
-          .eq("status", "pendente")
-          .lt("data_vencimento", hoje)
-          .is("deleted_at", null),
+      const [vencidosRes, { data: alunosNasc }] = await Promise.all([
+        temAcessoFinanceiro
+          ? (supabase as any)
+              .from("pagamentos")
+              .select("valor")
+              .eq("status", "pendente")
+              .lt("data_vencimento", hoje)
+              .is("deleted_at", null)
+          : Promise.resolve({ data: [] }),
         supabase
           .from("alunos")
           .select("nome, data_nascimento")
           .is("deleted_at", null)
           .not("data_nascimento", "is", null),
       ]);
-      const vencidosArr = (vencidos || []) as any[];
+      const vencidosArr = (vencidosRes.data || []) as any[];
       const aniversariantes = (alunosNasc || []).filter(
         (a: any) => (a.data_nascimento || "").slice(5) === mmdd,
       );
@@ -135,7 +141,9 @@ const Inicio = () => {
   ];
 
   const temAtencao =
-    (atencao?.vencidosQtd ?? 0) > 0 || atrasadas > 0 || (atencao?.aniversariantes?.length ?? 0) > 0;
+    (temAcessoFinanceiro && (atencao?.vencidosQtd ?? 0) > 0) ||
+    atrasadas > 0 ||
+    (atencao?.aniversariantes?.length ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -252,7 +260,7 @@ const Inicio = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {(atencao?.vencidosQtd ?? 0) > 0 && (
+            {temAcessoFinanceiro && (atencao?.vencidosQtd ?? 0) > 0 && (
               <button
                 onClick={() => navigate("/financeiro")}
                 className="w-full flex items-center gap-2 text-sm text-left rounded-md px-2 py-1.5 hover:bg-muted/50"
