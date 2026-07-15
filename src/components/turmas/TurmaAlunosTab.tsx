@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +27,7 @@ const whatsappLink = (phone?: string | null) => {
 };
 
 export function TurmaAlunosTab({ turma }: { turma: any }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
 
@@ -682,7 +684,15 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                   const wa = whatsappLink(a.telefone);
                   return (
                     <TableRow key={a.id}>
-                      <TableCell className="font-medium text-sm">{a.nome}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        <button
+                          type="button"
+                          className="text-left hover:underline hover:text-primary transition-colors"
+                          onClick={() => navigate(`/alunos?aluno=${a.id}`)}
+                        >
+                          {a.nome}
+                        </button>
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email || "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.telefone || "—"}</TableCell>
                       <TableCell className="text-center">

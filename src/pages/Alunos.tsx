@@ -29,6 +29,7 @@ const Alunos = () => {
   const [page, setPage] = useState(1);
   const [selectedAluno, setSelectedAluno] = useState<any>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<string>("dados");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AlunoForm>(emptyForm);
@@ -157,6 +158,30 @@ const Alunos = () => {
       cancelado = true;
     };
   }, [searchParams, produtos, turmas]);
+
+  // Deep-link ?aluno=<id>&tab=<tab> — abre a ficha do aluno direto na aba desejada
+  useEffect(() => {
+    const alunoId = searchParams.get("aluno");
+    const tab = searchParams.get("tab") || "dados";
+    if (!alunoId) return;
+    let cancelado = false;
+    (async () => {
+      const { data: aluno } = await supabase
+        .from("alunos")
+        .select("*")
+        .eq("id", alunoId)
+        .maybeSingle();
+      if (cancelado || !aluno) return;
+      setInitialTab(tab);
+      setSelectedAluno(aluno);
+      setSheetOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("aluno");
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    })();
+    return () => { cancelado = true; };
+  }, [searchParams]);
 
   const { data: contasBancarias = [] } = useQuery({
     queryKey: ["contas_bancarias"],
@@ -1480,6 +1505,7 @@ const Alunos = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            setInitialTab("dados");
                             setSelectedAluno(aluno);
                             setSheetOpen(true);
                           }}
@@ -1515,6 +1541,7 @@ const Alunos = () => {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         selectedAluno={selectedAluno}
+        initialTab={initialTab}
         matriculas={matriculas}
         pagamentos={pagamentos}
         contasBancarias={contasBancarias}

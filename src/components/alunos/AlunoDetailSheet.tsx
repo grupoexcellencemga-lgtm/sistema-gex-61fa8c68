@@ -32,6 +32,7 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   selectedAluno: any;
+  initialTab?: string;
   matriculas: any[];
   pagamentos: any[];
   contasBancarias: any[];
@@ -241,7 +242,7 @@ export const AlunoDetailSheet = (props: Props) => {
                 </SheetHeader>
               </div>
 
-              <Tabs defaultValue="dados" className="flex flex-col min-h-0 flex-1">
+              <Tabs key={`${selectedAluno?.id}|${props.initialTab || "dados"}`} defaultValue={props.initialTab || "dados"} className="flex flex-col min-h-0 flex-1">
                 <div className="overflow-x-auto no-scrollbar -mx-1 px-1 shrink-0 px-6">
                   <TabsList className="w-max min-w-full">
                     <TabsTrigger value="dados">Dados</TabsTrigger>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,7 @@ function SituacaoBadge({ s }: { s: SituacaoAluno }) {
 }
 
 export function TurmaFinanceiroTab({ turma }: { turma: any }) {
+  const navigate = useNavigate();
   const { data: matriculas = [], isLoading: loadingMat } = useQuery({
     queryKey: ["turma-fin-matriculas", turma.id],
     queryFn: async () => {
@@ -86,6 +88,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
 
   const dados = useMemo(() => {
     type AlunoEntry = {
+      alunoId: string;
       nome: string;
       pago: number;
       pendente: number;
@@ -134,6 +137,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         atual.situacao = getSituacao(atual.pago, atual.pendente, atual.vencido, atual.contratado);
       } else {
         porAluno.set(chave, {
+          alunoId: m.aluno_id,
           nome: m.alunos?.nome || "—",
           pago,
           pendente,
@@ -280,7 +284,15 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
             <TableBody>
               {dados.alunoEntries.map((a, i) => (
                 <TableRow key={i}>
-                  <TableCell className="text-sm font-medium">{a.nome}</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    <button
+                      type="button"
+                      className="text-left hover:underline hover:text-primary transition-colors"
+                      onClick={() => navigate(`/alunos?aluno=${a.alunoId}&tab=financeiro`)}
+                    >
+                      {a.nome}
+                    </button>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{a.conta}</TableCell>
                   <TableCell className="text-sm text-right text-muted-foreground">{formatCurrency(a.contratado)}</TableCell>
                   <TableCell className="text-sm text-right font-medium text-emerald-600">
