@@ -7,8 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Settings2, Loader2, Trash2 } from "lucide-react";
+import { Settings2, Loader2, Trash2, Pencil, Check, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import { CreateUserDialog } from "@/components/usuarios/CreateUserDialog";
 import { PermissionsDialog } from "@/components/usuarios/PermissionsDialog";
 import {
@@ -31,6 +32,20 @@ const UsuariosADM = () => {
   const queryClient = useQueryClient();
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [deleteUser, setDeleteUser] = useState<{ user_id: string; nome: string } | null>(null);
+  const [editingNome, setEditingNome] = useState<{ userId: string; value: string } | null>(null);
+
+  const saveNomeMutation = useMutation({
+    mutationFn: async ({ userId, nome }: { userId: string; nome: string }) => {
+      const { error } = await supabase.from("profiles").update({ nome }).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adm-users"] });
+      setEditingNome(null);
+      toast.success("Nome atualizado");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
 
   const { data: usuarios = [], isLoading } = useQuery({
     queryKey: ["adm-users"],
@@ -92,6 +107,7 @@ const UsuariosADM = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Usuário</TableHead>
+                  <TableHead>Nome de usuário</TableHead>
                   <TableHead>Tipo de Acesso</TableHead>
                   <TableHead>Vínculo</TableHead>
                   <TableHead>Ações</TableHead>
@@ -107,11 +123,44 @@ const UsuariosADM = () => {
                             {u.nome?.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        <div>
-                          <p className="font-medium text-sm">{u.nome}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
-                        </div>
+                        <p className="text-xs text-muted-foreground max-w-[160px] truncate">{u.email}</p>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {editingNome?.userId === u.user_id ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            value={editingNome.value}
+                            onChange={(e) => setEditingNome({ ...editingNome, value: e.target.value })}
+                            className="h-7 text-sm w-36"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveNomeMutation.mutate({ userId: u.user_id, nome: editingNome.value });
+                              if (e.key === "Escape") setEditingNome(null);
+                            }}
+                          />
+                          <Button
+                            size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-600"
+                            onClick={() => saveNomeMutation.mutate({ userId: u.user_id, nome: editingNome.value })}
+                            disabled={saveNomeMutation.isPending}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingNome(null)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          className="flex items-center gap-1.5 group text-sm text-left hover:text-primary"
+                          onClick={() => setEditingNome({ userId: u.user_id, value: u.nome || "" })}
+                        >
+                          <span className={u.nome ? "" : "text-muted-foreground text-xs"}>
+                            {u.nome || "Sem nome"}
+                          </span>
+                          <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 text-muted-foreground shrink-0" />
+                        </button>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={u.role === "admin" ? "default" : "secondary"}>
