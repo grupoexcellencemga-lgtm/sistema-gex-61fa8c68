@@ -51,7 +51,7 @@ const Inicio = () => {
         .select("nome")
         .eq("id", auth.user.id)
         .maybeSingle();
-      return { nome: (data as any)?.nome || auth.user.email?.split("@")[0] || "" };
+      return { nome: (data as any)?.nome || "" };
     },
   });
 
