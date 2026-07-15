@@ -3,7 +3,6 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
-import { APP_VERSION } from "@/lib/version";
 
 const routeTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -78,14 +77,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="text-sm font-medium text-foreground">
                   {pageTitle}
                 </span>
-                <span className="text-[10px] text-muted-foreground/60">v{APP_VERSION}</span>
               </div>
 
-              <div className="lg:hidden flex items-center gap-1.5">
+              <div className="lg:hidden">
                 <span className="text-sm font-semibold text-foreground">
                   Sistema GEx
                 </span>
-                <span className="text-[10px] text-muted-foreground">v{APP_VERSION}</span>
               </div>
             </div>
 

@@ -3,6 +3,7 @@ import {
   DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays, Home
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { APP_VERSION } from "@/lib/version";
 import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { usePermissions, type PageKey } from "@/hooks/usePermissions";
@@ -82,7 +83,10 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-semibold text-sidebar-foreground dark:text-white">Sistema GEx</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold text-sidebar-foreground dark:text-white">Sistema GEx</span>
+                <span className="text-[10px] text-sidebar-muted">v{APP_VERSION}</span>
+              </div>
               <span className="text-xs text-sidebar-muted">Grupo Excellence</span>
             </div>
           )}
