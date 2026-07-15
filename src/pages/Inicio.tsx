@@ -12,11 +12,8 @@ import {
 } from "lucide-react";
 
 function formatarNome(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return nome;
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-  if (partes.length === 1) return cap(partes[0]);
-  return `${cap(partes[0])} ${cap(partes[partes.length - 1])}`;
+  const primeiro = nome.trim().split(/\s+/)[0] || "";
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
 }
 
 function hojeBrasilISO(): string {
