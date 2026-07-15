@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
+import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
 import { toast } from "sonner";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
@@ -31,11 +32,11 @@ interface TurmaForm {
   modalidade: string;
   data_inicio: string;
   data_fim: string;
-  responsavel: string;
+  responsavelIds: string[];
   produto_id: string;
 }
 
-const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio: "", data_fim: "", responsavel: "", produto_id: "" };
+const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio: "", data_fim: "", responsavelIds: [], produto_id: "" };
 
 const Turmas = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -94,9 +95,20 @@ const Turmas = () => {
   const { data: turmasRaw = [], isLoading } = useQuery({
     queryKey: ["turmas"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("turmas").select("*, produtos(nome)").is("deleted_at", null).order("nome");
+      const { data, error } = await (supabase as any)
+        .from("turmas")
+        .select("*, produtos(nome), turmas_responsaveis(profissional_id, profissionais(id, nome))")
+        .is("deleted_at", null)
+        .order("nome");
       if (error) throw error;
-      return data;
+      return (data || []).map((t: any) => {
+        const nomes = (t.turmas_responsaveis || []).map((r: any) => r.profissionais?.nome).filter(Boolean);
+        return {
+          ...t,
+          responsavel: nomes.join(", ") || t.responsavel || null,
+          responsavelIds: (t.turmas_responsaveis || []).map((r: any) => r.profissional_id),
+        };
+      });
     },
   });
 
@@ -158,12 +170,17 @@ const Turmas = () => {
 
   const insertMutation = useMutation({
     mutationFn: async (data: TurmaForm) => {
-      const { error } = await supabase.from("turmas").insert({
+      const { data: criada, error } = await supabase.from("turmas").insert({
         nome: data.nome, cidade: data.cidade, modalidade: data.modalidade.toLowerCase(),
         data_inicio: data.data_inicio || null, data_fim: data.data_fim || null,
-        responsavel: data.responsavel || null, produto_id: data.produto_id || null,
-      });
+        responsavel: null, produto_id: data.produto_id || null,
+      }).select("id").single();
       if (error) throw error;
+      if (criada && data.responsavelIds.length > 0) {
+        await (supabase as any).from("turmas_responsaveis").insert(
+          data.responsavelIds.map((pid) => ({ turma_id: criada.id, profissional_id: pid }))
+        );
+      }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["turmas"] }); toast.success("Turma cadastrada"); setDialogOpen(false); },
     onError: (err: any) => toast.error("Erro: " + err.message),
@@ -174,9 +191,16 @@ const Turmas = () => {
       const { error } = await supabase.from("turmas").update({
         nome: data.nome, cidade: data.cidade, modalidade: data.modalidade.toLowerCase(),
         data_inicio: data.data_inicio || null, data_fim: data.data_fim || null,
-        responsavel: data.responsavel || null, produto_id: data.produto_id || null,
+        responsavel: null, produto_id: data.produto_id || null,
       }).eq("id", id);
       if (error) throw error;
+
+      await (supabase as any).from("turmas_responsaveis").delete().eq("turma_id", id);
+      if (data.responsavelIds.length > 0) {
+        await (supabase as any).from("turmas_responsaveis").insert(
+          data.responsavelIds.map((pid) => ({ turma_id: id, profissional_id: pid }))
+        );
+      }
 
       // Início/fim podem ter mudado (feriado, imprevisto...) — recalcula os
       // prazos das tarefas do checklist ainda pendentes.
@@ -231,7 +255,7 @@ const Turmas = () => {
     setForm({
       nome: t.nome, cidade: t.cidade, modalidade: t.modalidade,
       data_inicio: t.data_inicio || "", data_fim: t.data_fim || "",
-      responsavel: t.responsavel || "", produto_id: t.produto_id || "",
+      responsavelIds: t.responsavelIds || [], produto_id: t.produto_id || "",
     });
     setEditingId(t.id); setDialogOpen(true);
   };
@@ -244,7 +268,7 @@ const Turmas = () => {
     else insertMutation.mutate(form);
   };
 
-  const u = (field: keyof TurmaForm, value: string) => setForm(prev => ({ ...prev, [field]: value }));
+  const u = (field: Exclude<keyof TurmaForm, "responsavelIds">, value: string) => setForm(prev => ({ ...prev, [field]: value }));
   const isSaving = insertMutation.isPending || updateMutation.isPending;
 
   
@@ -342,11 +366,12 @@ const Turmas = () => {
                 <SelectContent><SelectItem value="presencial">Presencial</SelectItem><SelectItem value="online">Online</SelectItem></SelectContent>
               </Select>
             </div>
-            <div><Label>Responsável</Label>
-              <Select value={form.responsavel} onValueChange={(v) => u("responsavel", v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar profissional..." /></SelectTrigger>
-                <SelectContent>{profissionais.map((p: any) => <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>)}</SelectContent>
-              </Select>
+            <div><Label>Responsável(is)</Label>
+              <ResponsaveisMultiSelect
+                profissionais={profissionais}
+                selectedIds={form.responsavelIds}
+                onChange={(ids) => setForm(prev => ({ ...prev, responsavelIds: ids }))}
+              />
             </div>
             <div><Label>Data de início</Label><Input type="date" value={form.data_inicio} onChange={(e) => u("data_inicio", e.target.value)} /></div>
             <div><Label>Data de término</Label><Input type="date" value={form.data_fim} onChange={(e) => u("data_fim", e.target.value)} /></div>

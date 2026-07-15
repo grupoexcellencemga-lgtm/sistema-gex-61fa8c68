@@ -78,9 +78,12 @@ export function useDataFilter() {
   function filterByResponsavel<T extends { responsavel?: string | null }>(records: T[]): T[] {
     if (isAdmin) return records;
     if (isProfissional && profissionalNome) {
-      return records.filter(
-        (r) => r.responsavel?.toLowerCase() === profissionalNome.toLowerCase()
-      );
+      return records.filter((r) => {
+        if (!r.responsavel) return false;
+        // Suporta múltiplos responsáveis separados por vírgula
+        const nomes = r.responsavel.split(",").map((n) => n.trim().toLowerCase());
+        return nomes.includes(profissionalNome.toLowerCase());
+      });
     }
     return records; // Comercial e demais casos: sem escopo por profissional, vê tudo.
   }

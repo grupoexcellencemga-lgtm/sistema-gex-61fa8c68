@@ -6,13 +6,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
+import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
 
 export interface EventoForm {
   nome: string;
   data: string;
   local: string;
   tipo: string;
-  responsavel: string;
+  responsavelIds: string[];
   limite_participantes: string;
   descricao: string;
   pago: boolean;
@@ -25,7 +26,7 @@ export interface EventoForm {
 }
 
 export const emptyForm: EventoForm = {
-  nome: "", data: "", local: "", tipo: "", responsavel: "",
+  nome: "", data: "", local: "", tipo: "", responsavelIds: [],
   limite_participantes: "", descricao: "", pago: false, valor: "",
   comunidade: false, vincular_turma: false, produto_id: "", turma_id: "",
   checklist_template_id: "",
@@ -150,11 +151,12 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Responsável</Label>
-              <Select value={form.responsavel} onValueChange={(v) => u("responsavel", v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar profissional..." /></SelectTrigger>
-                <SelectContent>{profissionais.map((p: any) => <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Responsável(is)</Label>
+              <ResponsaveisMultiSelect
+                profissionais={profissionais}
+                selectedIds={form.responsavelIds}
+                onChange={(ids) => setForm(f => ({ ...f, responsavelIds: ids }))}
+              />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Limite de participantes</Label>

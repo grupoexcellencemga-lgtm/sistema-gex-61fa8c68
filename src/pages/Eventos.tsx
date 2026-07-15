@@ -41,9 +41,20 @@ const Eventos = () => {
   const { data: eventosRaw = [], isLoading } = useQuery({
     queryKey: ["eventos"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("eventos").select("*").is("deleted_at", null).order("data", { ascending: true });
+      const { data, error } = await (supabase as any)
+        .from("eventos")
+        .select("*, eventos_responsaveis(profissional_id, profissionais(id, nome))")
+        .is("deleted_at", null)
+        .order("data", { ascending: true });
       if (error) throw error;
-      return data;
+      return (data || []).map((e: any) => {
+        const nomes = (e.eventos_responsaveis || []).map((r: any) => r.profissionais?.nome).filter(Boolean);
+        return {
+          ...e,
+          responsavel: nomes.join(", ") || e.responsavel || null,
+          responsavelIds: (e.eventos_responsaveis || []).map((r: any) => r.profissional_id),
+        };
+      });
     },
   });
 
@@ -157,13 +168,20 @@ const Eventos = () => {
     mutationFn: async (data: EventoForm) => {
       const { data: criado, error } = await supabase.from("eventos").insert({
         nome: data.nome, data: data.data || null, local: data.local || null,
-        tipo: data.tipo ? data.tipo.toLowerCase() : null, responsavel: data.responsavel || null,
+        tipo: data.tipo ? data.tipo.toLowerCase() : null,
+        responsavel: null,
         limite_participantes: data.limite_participantes ? parseInt(data.limite_participantes) : null,
         descricao: data.descricao || null, pago: data.pago,
         valor: data.pago && data.valor ? parseFloat(data.valor) : 0, comunidade: data.comunidade,
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
       }).select("id, nome, tipo, data").single();
       if (error) throw error;
+
+      if (criado && data.responsavelIds.length > 0) {
+        await (supabase as any).from("eventos_responsaveis").insert(
+          data.responsavelIds.map((pid) => ({ evento_id: criado.id, profissional_id: pid }))
+        );
+      }
 
       // Aplica o checklist ESCOLHIDO no cadastro (obrigatório).
       const { data: auth } = await supabase.auth.getUser();
@@ -204,13 +222,21 @@ const Eventos = () => {
     mutationFn: async ({ id, data }: { id: string; data: EventoForm }) => {
       const { error } = await supabase.from("eventos").update({
         nome: data.nome, data: data.data || null, local: data.local || null,
-        tipo: data.tipo ? data.tipo.toLowerCase() : null, responsavel: data.responsavel || null,
+        tipo: data.tipo ? data.tipo.toLowerCase() : null,
+        responsavel: null,
         limite_participantes: data.limite_participantes ? parseInt(data.limite_participantes) : null,
         descricao: data.descricao || null, pago: data.pago,
         valor: data.pago && data.valor ? parseFloat(data.valor) : 0, comunidade: data.comunidade,
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
       }).eq("id", id);
       if (error) throw error;
+
+      await (supabase as any).from("eventos_responsaveis").delete().eq("evento_id", id);
+      if (data.responsavelIds.length > 0) {
+        await (supabase as any).from("eventos_responsaveis").insert(
+          data.responsavelIds.map((pid) => ({ evento_id: id, profissional_id: pid }))
+        );
+      }
 
       // A data pode ter mudado (feriado, imprevisto...) — recalcula os prazos
       // das tarefas do checklist ainda pendentes para acompanhar a nova data.
@@ -232,7 +258,7 @@ const Eventos = () => {
       if (selectedEvento && editingId === selectedEvento.id) {
         setSelectedEvento((prev: any) => ({
           ...prev, nome: form.nome, data: form.data || null, local: form.local || null,
-          tipo: form.tipo || null, responsavel: form.responsavel || null,
+          tipo: form.tipo || null, responsavelIds: form.responsavelIds,
           limite_participantes: form.limite_participantes ? parseInt(form.limite_participantes) : null,
           descricao: form.descricao || null, pago: form.pago,
           valor: form.pago && form.valor ? parseFloat(form.valor) : 0, comunidade: form.comunidade,
@@ -257,7 +283,8 @@ const Eventos = () => {
   const openEdit = (e: any) => {
     setForm({
       nome: e.nome, data: e.data || "", local: e.local || "", tipo: e.tipo || "",
-      responsavel: e.responsavel || "", limite_participantes: e.limite_participantes?.toString() || "",
+      responsavelIds: e.responsavelIds || [],
+      limite_participantes: e.limite_participantes?.toString() || "",
       descricao: e.descricao || "", pago: e.pago || false, valor: e.valor ? String(e.valor) : "",
       comunidade: e.comunidade || false, vincular_turma: !!(e.produto_id && !e.comunidade),
       produto_id: e.produto_id || "", turma_id: e.turma_id || "",
