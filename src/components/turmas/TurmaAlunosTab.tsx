@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus } from "lucide-react";
+import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
@@ -385,6 +385,50 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  // ── Remover aluno da turma (apaga matrícula + pagamentos) ──
+  const removerMutation = useMutation({
+    mutationFn: async (alunoId: string) => {
+      const agora = new Date().toISOString();
+
+      // Busca as matrículas ativas do aluno nessa turma
+      const { data: mats, error: matsErr } = await supabase
+        .from("matriculas")
+        .select("id")
+        .eq("aluno_id", alunoId)
+        .eq("turma_id", turma.id)
+        .is("deleted_at", null);
+      if (matsErr) throw matsErr;
+
+      if (!mats || mats.length === 0) return;
+
+      const matIds = mats.map((m: any) => m.id);
+
+      // Soft-delete dos pagamentos vinculados
+      const { error: pagErr } = await supabase
+        .from("pagamentos")
+        .update({ deleted_at: agora })
+        .in("matricula_id", matIds)
+        .is("deleted_at", null);
+      if (pagErr) throw pagErr;
+
+      // Soft-delete das matrículas
+      const { error: matErr } = await supabase
+        .from("matriculas")
+        .update({ deleted_at: agora })
+        .in("id", matIds);
+      if (matErr) throw matErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alunos-turma-tab", turma.id] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-financeiro-turmas"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      toast.success("Aluno removido da turma.");
+    },
+    onError: (err: any) => toast.error("Erro ao remover: " + err.message),
+  });
+
   // ── Filtro da tabela de alunos ──
   const filtrados = useMemo(() => {
     const termo = normalizar(busca);
@@ -630,6 +674,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                   <TableHead>E-mail</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead className="w-16 text-center">WhatsApp</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -649,12 +694,26 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={removerMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`Remover ${a.nome} da turma? A matrícula e todos os pagamentos serão excluídos.`))
+                              removerMutation.mutate(a.id);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
                 {filtrados.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       {alunos.length === 0
                         ? "Nenhum aluno matriculado nesta turma."
                         : "Nenhum aluno encontrado com essa busca."}
