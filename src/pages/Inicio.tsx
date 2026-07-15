@@ -46,7 +46,7 @@ const Inicio = () => {
       const { data } = await supabase
         .from("profiles")
         .select("nome")
-        .eq("id", auth.user.id)
+        .eq("user_id", auth.user.id)
         .maybeSingle();
       return { nome: (data as any)?.nome || "" };
     },
