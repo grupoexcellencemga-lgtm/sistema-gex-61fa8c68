@@ -233,7 +233,9 @@ const Inicio = () => {
                 <Calendar className="h-4 w-4 text-muted-foreground" /> Agenda de hoje
               </CardTitle>
               <span className="text-sm font-medium text-muted-foreground">
-                {new Date(hoje + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric" })}
+                {new Date(hoje + "T12:00:00")
+                  .toLocaleDateString("pt-BR", { day: "numeric", month: "long" })
+                  .replace(/de (\w)/, (_, c) => `de ${c.toUpperCase()}`)}
               </span>
             </div>
           </CardHeader>
