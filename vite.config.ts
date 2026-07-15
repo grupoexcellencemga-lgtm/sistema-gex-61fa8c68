@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 // import legacy from "@vitejs/plugin-legacy";
 import path from "path";
-const buildDate = new Date().toISOString().slice(2, 10).replace(/-/g, ".");
+const buildDate = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(2, 10).replace(/-/g, ".");
 
 import { VitePWA } from "vite-plugin-pwa";
 
