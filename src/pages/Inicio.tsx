@@ -66,11 +66,15 @@ const Inicio = () => {
   const { data: agenda = [] } = useQuery({
     queryKey: ["inicio-agenda", hoje],
     queryFn: async () => {
-      const [{ data: eventos }, { data: encontros }] = await Promise.all([
+      const [{ data: eventos }, { data: encontros }, { data: googleEventos }] = await Promise.all([
         supabase.from("eventos").select("id, nome").eq("data", hoje).is("deleted_at", null),
         (supabase as any)
           .from("encontros")
           .select("id, sessao_numero, turmas(nome, produtos(nome))")
+          .eq("data", hoje),
+        (supabase as any)
+          .from("google_agenda_eventos")
+          .select("id, titulo, hora")
           .eq("data", hoje),
       ]);
       const itens = [
@@ -79,6 +83,11 @@ const Inicio = () => {
           id: `en-${e.id}`,
           titulo: `${e.turmas?.produtos?.nome ? `${e.turmas.produtos.nome} · ` : ""}${e.turmas?.nome || "Turma"} · Sessão ${e.sessao_numero ?? ""}`.trim(),
           tipo: "Aula",
+        })),
+        ...(googleEventos || []).map((g: any) => ({
+          id: `g-${g.id}`,
+          titulo: g.hora ? `${g.hora.slice(0, 5)} · ${g.titulo}` : g.titulo,
+          tipo: "Google",
         })),
       ];
       return itens;
