@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, GripVertical, Trash2 } from "lucide-react";
+import { CalendarDays, GripVertical, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 import { AREA_LABELS, AREA_BADGE, type AreaEvento } from "@/lib/checklistEvento";
@@ -273,6 +273,182 @@ function TarefaEditDialog({
   );
 }
 
+// ── Create Dialog ─────────────────────────────────────────────────────────────
+
+function TarefaCreateDialog({
+  eventoId,
+  turmaId,
+  profiles,
+  onClose,
+  invalidateKey,
+  defaultFase,
+}: {
+  eventoId?: string;
+  turmaId?: string;
+  profiles: any[];
+  onClose: () => void;
+  invalidateKey: string[];
+  defaultFase: string;
+}) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    titulo: "",
+    descricao: "",
+    data_vencimento: "",
+    hora: "",
+    prioridade: "media",
+    area: "",
+    fase_evento: defaultFase,
+    responsavel_id: "",
+  });
+
+  const set = (field: string, value: string) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        titulo: form.titulo.trim(),
+        descricao: form.descricao || null,
+        data_vencimento: form.data_vencimento || null,
+        hora: form.hora || null,
+        prioridade: form.prioridade,
+        area: form.area || null,
+        fase_evento: form.fase_evento || null,
+        responsavel_id: form.responsavel_id || null,
+        status: "pendente",
+        ...(eventoId ? { evento_id: eventoId } : {}),
+        ...(turmaId ? { turma_id: turmaId } : {}),
+      };
+      const { error } = await (supabase as any).from("tarefas").insert(payload);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: invalidateKey });
+      queryClient.invalidateQueries({ queryKey: ["tarefas"] });
+      toast.success("Atividade criada");
+      onClose();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nova atividade</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Título *</Label>
+            <Input
+              value={form.titulo}
+              onChange={(e) => set("titulo", e.target.value)}
+              placeholder="Nome da atividade"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Descrição</Label>
+            <Textarea
+              value={form.descricao}
+              onChange={(e) => set("descricao", e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data de vencimento</Label>
+              <Input
+                type="date"
+                value={form.data_vencimento}
+                onChange={(e) => set("data_vencimento", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Hora</Label>
+              <Input
+                type="time"
+                value={form.hora}
+                onChange={(e) => set("hora", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Prioridade</Label>
+              <Select value={form.prioridade} onValueChange={(v) => set("prioridade", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="urgente">Urgente</SelectItem>
+                  <SelectItem value="alta">Alta</SelectItem>
+                  <SelectItem value="media">Média</SelectItem>
+                  <SelectItem value="baixa">Baixa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Fase</Label>
+              <Select value={form.fase_evento || "_none"} onValueChange={(v) => set("fase_evento", v === "_none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Nenhuma</SelectItem>
+                  {FASES.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Área</Label>
+              <Select value={form.area || "_none"} onValueChange={(v) => set("area", v === "_none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Nenhuma</SelectItem>
+                  {(Object.keys(AREA_LABELS) as AreaEvento[]).map((a) => (
+                    <SelectItem key={a} value={a}>{AREA_LABELS[a]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <Select value={form.responsavel_id || "_none"} onValueChange={(v) => set("responsavel_id", v === "_none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Nenhum</SelectItem>
+                  {profiles.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!form.titulo.trim() || createMutation.isPending}
+          >
+            {createMutation.isPending ? "Criando…" : "Criar atividade"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Task Card ─────────────────────────────────────────────────────────────────
 
 function TarefaCard({
@@ -434,6 +610,8 @@ export function ChecklistKanban({
   const [areaFiltro, setAreaFiltro] = useState<AreaEvento | "todas">("todas");
   const [sessaoFiltro, setSessaoFiltro] = useState<number | "todas">("todas");
   const [editando, setEditando] = useState<any | null>(null);
+  const [criando, setCriando] = useState(false);
+  const [activeTab, setActiveTab] = useState("pre_evento");
 
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles-list"],
@@ -498,6 +676,16 @@ export function ChecklistKanban({
           onClose={() => setEditando(null)}
         />
       )}
+      {criando && (
+        <TarefaCreateDialog
+          eventoId={eventoId}
+          turmaId={turmaId}
+          profiles={profiles}
+          invalidateKey={invalidateKey}
+          defaultFase={activeTab === "sem_fase" ? "" : activeTab}
+          onClose={() => setCriando(false)}
+        />
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
@@ -543,17 +731,22 @@ export function ChecklistKanban({
           </div>
         )}
 
-        <Tabs defaultValue="pre_evento" className="w-full">
-          <TabsList className="flex-wrap h-auto">
-            {FASES.map((f) => (
-              <TabsTrigger key={f.id} value={f.id}>
-                {f.label} ({porFase(f.id).length})
-              </TabsTrigger>
-            ))}
-            {semFase.length > 0 && (
-              <TabsTrigger value="sem_fase">Outras ({semFase.length})</TabsTrigger>
-            )}
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <TabsList className="flex-wrap h-auto">
+              {FASES.map((f) => (
+                <TabsTrigger key={f.id} value={f.id}>
+                  {f.label} ({porFase(f.id).length})
+                </TabsTrigger>
+              ))}
+              {semFase.length > 0 && (
+                <TabsTrigger value="sem_fase">Outras ({semFase.length})</TabsTrigger>
+              )}
+            </TabsList>
+            <Button size="sm" onClick={() => setCriando(true)} className="shrink-0">
+              <Plus className="h-4 w-4 mr-1" /> Nova atividade
+            </Button>
+          </div>
 
           {FASES.map((f) => (
             <TabsContent key={f.id} value={f.id} className="mt-3">
