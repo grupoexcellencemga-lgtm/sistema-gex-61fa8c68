@@ -283,7 +283,7 @@ const Turmas = () => {
             <TabsTrigger value="metricas"><TrendingUp className="h-4 w-4 mr-1" />Métricas</TabsTrigger>
             <TabsTrigger value="operacao"><ListChecks className="h-4 w-4 mr-1" />Operação</TabsTrigger>
           </TabsList>
-          <TabsContent value="alunos">
+          <TabsContent value="alunos" className="outline-none">
             <TurmaAlunosTab turma={selectedTurma} />
           </TabsContent>
           <TabsContent value="presenca">
