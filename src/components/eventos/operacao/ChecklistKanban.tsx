@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, GripVertical } from "lucide-react";
+import { CalendarDays, GripVertical, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 import { AREA_LABELS, AREA_BADGE, type AreaEvento } from "@/lib/checklistEvento";
@@ -121,6 +121,23 @@ function TarefaEditDialog({
       queryClient.invalidateQueries({ queryKey: invalidateKey });
       queryClient.invalidateQueries({ queryKey: ["tarefas"] });
       toast.success("Tarefa atualizada");
+      onClose();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase as any)
+        .from("tarefas")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", tarefa.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: invalidateKey });
+      queryClient.invalidateQueries({ queryKey: ["tarefas"] });
+      toast.success("Tarefa excluída");
       onClose();
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
@@ -237,6 +254,15 @@ function TarefaEditDialog({
         </div>
 
         <DialogFooter>
+          <Button
+            variant="destructive"
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteMutation.isPending}
+            className="mr-auto"
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            {deleteMutation.isPending ? "Excluindo…" : "Excluir"}
+          </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? "Salvando…" : "Salvar"}
