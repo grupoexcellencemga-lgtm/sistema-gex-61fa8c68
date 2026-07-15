@@ -72,7 +72,7 @@ const Inicio = () => {
         supabase.from("eventos").select("id, nome").eq("data", hoje).is("deleted_at", null),
         (supabase as any)
           .from("encontros")
-          .select("id, sessao_numero, turmas(nome, produtos(nome))")
+          .select("id, sessao_numero, turma_id, turmas(nome, produtos(nome))")
           .eq("data", hoje),
         (supabase as any)
           .from("google_agenda_eventos")
@@ -80,16 +80,23 @@ const Inicio = () => {
           .eq("data", hoje),
       ]);
       const itens = [
-        ...(eventos || []).map((e: any) => ({ id: `ev-${e.id}`, titulo: e.nome, tipo: "Evento" })),
+        ...(eventos || []).map((e: any) => ({
+          id: `ev-${e.id}`,
+          titulo: e.nome,
+          tipo: "Evento",
+          href: `/eventos/${e.id}`,
+        })),
         ...(encontros || []).map((e: any) => ({
           id: `en-${e.id}`,
           titulo: `${e.turmas?.produtos?.nome ? `${e.turmas.produtos.nome} · ` : ""}${e.turmas?.nome || "Turma"} · Sessão ${e.sessao_numero ?? ""}`.trim(),
           tipo: "Aula",
+          href: `/turmas`,
         })),
         ...(googleEventos || []).map((g: any) => ({
           id: `g-${g.id}`,
           titulo: g.hora ? `${g.hora.slice(0, 5)} · ${g.titulo}` : g.titulo,
           tipo: "Google",
+          href: `/agenda`,
         })),
       ];
       return itens;
@@ -243,14 +250,19 @@ const Inicio = () => {
             {agenda.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">Nada na agenda de hoje.</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-0.5">
                 {agenda.map((a: any) => (
-                  <div key={a.id} className="flex items-center gap-2 text-sm py-1">
+                  <button
+                    key={a.id}
+                    onClick={() => a.href && navigate(a.href)}
+                    className="w-full flex items-center gap-2 text-sm py-1.5 px-1.5 rounded-md text-left hover:bg-muted/50 transition-colors"
+                  >
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                       {a.tipo}
                     </span>
                     <span className="flex-1 truncate">{a.titulo}</span>
-                  </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </button>
                 ))}
               </div>
             )}
