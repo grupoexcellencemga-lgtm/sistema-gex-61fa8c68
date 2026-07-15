@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Users, CalendarDays, Percent, DollarSign, Receipt, TrendingUp, Loader2 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDate } from "@/lib/formatters";
 
 const getValorPago = (p: any) => {
   const pago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
@@ -11,12 +11,6 @@ const getValorPago = (p: any) => {
   return pago > 0 ? pago : original;
 };
 
-const pagamentoPertenceMatricula = (p: any, m: any, turmaId: string) => {
-  if (p.matricula_id && p.matricula_id === m.id) return true;
-  if (p.turma_id && p.turma_id === turmaId && p.aluno_id === m.aluno_id) return true;
-  if (!p.matricula_id && p.aluno_id === m.aluno_id && p.produto_id === m.produto_id) return true;
-  return false;
-};
 
 const FREQ_COLORS = {
   frequente: "hsl(142 71% 45%)",
@@ -64,16 +58,21 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
     [matriculas]
   );
 
+  const matriculaIds = useMemo(
+    () => matriculas.map((m: any) => m.id).filter(Boolean),
+    [matriculas]
+  );
+
   const { data: pagamentos = [], isLoading: l4 } = useQuery({
-    queryKey: ["turma-met-pagamentos", turma.id, alunoIds.length],
-    enabled: alunoIds.length > 0,
+    queryKey: ["turma-met-pagamentos", turma.id, matriculaIds.join(",")],
+    enabled: matriculaIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
-        .select("aluno_id, matricula_id, produto_id, valor, valor_pago")
+        .select("matricula_id, valor, valor_pago")
         .eq("status", "pago")
         .is("deleted_at", null)
-        .in("aluno_id", alunoIds as string[]);
+        .in("matricula_id", matriculaIds as string[]);
       if (error) throw error;
       return data || [];
     },
@@ -84,9 +83,10 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
-        .select("valor")
+        .select("id, descricao, valor, data")
         .eq("turma_id", turma.id)
-        .is("deleted_at", null);
+        .is("deleted_at", null)
+        .order("data", { ascending: true });
       if (error) throw error;
       return data || [];
     },
@@ -115,10 +115,7 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
     });
     const freqMedia = totalAlunos > 0 ? Math.round(somaFreq / totalAlunos) : 0;
 
-    const totalEntradas = matriculas.reduce((s: number, mt: any) => {
-      const pgs = pagamentos.filter((p: any) => pagamentoPertenceMatricula(p, mt, turma.id));
-      return s + pgs.reduce((ss: number, p: any) => ss + getValorPago(p), 0);
-    }, 0);
+    const totalEntradas = pagamentos.reduce((s: number, p: any) => s + getValorPago(p), 0);
     const totalDespesas = despesas.reduce((s: number, d: any) => s + Number(d.valor || 0), 0);
     const liquido = totalEntradas - totalDespesas;
 
@@ -129,7 +126,7 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
     ].filter((d) => d.value > 0);
 
     return { totalAlunos, totalEncontros, freqMedia, totalEntradas, totalDespesas, liquido, freqData };
-  }, [alunoIds, encontros, presencas, matriculas, pagamentos, despesas, turma.id]);
+  }, [alunoIds, encontros, presencas, pagamentos, despesas]);
 
   if (l1 || l2 || l3 || l4 || l5) {
     return (
@@ -196,7 +193,7 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
         </div>
       ) : null}
 
-      <div className="rounded-lg border bg-card p-4 space-y-2">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
         <h4 className="text-sm font-semibold">Resumo Financeiro</h4>
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div>
@@ -214,6 +211,22 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
             </p>
           </div>
         </div>
+        {despesas.length > 0 && (
+          <div className="border-t pt-3 space-y-1">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Detalhamento das despesas</p>
+            {despesas.map((d: any) => (
+              <div key={d.id} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-muted-foreground text-xs shrink-0">{formatDate(d.data)}</span>
+                  <span className="truncate">{d.descricao || "—"}</span>
+                </div>
+                <span className="font-medium text-destructive shrink-0 ml-3">
+                  {formatCurrency(Number(d.valor || 0))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
