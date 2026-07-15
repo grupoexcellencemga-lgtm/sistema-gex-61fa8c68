@@ -228,9 +228,14 @@ const Inicio = () => {
         {/* Agenda de hoje */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" /> Agenda de hoje
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" /> Agenda de hoje
+              </CardTitle>
+              <span className="text-sm font-medium text-muted-foreground">
+                {new Date(hoje + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric" })}
+              </span>
+            </div>
           </CardHeader>
           <CardContent>
             {agenda.length === 0 ? (
