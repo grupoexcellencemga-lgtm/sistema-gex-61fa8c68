@@ -73,14 +73,12 @@ export function ProximosEventosCard() {
               .from("tarefas")
               .select("status, evento_id")
               .in("evento_id", eventoIds)
-              .is("deleted_at", null)
           : Promise.resolve({ data: [] as any[] }),
         turmaIds.length
           ? (supabase as any)
               .from("tarefas")
               .select("status, turma_id")
               .in("turma_id", turmaIds)
-              .is("deleted_at", null)
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
