@@ -265,23 +265,17 @@ function TarefaCard({
     <Card
       ref={setNodeRef}
       {...attributes}
+      {...listeners}
       onClick={() => onEdit(tarefa)}
       style={
         transform
           ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
           : undefined
       }
-      className={`p-3 space-y-1.5 cursor-pointer active:cursor-grabbing touch-none ${isDragging ? "opacity-70 shadow-lg z-50 relative" : ""} ${atrasada ? "border-red-300 bg-red-50/50" : ""}`}
+      className={`p-3 space-y-1.5 cursor-grab active:cursor-grabbing touch-none ${isDragging ? "opacity-70 shadow-lg z-50 relative" : ""} ${atrasada ? "border-red-300 bg-red-50/50" : ""}`}
     >
       <div className="flex items-start gap-1.5">
-        {/* Grip separado: arrastar não abre o dialog */}
-        <div
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          className="cursor-grab active:cursor-grabbing mt-0.5 shrink-0"
-        >
-          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-        </div>
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
         <p className="text-sm font-medium leading-tight flex-1">
           {tarefa.titulo}
         </p>
