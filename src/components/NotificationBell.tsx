@@ -19,6 +19,7 @@ const tipoIcons: Record<string, string> = {
   sessao_proxima: "📅",
   meta_atingida: "🏆",
   lead_sem_contato: "⏳",
+  tarefa_atribuida: "✅",
 };
 
 export function NotificationBell() {
@@ -55,10 +56,19 @@ export function NotificationBell() {
       const limite = new Date(Date.now() - 3 * 3_600_000 + 2 * 86_400_000)
         .toISOString()
         .slice(0, 10); // hoje + 2 dias = janela "urgente"
+
+      const { data: responsaveisData } = await (supabase as any)
+        .from("tarefas_responsaveis")
+        .select("tarefa_id")
+        .eq("user_id", user.id);
+
+      const tarefaIds = (responsaveisData || []).map((r: any) => r.tarefa_id);
+      if (tarefaIds.length === 0) return [];
+
       const { data } = await (supabase as any)
         .from("tarefas")
         .select("id, titulo, data_vencimento, evento_id, eventos(nome)")
-        .eq("responsavel_id", user.id)
+        .in("id", tarefaIds)
         .eq("status", "pendente")
         .not("evento_id", "is", null)
         .not("data_vencimento", "is", null)

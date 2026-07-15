@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -37,6 +37,7 @@ import { CalendarDays, GripVertical, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 import { AREA_LABELS, AREA_BADGE, type AreaEvento } from "@/lib/checklistEvento";
+import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
 
 const COLUNAS = [
   { id: "pendente", titulo: "Pendente" },
@@ -86,14 +87,35 @@ function TarefaEditDialog({
     area: tarefa.area || "",
     fase_evento: tarefa.fase_evento || "",
     status: tarefa.status || "pendente",
-    responsavel_id: tarefa.responsavel_id || "",
   });
+  const [responsavelIds, setResponsavelIds] = useState<string[]>([]);
 
   const set = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const { data: responsaveisData } = useQuery({
+    queryKey: ["tarefa-responsaveis", tarefa.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("tarefas_responsaveis")
+        .select("user_id")
+        .eq("tarefa_id", tarefa.id);
+      return data || [];
+    },
+  });
+
+  useEffect(() => {
+    if (responsaveisData) {
+      setResponsavelIds(responsaveisData.map((r: any) => r.user_id));
+    }
+  }, [responsaveisData]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const prevIds = (responsaveisData || []).map((r: any) => r.user_id);
+      const added = responsavelIds.filter((id) => !prevIds.includes(id));
+      const goingConcluida = form.status === "concluida" && tarefa.status !== "concluida";
+
       const payload: any = {
         titulo: form.titulo,
         descricao: form.descricao || null,
@@ -103,23 +125,54 @@ function TarefaEditDialog({
         area: form.area || null,
         fase_evento: form.fase_evento || null,
         status: form.status,
-        responsavel_id: form.responsavel_id || null,
+        responsavel_id: null,
         completed_at:
-          form.status === "concluida" && tarefa.status !== "concluida"
+          goingConcluida
             ? new Date().toISOString()
             : tarefa.status !== "concluida"
             ? null
             : tarefa.completed_at,
       };
-      const { error } = await (supabase as any)
+      const { error: e1 } = await (supabase as any)
         .from("tarefas")
         .update(payload)
         .eq("id", tarefa.id);
-      if (error) throw error;
+      if (e1) throw e1;
+
+      await (supabase as any).from("tarefas_responsaveis").delete().eq("tarefa_id", tarefa.id);
+      if (responsavelIds.length > 0) {
+        await (supabase as any).from("tarefas_responsaveis").insert(
+          responsavelIds.map((uid) => ({ tarefa_id: tarefa.id, user_id: uid }))
+        );
+      }
+
+      if (added.length > 0) {
+        const link = tarefa.evento_id
+          ? `/eventos?evento=${tarefa.evento_id}`
+          : tarefa.turma_id
+          ? `/turmas?turma=${tarefa.turma_id}&tab=operacao`
+          : null;
+        await (supabase as any).from("notificacoes").insert(
+          added.map((uid) => ({
+            user_id: uid,
+            tipo: "tarefa_atribuida",
+            titulo: "Nova atividade atribuída",
+            mensagem: form.titulo,
+            link,
+            lida: false,
+            tarefa_id: tarefa.id,
+          }))
+        );
+      }
+
+      if (goingConcluida) {
+        await (supabase as any).from("notificacoes").delete().eq("tarefa_id", tarefa.id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invalidateKey });
       queryClient.invalidateQueries({ queryKey: ["tarefas"] });
+      queryClient.invalidateQueries({ queryKey: ["tarefa-responsaveis", tarefa.id] });
       toast.success("Tarefa atualizada");
       onClose();
     },
@@ -240,16 +293,12 @@ function TarefaEditDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Responsável</Label>
-            <Select value={form.responsavel_id || "_none"} onValueChange={(v) => set("responsavel_id", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">Nenhum</SelectItem>
-                {profiles.map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Responsável(is)</Label>
+            <ResponsaveisMultiSelect
+              profissionais={profiles}
+              selectedIds={responsavelIds}
+              onChange={setResponsavelIds}
+            />
           </div>
         </div>
 
@@ -299,8 +348,8 @@ function TarefaCreateDialog({
     prioridade: "media",
     area: "",
     fase_evento: defaultFase,
-    responsavel_id: "",
   });
+  const [responsavelIds, setResponsavelIds] = useState<string[]>([]);
 
   const set = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -315,13 +364,42 @@ function TarefaCreateDialog({
         prioridade: form.prioridade,
         area: form.area || null,
         fase_evento: form.fase_evento || null,
-        responsavel_id: form.responsavel_id || null,
+        responsavel_id: null,
         status: "pendente",
         ...(eventoId ? { evento_id: eventoId } : {}),
         ...(turmaId ? { turma_id: turmaId } : {}),
       };
-      const { error } = await (supabase as any).from("tarefas").insert(payload);
+      const { data: newTarefa, error } = await (supabase as any)
+        .from("tarefas")
+        .insert(payload)
+        .select("id")
+        .single();
       if (error) throw error;
+
+      const tarefaId = newTarefa.id;
+
+      if (responsavelIds.length > 0) {
+        await (supabase as any).from("tarefas_responsaveis").insert(
+          responsavelIds.map((uid) => ({ tarefa_id: tarefaId, user_id: uid }))
+        );
+
+        const link = eventoId
+          ? `/eventos?evento=${eventoId}`
+          : turmaId
+          ? `/turmas?turma=${turmaId}&tab=operacao`
+          : null;
+        await (supabase as any).from("notificacoes").insert(
+          responsavelIds.map((uid) => ({
+            user_id: uid,
+            tipo: "tarefa_atribuida",
+            titulo: "Nova atividade atribuída",
+            mensagem: form.titulo.trim(),
+            link,
+            lida: false,
+            tarefa_id: tarefaId,
+          }))
+        );
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invalidateKey });
@@ -421,16 +499,12 @@ function TarefaCreateDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Responsável</Label>
-              <Select value={form.responsavel_id || "_none"} onValueChange={(v) => set("responsavel_id", v === "_none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">Nenhum</SelectItem>
-                  {profiles.map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Responsável(is)</Label>
+              <ResponsaveisMultiSelect
+                profissionais={profiles}
+                selectedIds={responsavelIds}
+                onChange={setResponsavelIds}
+              />
             </div>
           </div>
         </div>
@@ -616,8 +690,8 @@ export function ChecklistKanban({
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, nome");
-      return data || [];
+      const { data } = await (supabase as any).from("profiles").select("id, user_id, nome").not("user_id", "is", null);
+      return (data || []).map((p: any) => ({ id: p.user_id, nome: p.nome }));
     },
   });
 
@@ -645,6 +719,9 @@ export function ChecklistKanban({
         })
         .eq("id", id);
       if (error) throw error;
+      if (status === "concluida") {
+        await (supabase as any).from("notificacoes").delete().eq("tarefa_id", id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invalidateKey });
