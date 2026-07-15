@@ -167,7 +167,7 @@ export function ProximosEventosCard() {
               </div>
 
               <div className="flex items-center gap-2 mt-2.5">
-                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="flex-1 h-2 rounded-full bg-muted/60 border border-border/40 overflow-hidden">
                   <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                 </div>
                 <span className="text-[11px] text-muted-foreground whitespace-nowrap">
