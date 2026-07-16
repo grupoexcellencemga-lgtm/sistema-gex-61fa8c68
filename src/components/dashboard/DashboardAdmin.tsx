@@ -13,7 +13,17 @@ import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
 import type { DashboardMetrics, MetaRow } from "@/types";
 
-const colors = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
+// Paleta categórica — cores diversas para gráficos de pizza sem conotação semântica
+const CATEGORICAL_COLORS = [
+  "hsl(217 91% 60%)",  // azul
+  "hsl(270 60% 55%)",  // roxo
+  "hsl(142 71% 45%)",  // verde
+  "hsl(38 92% 50%)",   // âmbar
+  "hsl(0 72% 51%)",    // vermelho
+  "hsl(197 71% 52%)",  // ciano
+  "hsl(340 82% 52%)",  // rosa
+  "hsl(160 60% 45%)",  // teal
+];
 
 interface Props {
   mes: number;
@@ -143,8 +153,8 @@ export function DashboardAdmin({ mes, ano }: Props) {
   const eventosMes = Number(m.eventos_mes || 0);
 
   const productData = (m.matriculas_por_produto || []) as { name: string; alunos: number }[];
-  const cityData = ((m.alunos_por_cidade || []) as { name: string; value: number }[]).map((c, i) => ({ ...c, color: colors[i % colors.length] }));
-  const despesasPorCategoria = ((m.despesas_por_categoria || []) as { name: string; value: number }[]).map((c, i) => ({ ...c, color: colors[i % colors.length] }));
+  const cityData = ((m.alunos_por_cidade || []) as { name: string; value: number }[]).map((c, i) => ({ ...c, color: CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length] }));
+  const despesasPorCategoria = ((m.despesas_por_categoria || []) as { name: string; value: number }[]).map((c, i) => ({ ...c, color: CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length] }));
   const comissoesPorVendedor = (m.comissoes_por_vendedor || []) as { name: string; pago: number; pendente: number }[];
   const metasAtivas = (m.metas_ativas || []) as MetaRow[];
 
@@ -344,8 +354,8 @@ export function DashboardAdmin({ mes, ano }: Props) {
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => formatCurrency(v)} />
                   <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ backgroundColor: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "13px" }} />
-                  <Bar dataKey="pago" name="Pago" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pendente" name="Pendente" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="pago" name="Pago" fill="hsl(142 71% 45%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="pendente" name="Pendente" fill="hsl(38 92% 50%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
