@@ -1,14 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { TrendingUp, TrendingDown, Landmark, AlertTriangle, CheckSquare, CreditCard } from "lucide-react";
+import { TrendingUp, TrendingDown, Landmark, AlertTriangle, CreditCard } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
-import type { TarefaRow } from "@/types";
 
 interface Props {
   mes: number;
@@ -16,7 +13,6 @@ interface Props {
 }
 
 export function DashboardFinanceiro({ mes, ano }: Props) {
-  const { user } = useAuth();
   const startStr = new Date(ano, mes, 1).toISOString().split("T")[0];
   const endStr = new Date(ano, mes + 1, 0).toISOString().split("T")[0];
   const hoje = new Date().toISOString().split("T")[0];
@@ -143,15 +139,6 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
     },
   });
 
-  const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
-    queryKey: ["minhas-tarefas-dashboard", user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data } = await supabase.from("tarefas").select("id, titulo, prioridade, data_vencimento, status").eq("responsavel_id", user.id).in("status", ["pendente", "em_andamento"]).order("data_vencimento", { ascending: true, nullsFirst: false }).limit(5);
-      return data || [];
-    },
-    enabled: !!user,
-  });
 
   const totalReceitaAnual = fluxoAnual.reduce((s, d) => s + d.receita, 0);
   const totalDespesaAnual = fluxoAnual.reduce((s, d) => s + d.despesa, 0);
@@ -290,37 +277,6 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
         )}
       </div>
 
-      {minhasTarefas.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Minhas Tarefas</CardTitle>
-              <Link to="/tarefas" className="text-xs text-primary hover:underline">Ver todas →</Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {minhasTarefas.map((t) => {
-                const isVencida = t.data_vencimento && new Date(t.data_vencimento + "T23:59:59") < new Date();
-                const prioridadeColors: Record<string, string> = { urgente: "text-destructive", alta: "text-orange-600 dark:text-orange-400", media: "text-blue-600 dark:text-blue-400", baixa: "text-muted-foreground" };
-                return (
-                  <Link key={t.id} to="/tarefas" className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`text-xs font-medium ${prioridadeColors[t.prioridade] || ""}`}>●</span>
-                      <span className="text-sm truncate">{t.titulo}</span>
-                    </div>
-                    {t.data_vencimento && (
-                      <span className={`text-xs shrink-0 ${isVencida ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                        {new Date(t.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </>
   );
 }
