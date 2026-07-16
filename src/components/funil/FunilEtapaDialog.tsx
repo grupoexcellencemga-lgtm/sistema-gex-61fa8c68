@@ -11,12 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { ETAPA_CORES, ETAPA_CORES_LIST, TIPO_ETAPA_LABELS, type FunilEtapa } from "./funilUtils";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSave: (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] }) => Promise<void>;
+  onSave: (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => Promise<void>;
   initialData?: FunilEtapa | null;
 }
 
@@ -24,6 +25,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
   const [nome, setNome] = useState("");
   const [cor, setCor] = useState("slate");
   const [tipo, setTipo] = useState<FunilEtapa["tipo"]>("em_andamento");
+  const [observacoes, setObservacoes] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
       setNome(initialData?.nome ?? "");
       setCor(initialData?.cor ?? "slate");
       setTipo(initialData?.tipo ?? "em_andamento");
+      setObservacoes(initialData?.observacoes ?? "");
     }
   }, [open, initialData]);
 
@@ -38,7 +41,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
     if (!nome.trim()) return;
     setLoading(true);
     try {
-      await onSave({ nome: nome.trim(), cor, tipo });
+      await onSave({ nome: nome.trim(), cor, tipo, observacoes });
       onClose();
     } finally {
       setLoading(false);
@@ -47,7 +50,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{initialData ? "Editar coluna do funil" : "Nova coluna do funil"}</DialogTitle>
         </DialogHeader>
@@ -96,6 +99,18 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
               Usado nas métricas e no dashboard (conversão, perdidos, pipeline em aberto) —
               não muda o que aparece na coluna, só como ela conta nos números.
             </p>
+          </div>
+
+          <div>
+            <Label>Observações da coluna</Label>
+            <div className="mt-1">
+              <RichTextEditor
+                key={initialData?.id ?? "new"}
+                value={observacoes}
+                onChange={setObservacoes}
+                placeholder="Critérios, instruções, detalhes desta etapa..."
+              />
+            </div>
           </div>
         </div>
 

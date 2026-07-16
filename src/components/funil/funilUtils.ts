@@ -21,6 +21,7 @@ export interface FunilEtapa {
   ordem: number;
   cor: string;
   tipo: "em_andamento" | "ganho" | "perdido";
+  observacoes?: string | null;
 }
 
 export const origens = [

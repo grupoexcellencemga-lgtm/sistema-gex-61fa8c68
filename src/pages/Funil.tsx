@@ -189,7 +189,7 @@ const Funil = () => {
 
   // ── Mutations: etapas (colunas) ──
   const insertEtapaMutation = useMutation({
-    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] }) => {
+    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
       const ordem = etapas.length;
       const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem });
       if (error) throw error;
@@ -199,7 +199,7 @@ const Funil = () => {
   });
 
   const updateEtapaMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string } }) => {
       const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
       if (error) throw error;
     },
