@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { WhatsAppDialog } from "@/components/WhatsAppDialog";
@@ -41,6 +41,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertForm, setConvertForm] = useState({ produto_id: "", turma_id: "" });
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [obsHtml, setObsHtml] = useState(lead?.observacoes || "");
 
   // Hooks precisam rodar sempre na mesma ordem/quantidade, mesmo quando o
   // sheet ainda não tem lead selecionado (fica montado com lead=null antes
@@ -168,6 +169,19 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
+
+  const saveObsMutation = useMutation({
+    mutationFn: async (html: string) => {
+      const { error } = await supabase.from("leads").update({ observacoes: html || null } as any).eq("id", lead.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { onLeadUpdated(); toast.success("Observações salvas"); },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  // Sync local obs editor whenever a different lead is opened
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setObsHtml(lead?.observacoes || ""); }, [lead?.id]);
 
   if (!lead) return null;
 
@@ -305,15 +319,27 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   </div>
                 </div>
 
-                {lead.observacoes && (
-                  <div className="border-t pt-4">
-                    <h3 className="text-sm font-semibold mb-2">Observações</h3>
-                    <div
-                      className="text-sm text-muted-foreground [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
-                      dangerouslySetInnerHTML={{ __html: lead.observacoes }}
-                    />
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold">Observações</h3>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => saveObsMutation.mutate(obsHtml)}
+                      disabled={saveObsMutation.isPending}
+                    >
+                      {saveObsMutation.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                      Salvar
+                    </Button>
                   </div>
-                )}
+                  <RichTextEditor
+                    key={lead.id}
+                    value={lead.observacoes || ""}
+                    onChange={setObsHtml}
+                    placeholder="Anotações, detalhes, histórico..."
+                  />
+                </div>
 
                 {lead.motivo_perda && etapaAtual?.tipo === "perdido" && (
                   <div className="border-t pt-4">
