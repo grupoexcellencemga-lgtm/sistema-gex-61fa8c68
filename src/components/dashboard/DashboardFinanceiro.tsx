@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { TrendingUp, TrendingDown, Landmark, AlertTriangle, CheckSquare, CreditCard } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
 import type { TarefaRow } from "@/types";
@@ -78,6 +78,33 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
     },
   });
 
+  const { data: fluxoAnual = [] } = useQuery({
+    queryKey: ["dash-fin-fluxo-anual", ano],
+    queryFn: async () => {
+      const mesAtual = new Date().getFullYear() === ano ? new Date().getMonth() : 11;
+      const results = [];
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(ano, m, 1);
+        const mStart = d.toISOString().split("T")[0];
+        const mEnd = new Date(ano, m + 1, 0).toISOString().split("T")[0];
+        const label = d.toLocaleDateString("pt-BR", { month: "short" });
+        if (m > mesAtual) {
+          results.push({ name: label, receita: 0, despesa: 0, lucro: 0, isFuture: true });
+          continue;
+        }
+        const [{ data: pag }, { data: rec }, { data: desp }] = await Promise.all([
+          supabase.from("pagamentos").select("valor, valor_pago").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd),
+          supabase.from("receitas_avulsas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
+          supabase.from("despesas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
+        ]);
+        const receita = (pag || []).reduce((s, p) => s + Number(p.valor_pago || p.valor), 0) + (rec || []).reduce((s, r) => s + Number(r.valor), 0);
+        const despesa = (desp || []).reduce((s, d) => s + Number(d.valor), 0);
+        results.push({ name: label, receita, despesa, lucro: receita - despesa, isFuture: false });
+      }
+      return results;
+    },
+  });
+
   const { data: vencidos = [] } = useQuery({
     queryKey: ["dash-fin-vencidos"],
     queryFn: async () => {
@@ -126,12 +153,77 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
     enabled: !!user,
   });
 
+  const totalReceitaAnual = fluxoAnual.reduce((s, d) => s + d.receita, 0);
+  const totalDespesaAnual = fluxoAnual.reduce((s, d) => s + d.despesa, 0);
+  const lucroAnual = totalReceitaAnual - totalDespesaAnual;
+
+  const CustomMonthTick = ({ x, y, payload }: any) => {
+    const item = fluxoAnual.find((d) => d.name === payload.value);
+    const hasData = item && !item.isFuture && (item.receita > 0 || item.despesa > 0);
+    const dotColor = hasData
+      ? item!.lucro >= 0 ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)"
+      : "transparent";
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={12} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{payload.value}</text>
+        <circle cx={0} cy={22} r={3.5} fill={dotColor} />
+      </g>
+    );
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
     <>
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-base font-semibold">Visão Anual {ano}</CardTitle>
+            <div className="flex gap-4 text-sm">
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">↑ {formatCurrency(totalReceitaAnual)}</span>
+              <span className="text-red-600 dark:text-red-400 font-medium">↓ {formatCurrency(totalDespesaAnual)}</span>
+              <span className={`font-semibold ${lucroAnual >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                = {formatCurrency(lucroAnual)}
+              </span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={fluxoAnual} barSize={14} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={<CustomMonthTick />} height={40} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => formatCurrency(v)} width={80} />
+              <Tooltip
+                content={({ active, payload, label }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const receita = Number(payload.find((p: any) => p.dataKey === "receita")?.value || 0);
+                  const despesa = Number(payload.find((p: any) => p.dataKey === "despesa")?.value || 0);
+                  const resultado = receita - despesa;
+                  return (
+                    <div style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: "10px 14px", fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}>
+                      <p style={{ fontWeight: 600, marginBottom: 6 }}>{label}</p>
+                      <p style={{ color: "hsl(142 71% 45%)" }}>Receita: {formatCurrency(receita)}</p>
+                      <p style={{ color: "hsl(0 72% 51%)" }}>Despesa: {formatCurrency(despesa)}</p>
+                      <p style={{ color: resultado >= 0 ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)", fontWeight: 700, marginTop: 6, borderTop: "1px solid hsl(var(--border))", paddingTop: 6 }}>
+                        Resultado: {formatCurrency(resultado)}
+                      </p>
+                    </div>
+                  );
+                }}
+              />
+              <Legend />
+              <ReferenceLine y={0} stroke="hsl(var(--border))" />
+              <Bar dataKey="receita" name="Receita" fill="hsl(142 71% 45%)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="despesa" name="Despesa" fill="hsl(0 72% 51%)" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-muted-foreground mt-1 text-center">● verde = mês positivo &nbsp;● vermelho = mês negativo</p>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard title="Receita do Mês" value={formatCurrency(receitaMes)} icon={TrendingUp} variant="success" />
         <MetricCard title="Despesas do Mês" value={formatCurrency(despesasMes)} icon={TrendingDown} variant="warning" />

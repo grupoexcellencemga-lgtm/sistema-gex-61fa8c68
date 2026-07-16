@@ -13,6 +13,7 @@ import {
   Wallet,
   ClipboardList,
   CalendarDays,
+  LayoutDashboard,
 } from "lucide-react";
 import { TabEntradas } from "@/components/financeiro/TabEntradas";
 import { TabDespesas } from "@/components/financeiro/TabDespesas";
@@ -22,12 +23,13 @@ import { TabTurmas } from "@/components/financeiro/TabTurmas";
 import { TabProfissionais } from "@/components/financeiro/TabProfissionais";
 import { TabEmpresarial } from "@/components/financeiro/TabEmpresarial";
 import { TabContasPagarReceber } from "@/components/financeiro/TabContasPagarReceber";
+import { DashboardFinanceiro } from "@/components/dashboard/DashboardFinanceiro";
 import { TabReembolsos } from "@/components/financeiro/TabReembolsos";
 import { TabEventos } from "@/components/financeiro/TabEventos";
 
 const Financeiro = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "painel";
+  const activeTab = searchParams.get("tab") || "dashboard";
 
   const handleTabChange = (tab: string) => {
     const next = new URLSearchParams(searchParams);
@@ -59,9 +61,13 @@ const Financeiro = () => {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6 min-w-0">
         <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-2">
           <TabsList className="inline-flex w-max min-w-max whitespace-nowrap">
+            <TabsTrigger value="dashboard" className="gap-1.5 shrink-0">
+              <LayoutDashboard className="h-4 w-4" /> Dashboard
+            </TabsTrigger>
+
             <TabsTrigger value="painel" className="gap-1.5 shrink-0">
-  <ClipboardList className="h-4 w-4" /> Contas a Pagar e Receber
-</TabsTrigger>
+              <ClipboardList className="h-4 w-4" /> Contas a Pagar e Receber
+            </TabsTrigger>
 
             <TabsTrigger value="entradas" className="gap-1.5 shrink-0">
               <DollarSign className="h-4 w-4" /> Entradas
@@ -100,6 +106,10 @@ const Financeiro = () => {
             </TabsTrigger>
           </TabsList>
         </div>
+
+        <TabsContent value="dashboard">
+          <DashboardFinanceiro mes={mes} ano={ano} />
+        </TabsContent>
 
         <TabsContent value="painel">
           <TabContasPagarReceber mes={mes} ano={ano} />
