@@ -13,17 +13,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
 import type { DashboardMetrics, MetaRow } from "@/types";
 
-// Paleta categórica — cores diversas para gráficos de pizza sem conotação semântica
-const CATEGORICAL_COLORS = [
-  "hsl(217 91% 60%)",  // azul
-  "hsl(270 60% 55%)",  // roxo
-  "hsl(142 71% 45%)",  // verde
-  "hsl(38 92% 50%)",   // âmbar
-  "hsl(0 72% 51%)",    // vermelho
-  "hsl(197 71% 52%)",  // ciano
-  "hsl(340 82% 52%)",  // rosa
-  "hsl(160 60% 45%)",  // teal
-];
+const CATEGORICAL_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
 
 interface Props {
   mes: number;
