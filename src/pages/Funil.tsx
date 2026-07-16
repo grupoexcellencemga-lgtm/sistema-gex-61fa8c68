@@ -1,22 +1,39 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, Loader2, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Check, Edit2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/components/ActivityTimeline";
+import { cn } from "@/lib/utils";
 import type { LeadRow, ProdutoSelect, ComercialSelect, TurmaSelect } from "@/types";
 
-import { LeadForm, emptyLeadForm, origens, cidades, type FunilEtapa } from "@/components/funil/funilUtils";
+import { LeadForm, emptyLeadForm, type FunilEtapa } from "@/components/funil/funilUtils";
 import { FunilMetrics } from "@/components/funil/FunilMetrics";
 import { FunilFilters } from "@/components/funil/FunilFilters";
 import { FunilColumn } from "@/components/funil/FunilColumn";
 import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
 import { LeadFormDialog } from "@/components/funil/LeadFormDialog";
 import { LeadDetailSheet } from "@/components/funil/LeadDetailSheet";
+
+type FunilQuadro = {
+  id: string;
+  nome: string;
+  ordem: number;
+  created_at?: string | null;
+};
+
+const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"] }> = [
+  { nome: "Novo Lead", cor: "slate", tipo: "em_andamento" },
+  { nome: "Em contato", cor: "blue", tipo: "em_andamento" },
+  { nome: "Proposta enviada", cor: "orange", tipo: "em_andamento" },
+  { nome: "Convertido", cor: "green", tipo: "ganho" },
+  { nome: "Perdido", cor: "red", tipo: "perdido" },
+];
 
 interface Filters {
   search: string;
@@ -41,16 +58,46 @@ const Funil = () => {
   const [etapaDialogOpen, setEtapaDialogOpen] = useState(false);
   const [editEtapa, setEditEtapa] = useState<FunilEtapa | null>(null);
 
+  // Quadros
+  const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
+  const [newQuadroName, setNewQuadroName] = useState("");
+  const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
+  const [editingQuadroName, setEditingQuadroName] = useState("");
+  const [quadrosVisible, setQuadrosVisible] = useState(true);
+
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const syncingScrollRef = useRef(false);
 
-  // Sensors for drag-and-drop (pointer + touch)
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
 
   // ── Queries ──
+  const { data: quadros = [], isLoading: quadrosLoading } = useQuery<FunilQuadro[]>({
+    queryKey: ["funil-quadros"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_quadros")
+        .select("*")
+        .is("deleted_at", null)
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as FunilQuadro[];
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedQuadroId && quadros.length > 0) {
+      setSelectedQuadroId(quadros[0].id);
+    }
+  }, [quadros, selectedQuadroId]);
+
+  const selectedQuadro = useMemo(
+    () => quadros.find((q) => q.id === selectedQuadroId) ?? null,
+    [quadros, selectedQuadroId]
+  );
+
   const { data: leads = [], isLoading } = useQuery<LeadRow[]>({
     queryKey: ["leads"],
     queryFn: async () => {
@@ -61,15 +108,18 @@ const Funil = () => {
   });
 
   const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
-    queryKey: ["funil-etapas"],
+    queryKey: ["funil-etapas", selectedQuadroId],
     queryFn: async () => {
+      if (!selectedQuadroId) return [];
       const { data, error } = await (supabase as any)
         .from("funil_etapas")
         .select("*")
+        .eq("quadro_id", selectedQuadroId)
         .order("ordem", { ascending: true });
       if (error) throw error;
       return (data || []) as FunilEtapa[];
     },
+    enabled: !!selectedQuadroId,
   });
 
   const { data: produtos = [] } = useQuery<ProdutoSelect[]>({
@@ -102,9 +152,15 @@ const Funil = () => {
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasMap = useMemo(() => new Map(etapas.map((e) => [e.id, e])), [etapas]);
 
-  // ── Filtered leads ──
+  // Leads do quadro selecionado (via etapa_id pertencente ao quadro)
+  const currentEtapaIds = useMemo(() => new Set(etapas.map((e) => e.id)), [etapas]);
+  const quadroLeads = useMemo(
+    () => leads.filter((l: any) => currentEtapaIds.has(l.etapa_id)),
+    [leads, currentEtapaIds]
+  );
+
   const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
+    return quadroLeads.filter((l) => {
       if (debouncedSearch && !l.nome.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
       if (filters.responsavel_id !== "todos") {
         if (filters.responsavel_id === "sem") { if (l.responsavel_id) return false; }
@@ -115,7 +171,7 @@ const Funil = () => {
       if (filters.cidade !== "todos" && l.cidade !== filters.cidade) return false;
       return true;
     });
-  }, [leads, debouncedSearch, filters]);
+  }, [quadroLeads, debouncedSearch, filters]);
 
   const getLeadsByEtapa = (etapaId: string) => filteredLeads.filter((l: any) => l.etapa_id === etapaId);
 
@@ -130,6 +186,62 @@ const Funil = () => {
     else top.scrollLeft = board.scrollLeft;
     requestAnimationFrame(() => { syncingScrollRef.current = false; });
   };
+
+  // ── Mutations: quadros ──
+  const createQuadroMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      const ordem = quadros.length;
+      const { data: quadro, error } = await (supabase as any)
+        .from("funil_quadros")
+        .insert({ nome: nome.trim(), ordem })
+        .select("id")
+        .single();
+      if (error) throw error;
+      await Promise.all(
+        ETAPAS_PADRAO.map((e, i) =>
+          (supabase as any).from("funil_etapas").insert({ ...e, quadro_id: quadro.id, ordem: i, observacoes: null })
+        )
+      );
+      return quadro.id as string;
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas", id] });
+      setNewQuadroName("");
+      setSelectedQuadroId(id);
+      toast.success("Quadro criado");
+    },
+    onError: (err: any) => toast.error("Erro ao criar quadro: " + err.message),
+  });
+
+  const renameQuadroMutation = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await (supabase as any).from("funil_quadros").update({ nome: nome.trim() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
+      setEditingQuadroId(null);
+      toast.success("Quadro renomeado");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const deleteQuadroMutation = useMutation({
+    mutationFn: async (quadro: FunilQuadro) => {
+      const leadCount = leads.filter((l: any) => currentEtapaIds.has(l.etapa_id)).length;
+      if (leadCount > 0) throw new Error(`Mova os ${leadCount} lead(s) deste quadro antes de excluí-lo.`);
+      const { error } = await (supabase as any).from("funil_quadros").delete().eq("id", quadro.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas"] });
+      setSelectedQuadroId(null);
+      toast.success("Quadro excluído");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
 
   // ── Mutations: leads ──
   const insertMutation = useMutation({
@@ -168,10 +280,7 @@ const Funil = () => {
         lead_id: id,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast.success("Lead movido");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["leads"] }); toast.success("Lead movido"); },
     onError: (err: Error) => toast.error("Erro ao mover: " + err.message),
   });
 
@@ -180,21 +289,18 @@ const Funil = () => {
       const { error } = await supabase.from("leads").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast.success("Lead excluído");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["leads"] }); toast.success("Lead excluído"); },
     onError: (err: Error) => toast.error("Erro ao excluir: " + err.message),
   });
 
   // ── Mutations: etapas (colunas) ──
   const insertEtapaMutation = useMutation({
-    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
+    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string; quadro_id: string }) => {
       const ordem = etapas.length;
       const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem });
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna criada"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna criada"); },
     onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
   });
 
@@ -203,20 +309,18 @@ const Funil = () => {
       const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna atualizada"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna atualizada"); },
     onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
   });
 
   const deleteEtapaMutation = useMutation({
     mutationFn: async (etapa: FunilEtapa) => {
-      const emUso = leads.filter((l: any) => l.etapa_id === etapa.id).length;
-      if (emUso > 0) {
-        throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
-      }
+      const emUso = quadroLeads.filter((l: any) => l.etapa_id === etapa.id).length;
+      if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
       const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }); toast.success("Coluna excluída"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna excluída"); },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
@@ -228,7 +332,7 @@ const Funil = () => {
       const error = results.find((r) => r.error)?.error;
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-etapas"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }),
     onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
   });
 
@@ -242,9 +346,9 @@ const Funil = () => {
     reorderEtapasMutation.mutate(reordenadas.map((e, i) => ({ id: e.id, ordem: i })));
   };
 
-  const handleSaveEtapa = async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"] }) => {
+  const handleSaveEtapa = async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
     if (editEtapa) await updateEtapaMutation.mutateAsync({ id: editEtapa.id, data });
-    else await insertEtapaMutation.mutateAsync(data);
+    else await insertEtapaMutation.mutateAsync({ ...data, quadro_id: selectedQuadroId! });
   };
 
   const handleDeleteEtapa = (etapa: FunilEtapa) => {
@@ -252,7 +356,6 @@ const Funil = () => {
     if (confirm(`Excluir a coluna "${etapa.nome}"?`)) deleteEtapaMutation.mutate(etapa);
   };
 
-  // ── Drag and Drop ──
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -261,7 +364,6 @@ const Funil = () => {
     const lead = leads.find((l) => l.id === leadId) as any;
     if (!lead || lead.etapa_id === targetEtapaId) return;
     const targetEtapa = etapasMap.get(targetEtapaId);
-    // Perda sempre passa pela tela de detalhe (exige motivo).
     if (targetEtapa?.tipo === "perdido") return;
     moveEtapaMutation.mutate({ id: leadId, fromEtapaId: lead.etapa_id, toEtapaId: targetEtapaId });
   };
@@ -275,23 +377,8 @@ const Funil = () => {
   const loading = isLoading || etapasLoading;
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Funil Comercial" description="Pipeline de leads e conversão">
-        <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" />Nova Coluna
-        </Button>
-        <Button onClick={() => { setForm(emptyLeadForm); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" />Novo Lead
-        </Button>
-      </PageHeader>
-
-      {/* Metrics */}
-      {!loading && <FunilMetrics leads={leads} produtos={produtos} etapas={etapas} />}
-
-      {/* Filters */}
-      <FunilFilters filters={filters} setFilters={setFilters} comerciais={comerciais} produtos={produtos} />
-
-      {/* Lead Form Dialog */}
+    <>
+      {/* Modais fora do layout para não quebrar o flex */}
       <LeadFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -302,60 +389,12 @@ const Funil = () => {
         produtos={produtos}
         comerciais={comerciais}
       />
-
       <FunilEtapaDialog
         open={etapaDialogOpen}
         onClose={() => { setEtapaDialogOpen(false); setEditEtapa(null); }}
         onSave={handleSaveEtapa}
         initialData={editEtapa}
       />
-
-      {/* Pipeline columns with DnD — largura fixa, rolagem horizontal (não comprime) */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : etapasOrdenadas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-          <p className="text-sm">Nenhuma coluna criada no funil ainda.</p>
-          <Button size="sm" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" />Criar primeira coluna
-          </Button>
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="space-y-2">
-            <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden" onScroll={() => syncScroll("top")}>
-              <div style={{ width: boardWidth }} className="h-1" />
-            </div>
-            <div ref={boardScrollRef} className="w-full overflow-x-auto overflow-y-hidden pb-2" onScroll={() => syncScroll("board")}>
-              <div className="flex w-max gap-4">
-                {etapasOrdenadas.map((etapa, idx) => (
-                  <FunilColumn
-                    key={etapa.id}
-                    etapa={etapa}
-                    leads={getLeadsByEtapa(etapa.id)}
-                    comerciaisMap={comerciaisMap}
-                    onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
-                    onDeleteLead={(lead) => {
-                      if (confirm(`Excluir o lead "${lead.nome}"? Esta ação não pode ser desfeita.`)) {
-                        deleteLeadMutation.mutate(lead.id);
-                      }
-                    }}
-                    onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
-                    onDeleteEtapa={handleDeleteEtapa}
-                    onMoveEtapa={handleMoveEtapa}
-                    canMoveLeft={idx > 0}
-                    canMoveRight={idx < etapasOrdenadas.length - 1}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </DndContext>
-      )}
-
-      {/* Lead Detail Sheet */}
       <LeadDetailSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
@@ -370,7 +409,192 @@ const Funil = () => {
           if (selectedLead) queryClient.invalidateQueries({ queryKey: ["atividades", undefined, selectedLead.id] });
         }}
       />
-    </div>
+
+      <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
+        {/* Sidebar — lista de quadros */}
+        {quadrosVisible && (
+          <aside className="w-[240px] shrink-0 border-r bg-card flex flex-col">
+            <div className="p-4 border-b flex items-center gap-2">
+              <LayoutDashboard className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="text-sm font-semibold leading-tight">Quadros do Funil</h2>
+                <p className="text-xs text-muted-foreground">Cada quadro tem seu pipeline</p>
+              </div>
+            </div>
+
+            <div className="p-3 border-b">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newQuadroName.trim()) return;
+                  createQuadroMutation.mutate(newQuadroName);
+                }}
+                className="flex gap-2"
+              >
+                <Input
+                  value={newQuadroName}
+                  onChange={(e) => setNewQuadroName(e.target.value)}
+                  placeholder="Nome do quadro..."
+                  className="h-9 text-sm"
+                />
+                <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
+                  {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </form>
+            </div>
+
+            <div className="flex-1 overflow-auto p-2 space-y-1">
+              {quadrosLoading ? (
+                <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
+              ) : quadros.length === 0 ? (
+                <div className="text-center p-6 space-y-2">
+                  <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/30" />
+                  <p className="text-xs text-muted-foreground">Crie o primeiro quadro de funil.</p>
+                </div>
+              ) : (
+                quadros.map((quadro) => (
+                  <div
+                    key={quadro.id}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
+                      selectedQuadroId === quadro.id
+                        ? "bg-primary/15 text-primary font-medium"
+                        : "hover:bg-muted text-foreground"
+                    )}
+                  >
+                    {editingQuadroId === quadro.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
+                        }}
+                        className="flex items-center gap-1 flex-1"
+                      >
+                        <Input
+                          value={editingQuadroName}
+                          onChange={(e) => setEditingQuadroName(e.target.value)}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
+                          {quadro.nome}
+                        </span>
+                        <Button
+                          size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                          onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }}
+                          title="Renomear"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                          onClick={() => {
+                            if (confirm(`Excluir o quadro "${quadro.nome}"? As colunas sem leads serão removidas.`))
+                              deleteQuadroMutation.mutate(quadro);
+                          }}
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        )}
+
+        {/* Área principal */}
+        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
+          <div className="p-6 space-y-6 min-h-full">
+            <PageHeader
+              title={selectedQuadro?.nome || "Funil Comercial"}
+              description="Pipeline de leads e conversão"
+            >
+              <Button variant="outline" size="sm" onClick={() => setQuadrosVisible((v) => !v)} className="gap-1">
+                {quadrosVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                {quadrosVisible ? "Ocultar" : "Quadros"}
+              </Button>
+              {selectedQuadroId && (
+                <>
+                  <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />Nova Coluna
+                  </Button>
+                  <Button onClick={() => { setForm(emptyLeadForm); setDialogOpen(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />Novo Lead
+                  </Button>
+                </>
+              )}
+            </PageHeader>
+
+            {!selectedQuadroId ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
+                <LayoutDashboard className="h-12 w-12 opacity-20" />
+                <p className="text-sm">Selecione ou crie um quadro de funil na barra lateral.</p>
+              </div>
+            ) : (
+              <>
+                {!loading && <FunilMetrics leads={quadroLeads} produtos={produtos} etapas={etapas} />}
+                <FunilFilters filters={filters} setFilters={setFilters} comerciais={comerciais} produtos={produtos} />
+
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : etapasOrdenadas.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <p className="text-sm">Nenhuma coluna criada neste funil.</p>
+                    <Button size="sm" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
+                      <Plus className="h-4 w-4 mr-1" />Criar primeira coluna
+                    </Button>
+                  </div>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <div className="space-y-2">
+                      <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden" onScroll={() => syncScroll("top")}>
+                        <div style={{ width: boardWidth }} className="h-1" />
+                      </div>
+                      <div ref={boardScrollRef} className="w-full overflow-x-auto overflow-y-hidden pb-2" onScroll={() => syncScroll("board")}>
+                        <div className="flex w-max gap-4">
+                          {etapasOrdenadas.map((etapa, idx) => (
+                            <FunilColumn
+                              key={etapa.id}
+                              etapa={etapa}
+                              leads={getLeadsByEtapa(etapa.id)}
+                              comerciaisMap={comerciaisMap}
+                              onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
+                              onDeleteLead={(lead) => {
+                                if (confirm(`Excluir o lead "${lead.nome}"? Esta ação não pode ser desfeita.`))
+                                  deleteLeadMutation.mutate(lead.id);
+                              }}
+                              onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
+                              onDeleteEtapa={handleDeleteEtapa}
+                              onMoveEtapa={handleMoveEtapa}
+                              canMoveLeft={idx > 0}
+                              canMoveRight={idx < etapasOrdenadas.length - 1}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </DndContext>
+                )}
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+    </>
   );
 };
 
