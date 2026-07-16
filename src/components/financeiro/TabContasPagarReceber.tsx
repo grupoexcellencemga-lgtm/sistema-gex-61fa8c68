@@ -67,15 +67,12 @@ import autoTable from "jspdf-autotable";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 
-const statusVariant: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  pago: "default",
-  parcial: "outline",
-  pendente: "secondary",
-  vencido: "destructive",
-  cancelado: "outline",
+const statusBadgeClass: Record<string, string> = {
+  pago:     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0",
+  parcial:  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0",
+  pendente: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0",
+  vencido:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0",
+  cancelado: "",
 };
 
 type ContaItem = {
@@ -2406,8 +2403,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
                       <TableCell>
                         <Badge
-                          variant={statusVariant[item.status] || "secondary"}
-                          className="text-xs"
+                          variant="outline"
+                          className={`text-xs ${statusBadgeClass[item.status] ?? ""}`}
                         >
                           {item.status === "pago"
                             ? "Pago"

@@ -29,13 +29,17 @@ export const getComprovantesParticipante = (participante: any) => {
 export const getStatusBadge = (status: string) => {
   switch (status) {
     case "pago":
-      return <Badge className="bg-emerald-600 text-white">Pago</Badge>;
+      return <Badge variant="outline" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">Pago</Badge>;
     case "pendente":
-      return <Badge variant="destructive">Pendente</Badge>;
+      return <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0">Pendente</Badge>;
+    case "vencido":
+      return <Badge variant="outline" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0">Vencido</Badge>;
     case "gratuito":
       return <Badge variant="secondary">Gratuito</Badge>;
+    case "isento":
+      return <Badge variant="secondary">Isento</Badge>;
     case "permuta":
-      return <Badge className="bg-amber-600 text-white">Permuta</Badge>;
+      return <Badge variant="outline" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">Permuta</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }

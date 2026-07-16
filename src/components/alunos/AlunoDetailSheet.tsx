@@ -333,7 +333,13 @@ export const AlunoDetailSheet = (props: Props) => {
                                 >
                                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                 </Button>
-                                <Badge variant={m.status === "ativo" ? "default" : m.status === "cancelado" ? "destructive" : "secondary"}>
+                                <Badge variant="outline" className={
+                                  m.status === "ativo"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                                    : m.status === "cancelado"
+                                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0"
+                                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                                }>
                                   {m.status}
                                 </Badge>
                               </div>
@@ -455,7 +461,13 @@ export const AlunoDetailSheet = (props: Props) => {
                                         {items[0]?.produtos?.nome || "—"} · {getFormaLabel(items[0]?.forma_pagamento)} · {pagas}/{items.length} pagas
                                       </p>
                                     </div>
-                                    <Badge variant={pagas === items.length ? "default" : "secondary"}>
+                                    <Badge variant="outline" className={
+                                      pagas === items.length
+                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                                        : pagas > 0
+                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                                    }>
                                       {pagas === items.length ? "Quitado" : `${pagas}/${items.length}`}
                                     </Badge>
                                   </div>
@@ -529,7 +541,13 @@ export const AlunoDetailSheet = (props: Props) => {
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>
+                                  <Badge variant="outline" className={
+                                    p.status === "pago"
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                                      : p.status === "vencido"
+                                        ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0"
+                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                                  }>
                                     {p.status}
                                   </Badge>
                                 </div>
@@ -781,7 +799,13 @@ export const AlunoDetailSheet = (props: Props) => {
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                      <Badge variant={p.status === "pago" ? "default" : p.status === "vencido" ? "destructive" : "secondary"}>
+                      <Badge variant="outline" className={
+                        p.status === "pago"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                          : p.status === "vencido"
+                            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                      }>
                         {p.status}
                       </Badge>
                     </div>

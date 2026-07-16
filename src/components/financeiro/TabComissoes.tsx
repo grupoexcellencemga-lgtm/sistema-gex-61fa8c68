@@ -618,15 +618,13 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
 
                                                       <TableCell>
                                                         <Badge
-                                                          variant={
-                                                            c.status === "pago"
-                                                              ? "secondary"
-                                                              : "destructive"
+                                                          variant="outline"
+                                                          className={c.status === "pago"
+                                                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                                                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
                                                           }
                                                         >
-                                                          {c.status === "pago"
-                                                            ? "Pago"
-                                                            : "Pendente"}
+                                                          {c.status === "pago" ? "Pago" : "Pendente"}
                                                         </Badge>
                                                       </TableCell>
 
