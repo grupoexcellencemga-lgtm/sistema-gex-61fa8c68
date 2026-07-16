@@ -14,14 +14,14 @@ import { Loader2 } from "lucide-react";
 import type { DashboardMetrics, MetaRow } from "@/types";
 
 const CATEGORICAL_COLORS = [
-  "hsl(0 0% 12%)",   // quase preto
-  "hsl(0 0% 30%)",   // cinza muito escuro
-  "hsl(0 0% 50%)",   // cinza médio
-  "hsl(0 0% 68%)",   // cinza claro
-  "hsl(0 0% 20%)",   // cinza escuro
-  "hsl(0 0% 42%)",   // cinza médio-escuro
-  "hsl(0 0% 60%)",   // cinza médio-claro
-  "hsl(0 0% 78%)",   // cinza muito claro
+  "hsl(20 85% 42%)",   // laranja queimado
+  "hsl(25 95% 53%)",   // laranja primário
+  "hsl(30 98% 62%)",   // laranja médio
+  "hsl(35 100% 70%)",  // laranja claro
+  "hsl(22 90% 48%)",   // laranja escuro
+  "hsl(28 97% 58%)",   // laranja médio-escuro
+  "hsl(33 99% 66%)",   // laranja médio-claro
+  "hsl(40 100% 77%)",  // pêssego
 ];
 
 interface Props {
