@@ -13,7 +13,16 @@ import { formatCurrency } from "@/lib/formatters";
 import { Loader2 } from "lucide-react";
 import type { DashboardMetrics, MetaRow } from "@/types";
 
-const CATEGORICAL_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
+const CATEGORICAL_COLORS = [
+  "hsl(0 0% 12%)",   // quase preto
+  "hsl(0 0% 30%)",   // cinza muito escuro
+  "hsl(0 0% 50%)",   // cinza médio
+  "hsl(0 0% 68%)",   // cinza claro
+  "hsl(0 0% 20%)",   // cinza escuro
+  "hsl(0 0% 42%)",   // cinza médio-escuro
+  "hsl(0 0% 60%)",   // cinza médio-claro
+  "hsl(0 0% 78%)",   // cinza muito claro
+];
 
 interface Props {
   mes: number;
