@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Phone, Mail, MapPin, ArrowRight, ArrowLeft, XCircle, Loader2, Clock, Pencil, UserCheck, User, Trash2 } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
@@ -204,8 +205,8 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               {lead.nome}
-              {!editing && etapaAtual?.tipo !== "perdido" && (
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={startEdit}>
+              {!editing && (
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={startEdit} title="Editar lead">
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -256,7 +257,14 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                     </Select>
                   </div>
                 </div>
-                <div><Label>Observações</Label><Textarea value={editForm.observacoes} onChange={(e) => u("observacoes", e.target.value)} /></div>
+                <div>
+                  <Label className="mb-1.5 block">Observações</Label>
+                  <RichTextEditor
+                    value={editForm.observacoes}
+                    onChange={(html) => u("observacoes", html)}
+                    placeholder="Anotações, detalhes, histórico..."
+                  />
+                </div>
                 <div className="flex gap-2">
                   <Button className="flex-1" onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending}>
                     {saveEdit.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Salvar
@@ -300,7 +308,10 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                 {lead.observacoes && (
                   <div className="border-t pt-4">
                     <h3 className="text-sm font-semibold mb-2">Observações</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.observacoes}</p>
+                    <div
+                      className="text-sm text-muted-foreground [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                      dangerouslySetInnerHTML={{ __html: lead.observacoes }}
+                    />
                   </div>
                 )}
 

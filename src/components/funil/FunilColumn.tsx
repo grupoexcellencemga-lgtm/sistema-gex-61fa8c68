@@ -38,7 +38,7 @@ export function FunilColumn({
       <div className="flex items-center justify-between gap-1 mb-3 group">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${cores.dot}`} />
-          <h3 className="text-sm font-semibold truncate">{etapa.nome}</h3>
+          <h3 className="text-base font-semibold truncate">{etapa.nome}</h3>
           <span className="text-xs bg-secondary text-muted-foreground rounded-full px-2 py-0.5 shrink-0">
             {leads.length}
           </span>
