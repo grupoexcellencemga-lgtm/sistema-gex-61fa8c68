@@ -2019,7 +2019,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="overflow-x-auto pb-1">
+      <div className="grid grid-flow-col auto-cols-[minmax(10rem,1fr)] gap-3 min-w-max w-full">
         <MetricCard
           title="A Pagar"
           value={formatCurrency(totalAPagar)}
@@ -2135,6 +2136,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
             setMetricDialog({ title: "Todas as Pendentes", items });
           }}
         />
+      </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">

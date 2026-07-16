@@ -776,15 +776,17 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-4">
-        <MetricCard title="Recebido (Alunos)" value={formatCurrency(totalPago)} icon={DollarSign} variant="primary" onClick={() => setActiveDialog("recebido")} />
-        <MetricCard title="Entradas Avulsas" value={formatCurrency(totalAvulsas)} icon={Building2} variant="success" onClick={() => setActiveDialog("avulsas")} />
-        <MetricCard title="Proc. Individuais" value={formatCurrency(totalProcessos)} icon={UserPlus} variant="success" onClick={() => setActiveDialog("processos")} />
-        <MetricCard title="Proc. Empresariais" value={formatCurrency(totalProcessosEmpresariais)} icon={Building2} variant="success" onClick={() => setActiveDialog("empresariais")} />
-        <MetricCard title="Eventos" value={formatCurrency(totalEventos)} icon={CalendarDays} variant="success" onClick={() => setActiveDialog("eventos")} />
-        <MetricCard title="Total Geral" value={formatCurrency(totalGeral)} icon={TrendingUp} variant="success" onClick={() => setActiveDialog("total")} />
-        <MetricCard title="Pgtos Pendentes" value={formatCurrency(totalPendente)} icon={Clock} variant="warning" onClick={() => setActiveDialog("pendentes")} />
-        <MetricCard title="Pgtos Vencidos" value={formatCurrency(totalVencido)} icon={AlertTriangle} variant="destructive" onClick={() => setActiveDialog("vencidos")} />
+      <div className="overflow-x-auto pb-1">
+        <div className="grid grid-flow-col auto-cols-[minmax(10rem,1fr)] gap-3 min-w-max w-full">
+          <MetricCard title="Recebido (Alunos)" value={formatCurrency(totalPago)} icon={DollarSign} variant="primary" onClick={() => setActiveDialog("recebido")} />
+          <MetricCard title="Entradas Avulsas" value={formatCurrency(totalAvulsas)} icon={Building2} variant="success" onClick={() => setActiveDialog("avulsas")} />
+          <MetricCard title="Proc. Individuais" value={formatCurrency(totalProcessos)} icon={UserPlus} variant="success" onClick={() => setActiveDialog("processos")} />
+          <MetricCard title="Proc. Empresariais" value={formatCurrency(totalProcessosEmpresariais)} icon={Building2} variant="success" onClick={() => setActiveDialog("empresariais")} />
+          <MetricCard title="Eventos" value={formatCurrency(totalEventos)} icon={CalendarDays} variant="success" onClick={() => setActiveDialog("eventos")} />
+          <MetricCard title="Total Geral" value={formatCurrency(totalGeral)} icon={TrendingUp} variant="success" onClick={() => setActiveDialog("total")} />
+          <MetricCard title="Pgtos Pendentes" value={formatCurrency(totalPendente)} icon={Clock} variant="warning" onClick={() => setActiveDialog("pendentes")} />
+          <MetricCard title="Pgtos Vencidos" value={formatCurrency(totalVencido)} icon={AlertTriangle} variant="destructive" onClick={() => setActiveDialog("vencidos")} />
+        </div>
       </div>
 
       {receitaProduto.length > 0 && (
