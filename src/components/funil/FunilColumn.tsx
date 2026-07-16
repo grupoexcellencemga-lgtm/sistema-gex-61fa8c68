@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { LeadCard } from "./LeadCard";
 import { ETAPA_CORES, type FunilEtapa } from "./funilUtils";
@@ -32,13 +34,44 @@ export function FunilColumn({
 }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: etapa.id });
   const cores = ETAPA_CORES[etapa.cor] || ETAPA_CORES.slate;
+  const [obsOpen, setObsOpen] = useState(false);
+
+  const hasObs = !!(etapa.observacoes && etapa.observacoes.replace(/<[^>]*>/g, "").trim());
+
+  const titleEl = (
+    <h3
+      className={`text-sm font-semibold leading-tight break-words min-w-0 ${hasObs ? "cursor-pointer hover:text-primary transition-colors" : ""}`}
+      onClick={() => hasObs && setObsOpen((v) => !v)}
+      title={hasObs ? "Clique para ver observações" : undefined}
+    >
+      {etapa.nome}
+      {hasObs && <span className="ml-1 text-primary text-xs">●</span>}
+    </h3>
+  );
 
   return (
     <div className="flex flex-col w-[280px] min-w-[280px] max-w-[280px] shrink-0">
       <div className="flex items-center justify-between gap-1 mb-3 group">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${cores.dot}`} />
-          <h3 className="text-sm font-semibold leading-tight break-words min-w-0">{etapa.nome}</h3>
+          {hasObs ? (
+            <Popover open={obsOpen} onOpenChange={setObsOpen}>
+              <PopoverTrigger asChild>{titleEl}</PopoverTrigger>
+              <PopoverContent
+                side="bottom"
+                align="start"
+                className="w-72 max-h-64 overflow-y-auto p-3 text-sm"
+              >
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Observações — {etapa.nome}</p>
+                <div
+                  className="[&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
+                  dangerouslySetInnerHTML={{ __html: etapa.observacoes || "" }}
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            titleEl
+          )}
           <span className="text-xs bg-secondary text-muted-foreground rounded-full px-2 py-0.5 shrink-0">
             {leads.length}
           </span>

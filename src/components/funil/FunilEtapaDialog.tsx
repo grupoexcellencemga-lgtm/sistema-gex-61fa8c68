@@ -27,6 +27,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
   const [tipo, setTipo] = useState<FunilEtapa["tipo"]>("em_andamento");
   const [observacoes, setObservacoes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
 
   useEffect(() => {
     if (open) {
@@ -34,6 +35,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
       setCor(initialData?.cor ?? "slate");
       setTipo(initialData?.tipo ?? "em_andamento");
       setObservacoes(initialData?.observacoes ?? "");
+      setEditorKey((k) => k + 1); // força remount do editor a cada abertura
     }
   }, [open, initialData]);
 
@@ -105,7 +107,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
             <Label>Observações da coluna</Label>
             <div className="mt-1">
               <RichTextEditor
-                key={initialData?.id ?? "new"}
+                key={editorKey}
                 value={observacoes}
                 onChange={setObservacoes}
                 placeholder="Critérios, instruções, detalhes desta etapa..."
