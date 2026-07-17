@@ -85,7 +85,7 @@ const Tarefas = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
-        .select("*, turmas(nome, produtos(nome)), eventos(nome)")
+        .select("*, turmas(nome, produtos(nome)), eventos(nome), tarefa_itens(id, concluido)")
         .neq("status", "cancelada")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -386,6 +386,9 @@ const Tarefas = () => {
                           const resp = profiles.find((p: any) => p.user_id === t.responsavel_id);
                           const atrasada = t.data_vencimento && t.data_vencimento < gruposPrazo.hojeISO && t.status !== "concluida";
                           const concluida = t.status === "concluida";
+                          const subItens: any[] = t.tarefa_itens || [];
+                          const subTotal = subItens.length;
+                          const subDone = subItens.filter((i: any) => i.concluido).length;
                           return (
                             <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 border-t text-sm">
                               <button
@@ -405,6 +408,12 @@ const Tarefas = () => {
                                   <div className="text-[11px] text-muted-foreground truncate">{origemDaTarefa(t).label}</div>
                                 )}
                               </button>
+                              {subTotal > 0 && (
+                                <span className={cn("text-[11px] whitespace-nowrap shrink-0 flex items-center gap-0.5", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {subDone}/{subTotal}
+                                </span>
+                              )}
                               <span className={cn("text-xs whitespace-nowrap shrink-0", atrasada ? "text-destructive font-medium" : "text-muted-foreground")}>
                                 {t.data_vencimento ? format(new Date(t.data_vencimento + "T12:00:00"), "dd/MM") : "—"}
                               </span>

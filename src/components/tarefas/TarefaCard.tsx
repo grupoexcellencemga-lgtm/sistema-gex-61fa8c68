@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Pencil, Trash2, Calendar, Clock, User, Link2 } from "lucide-react";
+import { Pencil, Trash2, Calendar, Clock, User, Link2, CheckSquare } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,9 @@ export function TarefaCard({ tarefa, onEdit, onDelete, profiles = [] }: Props) {
 
   const responsavel = profiles.find((p) => p.user_id === tarefa.responsavel_id);
   const isVencida = tarefa.data_vencimento && new Date(tarefa.data_vencimento + "T23:59:59") < new Date() && tarefa.status !== "concluida";
+  const subItens: any[] = (tarefa as any).tarefa_itens || [];
+  const subTotal = subItens.length;
+  const subDone = subItens.filter((i: any) => i.concluido).length;
 
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
@@ -78,6 +81,23 @@ export function TarefaCard({ tarefa, onEdit, onDelete, profiles = [] }: Props) {
 
         {tarefa.descricao && (
           <p className="text-xs text-muted-foreground line-clamp-2">{tarefa.descricao}</p>
+        )}
+
+        {subTotal > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className={cn("flex items-center gap-1", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
+                <CheckSquare className="h-3 w-3" />
+                {subDone}/{subTotal}
+              </span>
+            </div>
+            <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all", subDone === subTotal ? "bg-green-500" : "bg-primary")}
+                style={{ width: `${(subDone / subTotal) * 100}%` }}
+              />
+            </div>
+          </div>
         )}
 
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
