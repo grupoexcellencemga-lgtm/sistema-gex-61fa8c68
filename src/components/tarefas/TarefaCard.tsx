@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Pencil, Trash2, Calendar, Clock, User, Link2, CheckSquare } from "lucide-react";
+import { Pencil, Trash2, Calendar, Clock, User, Link2, CheckSquare, Square, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export function TarefaCard({ tarefa, onEdit, onDelete, profiles = [] }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: tarefa.id,
     data: { tarefa },
@@ -46,7 +48,7 @@ export function TarefaCard({ tarefa, onEdit, onDelete, profiles = [] }: Props) {
 
   const responsavel = profiles.find((p) => p.user_id === tarefa.responsavel_id);
   const isVencida = tarefa.data_vencimento && new Date(tarefa.data_vencimento + "T23:59:59") < new Date() && tarefa.status !== "concluida";
-  const subItens: any[] = (tarefa as any).tarefa_itens || [];
+  const subItens: any[] = ((tarefa as any).tarefa_itens || []).slice().sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
   const subTotal = subItens.length;
   const subDone = subItens.filter((i: any) => i.concluido).length;
 
@@ -85,18 +87,35 @@ export function TarefaCard({ tarefa, onEdit, onDelete, profiles = [] }: Props) {
 
         {subTotal > 0 && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className={cn("flex items-center gap-1", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+              className="w-full flex items-center gap-1.5 text-[11px] hover:text-foreground transition-colors"
+            >
+              <span className={cn("flex items-center gap-0.5", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
+                {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 <CheckSquare className="h-3 w-3" />
                 {subDone}/{subTotal}
               </span>
-            </div>
-            <div className="h-1 rounded-full bg-muted overflow-hidden">
-              <div
-                className={cn("h-full rounded-full transition-all", subDone === subTotal ? "bg-green-500" : "bg-primary")}
-                style={{ width: `${(subDone / subTotal) * 100}%` }}
-              />
-            </div>
+              <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all", subDone === subTotal ? "bg-green-500" : "bg-primary")}
+                  style={{ width: `${(subDone / subTotal) * 100}%` }}
+                />
+              </div>
+            </button>
+            {expanded && (
+              <div className="pl-4 space-y-0.5 border-l-2 border-muted ml-1 pt-0.5">
+                {subItens.map((item: any) => (
+                  <div key={item.id} className="flex items-center gap-1.5 py-0.5">
+                    {item.concluido
+                      ? <CheckSquare className="h-3 w-3 shrink-0 text-green-500" />
+                      : <Square className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                    <span className={cn("text-[11px] leading-tight", item.concluido && "line-through text-muted-foreground")}>{item.titulo}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

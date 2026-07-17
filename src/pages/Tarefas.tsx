@@ -16,7 +16,7 @@ import { TarefaCard } from "@/components/tarefas/TarefaCard";
 import { TarefaKanbanColumn } from "@/components/tarefas/TarefaKanbanColumn";
 import {
   Plus, Loader2, Kanban, List, CalendarDays, CheckCircle2, Circle, Clock,
-  AlertTriangle, Search, ChevronDown, ChevronRight, Pencil, Trash2
+  AlertTriangle, Search, ChevronDown, ChevronRight, Pencil, Trash2, Square, CheckSquare
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -79,13 +79,14 @@ const Tarefas = () => {
   const [filterPrioridade, setFilterPrioridade] = useState("todos");
   const [search, setSearch] = useState("");
   const [calMonth, setCalMonth] = useState(new Date());
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
   const { data: tarefas = [], isLoading, refetch } = useQuery({
     queryKey: ["tarefas"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
-        .select("*, turmas(nome, produtos(nome)), eventos(nome), tarefa_itens(id, concluido)")
+        .select("*, turmas(nome, produtos(nome)), eventos(nome), tarefa_itens(id, titulo, concluido, ordem)")
         .neq("status", "cancelada")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -116,6 +117,14 @@ const Tarefas = () => {
         completed_at: status === "concluida" ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => refetch(),
+  });
+
+  const toggleSubItemMutation = useMutation({
+    mutationFn: async ({ id, concluido }: { id: string; concluido: boolean }) => {
+      const { error } = await (supabase as any).from("tarefa_itens").update({ concluido }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => refetch(),
@@ -386,44 +395,68 @@ const Tarefas = () => {
                           const resp = profiles.find((p: any) => p.user_id === t.responsavel_id);
                           const atrasada = t.data_vencimento && t.data_vencimento < gruposPrazo.hojeISO && t.status !== "concluida";
                           const concluida = t.status === "concluida";
-                          const subItens: any[] = t.tarefa_itens || [];
+                          const subItens: any[] = (t.tarefa_itens || []).slice().sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
                           const subTotal = subItens.length;
                           const subDone = subItens.filter((i: any) => i.concluido).length;
+                          const isExpanded = !!expandedTasks[t.id];
                           return (
-                            <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 border-t text-sm">
-                              <button
-                                onClick={() => updateStatusMutation.mutate({ id: t.id, status: concluida ? "pendente" : "concluida" })}
-                                title={concluida ? "Reabrir" : "Concluir"}
-                                className="shrink-0"
-                              >
-                                {concluida ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-muted-foreground hover:text-foreground" />}
-                              </button>
-                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: AREA_DOT[t.area] || "hsl(var(--muted-foreground))" }} title={t.area || ""} />
-                              <button
-                                onClick={() => { setEditTarefa(t); setFormOpen(true); }}
-                                className="flex-1 min-w-0 text-left"
-                              >
-                                <div className={cn("truncate", concluida && "line-through text-muted-foreground")}>{t.titulo}</div>
-                                {filterOrigem === "todos" && (t.turma_id || t.evento_id) && (
-                                  <div className="text-[11px] text-muted-foreground truncate">{origemDaTarefa(t).label}</div>
+                            <div key={t.id}>
+                              <div className="flex items-center gap-2.5 px-3 py-2 border-t text-sm">
+                                <button
+                                  onClick={() => updateStatusMutation.mutate({ id: t.id, status: concluida ? "pendente" : "concluida" })}
+                                  title={concluida ? "Reabrir" : "Concluir"}
+                                  className="shrink-0"
+                                >
+                                  {concluida ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-muted-foreground hover:text-foreground" />}
+                                </button>
+                                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: AREA_DOT[t.area] || "hsl(var(--muted-foreground))" }} title={t.area || ""} />
+                                <button
+                                  onClick={() => { setEditTarefa(t); setFormOpen(true); }}
+                                  className="flex-1 min-w-0 text-left"
+                                >
+                                  <div className={cn("truncate", concluida && "line-through text-muted-foreground")}>{t.titulo}</div>
+                                  {filterOrigem === "todos" && (t.turma_id || t.evento_id) && (
+                                    <div className="text-[11px] text-muted-foreground truncate">{origemDaTarefa(t).label}</div>
+                                  )}
+                                </button>
+                                {subTotal > 0 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setExpandedTasks(p => ({ ...p, [t.id]: !p[t.id] })); }}
+                                    className={cn("text-[11px] whitespace-nowrap shrink-0 flex items-center gap-0.5 hover:text-foreground transition-colors", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}
+                                    title={isExpanded ? "Recolher sub-tarefas" : "Ver sub-tarefas"}
+                                  >
+                                    {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                    {subDone}/{subTotal}
+                                  </button>
                                 )}
-                              </button>
-                              {subTotal > 0 && (
-                                <span className={cn("text-[11px] whitespace-nowrap shrink-0 flex items-center gap-0.5", subDone === subTotal ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  {subDone}/{subTotal}
+                                <span className={cn("text-xs whitespace-nowrap shrink-0", atrasada ? "text-destructive font-medium" : "text-muted-foreground")}>
+                                  {t.data_vencimento ? format(new Date(t.data_vencimento + "T12:00:00"), "dd/MM") : "—"}
                                 </span>
+                                <span className="text-xs text-muted-foreground w-14 truncate hidden sm:block">{resp?.nome?.split(" ")[0] || "—"}</span>
+                                <button onClick={() => { setEditTarefa(t); setFormOpen(true); }} className="shrink-0 text-muted-foreground/60 hover:text-foreground" title="Editar">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => deleteMutation.mutate(t.id)} className="shrink-0 text-muted-foreground/60 hover:text-destructive" title="Excluir">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                              {isExpanded && subTotal > 0 && (
+                                <div className="border-t border-dashed bg-muted/20 pl-10 pr-3 py-1.5 space-y-0.5 border-l-2 border-l-muted ml-3">
+                                  {subItens.map((item: any) => (
+                                    <div key={item.id} className="flex items-center gap-2 py-0.5 ml-3">
+                                      <button
+                                        onClick={() => toggleSubItemMutation.mutate({ id: item.id, concluido: !item.concluido })}
+                                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                      >
+                                        {item.concluido
+                                          ? <CheckSquare className="h-3.5 w-3.5 text-green-500" />
+                                          : <Square className="h-3.5 w-3.5" />}
+                                      </button>
+                                      <span className={cn("text-xs", item.concluido && "line-through text-muted-foreground")}>{item.titulo}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                              <span className={cn("text-xs whitespace-nowrap shrink-0", atrasada ? "text-destructive font-medium" : "text-muted-foreground")}>
-                                {t.data_vencimento ? format(new Date(t.data_vencimento + "T12:00:00"), "dd/MM") : "—"}
-                              </span>
-                              <span className="text-xs text-muted-foreground w-14 truncate hidden sm:block">{resp?.nome?.split(" ")[0] || "—"}</span>
-                              <button onClick={() => { setEditTarefa(t); setFormOpen(true); }} className="shrink-0 text-muted-foreground/60 hover:text-foreground" title="Editar">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => deleteMutation.mutate(t.id)} className="shrink-0 text-muted-foreground/60 hover:text-destructive" title="Excluir">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
                             </div>
                           );
                         })}
