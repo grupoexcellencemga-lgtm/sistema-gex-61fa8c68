@@ -86,7 +86,7 @@ const Tarefas = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
-        .select("*, turmas(nome, produtos(nome)), eventos(nome), tarefa_itens(id, titulo, concluido, ordem)")
+        .select("*, turmas(nome, data_fim, produtos(nome)), eventos(nome, data), tarefa_itens(id, titulo, concluido, ordem)")
         .neq("status", "cancelada")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -130,12 +130,22 @@ const Tarefas = () => {
     onSuccess: () => refetch(),
   });
 
-  // Tasks for the current section
+  // First day of the current month — events/turmas that ended before this are hidden
+  const inicioMesAtual = format(startOfMonth(new Date()), "yyyy-MM-dd");
+
+  // Tasks for the current section, excluding tasks from finished events/turmas
   const activeTasks = useMemo(() => {
-    if (section === "geral") return tarefas.filter((t: any) => (t.escopo ?? "geral") === "geral");
-    if (isAdmin) return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual");
-    return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual" && t.responsavel_id === user?.id);
-  }, [section, tarefas, isAdmin, user?.id]);
+    const porSecao = (() => {
+      if (section === "geral") return tarefas.filter((t: any) => (t.escopo ?? "geral") === "geral");
+      if (isAdmin) return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual");
+      return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual" && t.responsavel_id === user?.id);
+    })();
+    return porSecao.filter((t: any) => {
+      if (t.turma_id && t.turmas?.data_fim && t.turmas.data_fim < inicioMesAtual) return false;
+      if (t.evento_id && t.eventos?.data && t.eventos.data < inicioMesAtual) return false;
+      return true;
+    });
+  }, [section, tarefas, isAdmin, user?.id, inicioMesAtual]);
 
   const filtered = useMemo(() => {
     return activeTasks.filter((t: any) => {
