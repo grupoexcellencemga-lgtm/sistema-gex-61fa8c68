@@ -40,16 +40,18 @@ interface Props {
   defaultAlunoId?: string;
   defaultLeadId?: string;
   defaultProcessoId?: string;
+  defaultEscopo?: "geral" | "individual";
   onSaved: () => void;
 }
 
-export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, defaultLeadId, defaultProcessoId, onSaved }: Props) {
+export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, defaultLeadId, defaultProcessoId, defaultEscopo, onSaved }: Props) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     titulo: "", descricao: "", tipo: "outro", prioridade: "media",
     responsavel_id: "", data_vencimento: "", hora: "",
     aluno_id: "", lead_id: "", processo_id: "", recorrencia: "nenhuma",
+    escopo: "geral" as "geral" | "individual",
   });
 
   const { data: profiles = [] } = useQuery({
@@ -75,6 +77,7 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
           lead_id: tarefa.lead_id || "",
           processo_id: tarefa.processo_id || "",
           recorrencia: tarefa.recorrencia || "nenhuma",
+          escopo: (tarefa.escopo as "geral" | "individual") || "geral",
         });
       } else {
         setForm({
@@ -82,10 +85,11 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
           responsavel_id: user?.id || "", data_vencimento: "", hora: "",
           aluno_id: defaultAlunoId || "", lead_id: defaultLeadId || "",
           processo_id: defaultProcessoId || "", recorrencia: "nenhuma",
+          escopo: defaultEscopo || "geral",
         });
       }
     }
-  }, [open, tarefa, user, defaultAlunoId, defaultLeadId, defaultProcessoId]);
+  }, [open, tarefa, user, defaultAlunoId, defaultLeadId, defaultProcessoId, defaultEscopo]);
 
   const handleSave = async () => {
     if (!form.titulo.trim()) { toast.error("Título é obrigatório"); return; }
@@ -104,6 +108,7 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
         lead_id: form.lead_id || null,
         processo_id: form.processo_id || null,
         recorrencia: form.recorrencia,
+        escopo: form.escopo,
       };
 
       if (tarefa) {
@@ -165,6 +170,28 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
                 {profiles.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.nome}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Visibilidade</Label>
+            <div className="flex gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, escopo: "geral" }))}
+                className={`flex-1 py-1.5 text-sm rounded-md border transition-colors ${form.escopo === "geral" ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"}`}
+              >
+                Geral
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, escopo: "individual" }))}
+                className={`flex-1 py-1.5 text-sm rounded-md border transition-colors ${form.escopo === "individual" ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"}`}
+              >
+                Individual
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {form.escopo === "geral" ? "Visível para toda a equipe." : "Visível apenas para o responsável (e administradores)."}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

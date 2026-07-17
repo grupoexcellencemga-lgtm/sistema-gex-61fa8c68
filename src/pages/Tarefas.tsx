@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,9 +62,11 @@ function origemDaTarefa(t: any): { key: string; label: string } {
 
 const Tarefas = () => {
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarefa, setEditTarefa] = useState<any>(null);
+  const [section, setSection] = useState<"geral" | "individual">("geral");
   const [view, setView] = useState<"kanban" | "lista" | "calendario">("lista");
   const [colapsados, setColapsados] = useState<Record<string, boolean>>({
     depois: true,
@@ -118,8 +121,15 @@ const Tarefas = () => {
     onSuccess: () => refetch(),
   });
 
+  // Tasks for the current section
+  const activeTasks = useMemo(() => {
+    if (section === "geral") return tarefas.filter((t: any) => (t.escopo ?? "geral") === "geral");
+    if (isAdmin) return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual");
+    return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual" && t.responsavel_id === user?.id);
+  }, [section, tarefas, isAdmin, user?.id]);
+
   const filtered = useMemo(() => {
-    return tarefas.filter((t: any) => {
+    return activeTasks.filter((t: any) => {
       if (filterResponsavel !== "todos" && t.responsavel_id !== filterResponsavel) return false;
       if (filterTipo !== "todos" && t.tipo !== filterTipo) return false;
       if (filterPrioridade !== "todos" && t.prioridade !== filterPrioridade) return false;
@@ -127,7 +137,7 @@ const Tarefas = () => {
       if (search && !t.titulo.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [tarefas, filterResponsavel, filterTipo, filterPrioridade, filterOrigem, search]);
+  }, [activeTasks, filterResponsavel, filterTipo, filterPrioridade, filterOrigem, search]);
 
   const sortedFiltered = useMemo(() => {
     return [...filtered].sort((a: any, b: any) => {
@@ -164,7 +174,7 @@ const Tarefas = () => {
   // Abas de evento/turma: uma por origem que tem tarefa (com contagem de pendentes).
   const origens = useMemo(() => {
     const map = new Map<string, { key: string; label: string; count: number }>();
-    for (const t of tarefas) {
+    for (const t of activeTasks) {
       if (t.status === "concluida") continue;
       const o = origemDaTarefa(t);
       if (!map.has(o.key)) map.set(o.key, { key: o.key, label: o.label, count: 0 });
@@ -173,7 +183,7 @@ const Tarefas = () => {
     return [...map.values()].sort((a, b) =>
       a.key === "avulsas" ? 1 : b.key === "avulsas" ? -1 : a.label.localeCompare(b.label, "pt-BR"),
     );
-  }, [tarefas]);
+  }, [activeTasks]);
 
   const tipoLabels: Record<string, string> = { follow_up: "Follow-up", cobranca: "Cobrança", lembrete: "Lembrete", reuniao: "Reunião", outro: "Outro" };
   const prioridadeColors: Record<string, string> = {
@@ -211,13 +221,15 @@ const Tarefas = () => {
         <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
         <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 w-48" />
       </div>
-      <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
-        <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Responsável" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="todos">Todos</SelectItem>
-          {profiles.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.nome}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      {(section === "geral" || isAdmin) && (
+        <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Responsável" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {profiles.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.nome}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
       <Select value={filterTipo} onValueChange={setFilterTipo}>
         <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
         <SelectContent>
@@ -247,10 +259,38 @@ const Tarefas = () => {
     );
   }
 
+  const handleSectionChange = (s: "geral" | "individual") => {
+    setSection(s);
+    setFilterResponsavel("todos");
+    setFilterOrigem("todos");
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <PageHeader title="Tarefas" description="Gestão de tarefas e agenda da equipe" />
+        <div>
+          <PageHeader title="Tarefas" description="Gestão de tarefas e agenda da equipe" />
+          <div className="flex gap-1 mt-2">
+            <button
+              onClick={() => handleSectionChange("geral")}
+              className={cn(
+                "px-4 py-1.5 text-sm rounded-full border transition-colors",
+                section === "geral" ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              Geral
+            </button>
+            <button
+              onClick={() => handleSectionChange("individual")}
+              className={cn(
+                "px-4 py-1.5 text-sm rounded-full border transition-colors",
+                section === "individual" ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              Individual
+            </button>
+          </div>
+        </div>
         <Button onClick={() => { setEditTarefa(null); setFormOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova Tarefa
         </Button>
@@ -441,6 +481,7 @@ const Tarefas = () => {
         open={formOpen}
         onOpenChange={setFormOpen}
         tarefa={editTarefa}
+        defaultEscopo={section}
         onSaved={refetch}
       />
     </div>
