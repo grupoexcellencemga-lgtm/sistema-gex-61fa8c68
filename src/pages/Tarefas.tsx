@@ -411,8 +411,10 @@ const Tarefas = () => {
                                 </button>
                                 <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: AREA_DOT[t.area] || "hsl(var(--muted-foreground))" }} title={t.area || ""} />
                                 <button
-                                  onClick={() => { setEditTarefa(t); setFormOpen(true); }}
-                                  className="flex-1 min-w-0 text-left"
+                                  onClick={() => {
+                                    if (subTotal > 0) setExpandedTasks(p => ({ ...p, [t.id]: !p[t.id] }));
+                                  }}
+                                  className={cn("flex-1 min-w-0 text-left", subTotal > 0 ? "cursor-pointer" : "cursor-default")}
                                 >
                                   <div className={cn("truncate", concluida && "line-through text-muted-foreground")}>{t.titulo}</div>
                                   {filterOrigem === "todos" && (t.turma_id || t.evento_id) && (
