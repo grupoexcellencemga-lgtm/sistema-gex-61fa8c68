@@ -125,24 +125,26 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
     setItems(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const saveItems = async (tarefaId: string) => {
-    // Delete all existing and re-insert to keep it simple
-    await (supabase as any).from("tarefa_itens").delete().eq("tarefa_id", tarefaId);
-    if (items.length > 0) {
-      await (supabase as any).from("tarefa_itens").insert(
-        items.map((it, i) => ({
+  const saveItems = async (tarefaId: string, itemsToSave: SubItem[]) => {
+    const { error: delError } = await (supabase as any).from("tarefa_itens").delete().eq("tarefa_id", tarefaId);
+    if (delError) throw delError;
+    if (itemsToSave.length > 0) {
+      const { error: insError } = await (supabase as any).from("tarefa_itens").insert(
+        itemsToSave.map((it, i) => ({
           tarefa_id: tarefaId,
           titulo: it.titulo,
           concluido: it.concluido,
           ordem: i,
         }))
       );
+      if (insError) throw insError;
     }
   };
 
   const handleSave = async () => {
     if (!form.titulo.trim()) { toast.error("Título é obrigatório"); return; }
     if (!form.responsavel_id) { toast.error("Responsável é obrigatório"); return; }
+    const currentItems = [...items];
     setSaving(true);
     try {
       const payload: any = {
@@ -163,7 +165,7 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
       if (tarefa) {
         const { error } = await supabase.from("tarefas").update(payload).eq("id", tarefa.id);
         if (error) throw error;
-        await saveItems(tarefa.id);
+        await saveItems(tarefa.id, currentItems);
         toast.success("Tarefa atualizada");
       } else {
         payload.created_by = user?.id;
@@ -171,7 +173,7 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
         const { data: inserted, error } = await (supabase as any)
           .from("tarefas").insert(payload).select("id").single();
         if (error) throw error;
-        await saveItems(inserted.id);
+        await saveItems(inserted.id, currentItems);
         toast.success("Tarefa criada");
       }
       onSaved();
