@@ -60,7 +60,6 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
     escopo: "geral" as "geral" | "individual",
   });
   const [items, setItems] = useState<SubItem[]>([]);
-  const [newItemTitulo, setNewItemTitulo] = useState("");
   const newItemRef = useRef<HTMLInputElement>(null);
 
   const { data: profiles = [] } = useQuery({
@@ -107,14 +106,14 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
       });
       setItems([]);
     }
-    setNewItemTitulo("");
+    if (newItemRef.current) newItemRef.current.value = "";
   }, [open, tarefa, user, defaultAlunoId, defaultLeadId, defaultProcessoId, defaultEscopo]);
 
   const addItem = () => {
-    const titulo = newItemTitulo.trim();
+    const titulo = (newItemRef.current?.value ?? "").trim();
     if (!titulo) return;
     setItems(prev => [...prev, { titulo, concluido: false }]);
-    setNewItemTitulo("");
+    if (newItemRef.current) newItemRef.current.value = "";
     newItemRef.current?.focus();
   };
 
@@ -304,13 +303,11 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
             )}
 
             <div className="flex gap-2">
-              <Input
+              <input
                 ref={newItemRef}
-                value={newItemTitulo}
-                onChange={e => setNewItemTitulo(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addItem())}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addItem(); } }}
                 placeholder="Adicionar item..."
-                className="h-8 text-sm"
+                className="h-8 text-sm flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
               <Button type="button" variant="outline" size="sm" className="h-8 px-2 shrink-0" onClick={addItem}>
                 <Plus className="h-3.5 w-3.5" />
