@@ -6,7 +6,7 @@ import { DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSen
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Loader2, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Check, Edit2, Trash2, X } from "lucide-react";
+import { Plus, Loader2, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Check, Edit2, Trash2, X, ChevronDown, ChevronRight, Users } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/components/ActivityTimeline";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,12 @@ const Funil = () => {
   const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
   const [editingQuadroName, setEditingQuadroName] = useState("");
   const [quadrosVisible, setQuadrosVisible] = useState(true);
+
+  // Import contacts state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importTipo, setImportTipo] = useState<"evento" | "turma">("evento");
+  const [importEventoId, setImportEventoId] = useState("");
+  const [importTurmaId, setImportTurmaId] = useState("");
 
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -149,6 +155,42 @@ const Funil = () => {
     },
   });
 
+  const { data: eventosImport = [] } = useQuery({
+    queryKey: ["eventos-funil-import"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("eventos")
+        .select("id, nome")
+        .is("deleted_at", null)
+        .order("data", { ascending: false })
+        .limit(100);
+      return (data || []) as { id: string; nome: string }[];
+    },
+  });
+
+  const { data: previewCount, isFetching: previewFetching } = useQuery({
+    queryKey: ["funil-import-preview", importTipo, importEventoId, importTurmaId],
+    queryFn: async () => {
+      if (importTipo === "evento" && importEventoId) {
+        const { count } = await (supabase as any)
+          .from("participantes_eventos")
+          .select("id", { count: "exact", head: true })
+          .eq("evento_id", importEventoId);
+        return count ?? 0;
+      }
+      if (importTipo === "turma" && importTurmaId) {
+        const { count } = await (supabase as any)
+          .from("matriculas")
+          .select("id", { count: "exact", head: true })
+          .eq("turma_id", importTurmaId)
+          .is("deleted_at", null);
+        return count ?? 0;
+      }
+      return null;
+    },
+    enabled: importOpen && ((importTipo === "evento" && !!importEventoId) || (importTipo === "turma" && !!importTurmaId)),
+  });
+
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasMap = useMemo(() => new Map(etapas.map((e) => [e.id, e])), [etapas]);
 
@@ -197,19 +239,84 @@ const Funil = () => {
         .select("id")
         .single();
       if (error) throw error;
+
       await Promise.all(
         ETAPAS_PADRAO.map((e, i) =>
           (supabase as any).from("funil_etapas").insert({ ...e, quadro_id: quadro.id, ordem: i, observacoes: null })
         )
       );
-      return quadro.id as string;
+
+      // Import contacts if configured
+      let importResult = { novos: 0, pulados: 0 };
+      if (importOpen && (importEventoId || importTurmaId)) {
+        let contacts: Array<{ nome: string; telefone?: string; email?: string }> = [];
+
+        if (importTipo === "evento" && importEventoId) {
+          const { data } = await (supabase as any)
+            .from("participantes_eventos")
+            .select("nome, telefone, email")
+            .eq("evento_id", importEventoId);
+          contacts = (data || []).filter((p: any) => p.nome?.trim());
+        } else if (importTipo === "turma" && importTurmaId) {
+          const { data } = await (supabase as any)
+            .from("matriculas")
+            .select("alunos(nome, telefone, email)")
+            .eq("turma_id", importTurmaId)
+            .is("deleted_at", null);
+          contacts = (data || [])
+            .map((m: any) => m.alunos)
+            .filter((a: any) => a?.nome?.trim());
+        }
+
+        if (contacts.length > 0) {
+          const existingPhones = new Set(
+            (leads as any[]).filter((l) => l.telefone).map((l) => l.telefone?.trim())
+          );
+          const novos = contacts.filter(
+            (c) => !c.telefone?.trim() || !existingPhones.has(c.telefone.trim())
+          );
+          importResult.pulados = contacts.length - novos.length;
+          importResult.novos = novos.length;
+
+          if (novos.length > 0) {
+            const { data: primeiraEtapa } = await (supabase as any)
+              .from("funil_etapas")
+              .select("id")
+              .eq("quadro_id", quadro.id)
+              .eq("ordem", 0)
+              .single();
+
+            if (primeiraEtapa?.id) {
+              await (supabase as any).from("leads").insert(
+                novos.map((c) => ({
+                  nome: c.nome.trim(),
+                  telefone: c.telefone?.trim() || null,
+                  email: c.email?.trim() || null,
+                  etapa_id: primeiraEtapa.id,
+                }))
+              );
+            }
+          }
+        }
+      }
+
+      return { id: quadro.id as string, importResult };
     },
-    onSuccess: (id) => {
+    onSuccess: ({ id, importResult }) => {
       queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
       queryClient.invalidateQueries({ queryKey: ["funil-etapas", id] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       setNewQuadroName("");
+      setImportOpen(false);
+      setImportEventoId("");
+      setImportTurmaId("");
       setSelectedQuadroId(id);
-      toast.success("Quadro criado");
+      if (importResult.novos > 0 || importResult.pulados > 0) {
+        const msg = `Quadro criado · ${importResult.novos} lead${importResult.novos !== 1 ? "s" : ""} importado${importResult.novos !== 1 ? "s" : ""}${importResult.pulados > 0 ? ` · ${importResult.pulados} já existia${importResult.pulados !== 1 ? "m" : ""} e foi${importResult.pulados !== 1 ? "ram" : ""} ignorado${importResult.pulados !== 1 ? "s" : ""}` : ""}`;
+        toast.success(msg);
+      } else {
+        toast.success("Quadro criado");
+      }
     },
     onError: (err: any) => toast.error("Erro ao criar quadro: " + err.message),
   });
@@ -420,7 +527,7 @@ const Funil = () => {
               </div>
             </div>
 
-            <div className="p-3 border-b">
+            <div className="p-3 border-b space-y-2">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -439,6 +546,74 @@ const Funil = () => {
                   {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
               </form>
+
+              {/* Import contacts toggle */}
+              <button
+                type="button"
+                onClick={() => setImportOpen((v) => !v)}
+                className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-0.5"
+              >
+                {importOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                <Users className="h-3.5 w-3.5" />
+                Importar contatos do evento/turma
+              </button>
+
+              {importOpen && (
+                <div className="space-y-2 pt-1">
+                  {/* Tipo toggle */}
+                  <div className="flex gap-1">
+                    {(["evento", "turma"] as const).map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => { setImportTipo(tipo); setImportEventoId(""); setImportTurmaId(""); }}
+                        className={cn(
+                          "flex-1 py-1 text-xs rounded border transition-colors",
+                          importTipo === tipo ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"
+                        )}
+                      >
+                        {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Source select */}
+                  {importTipo === "evento" ? (
+                    <select
+                      value={importEventoId}
+                      onChange={(e) => setImportEventoId(e.target.value)}
+                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione o evento...</option>
+                      {(eventosImport as { id: string; nome: string }[]).map((ev) => (
+                        <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={importTurmaId}
+                      onChange={(e) => setImportTurmaId(e.target.value)}
+                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione a turma...</option>
+                      {turmas.map((t) => (
+                        <option key={t.id} value={t.id}>{t.nome}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Preview count */}
+                  {((importTipo === "evento" && importEventoId) || (importTipo === "turma" && importTurmaId)) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {previewFetching
+                        ? "Contando..."
+                        : previewCount != null
+                          ? `${previewCount} contato${previewCount !== 1 ? "s" : ""} encontrado${previewCount !== 1 ? "s" : ""}`
+                          : ""}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-auto p-2 space-y-1">
