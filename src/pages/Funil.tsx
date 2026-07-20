@@ -340,8 +340,24 @@ const Funil = () => {
 
   const deleteQuadroMutation = useMutation({
     mutationFn: async (quadro: FunilQuadro) => {
-      const leadCount = leads.filter((l: any) => currentEtapaIds.has(l.etapa_id)).length;
+      const { data: quadroEtapas, error: etapasErr } = await (supabase as any)
+        .from("funil_etapas")
+        .select("id")
+        .eq("quadro_id", quadro.id);
+      if (etapasErr) throw etapasErr;
+
+      const quadroEtapaIds = new Set((quadroEtapas || []).map((e: any) => e.id as string));
+      const leadCount = leads.filter((l: any) => quadroEtapaIds.has(l.etapa_id)).length;
       if (leadCount > 0) throw new Error(`Mova os ${leadCount} lead(s) deste quadro antes de excluí-lo.`);
+
+      if (quadroEtapas && quadroEtapas.length > 0) {
+        const { error: delEtapasErr } = await (supabase as any)
+          .from("funil_etapas")
+          .delete()
+          .eq("quadro_id", quadro.id);
+        if (delEtapasErr) throw delEtapasErr;
+      }
+
       const { error } = await (supabase as any).from("funil_quadros").delete().eq("id", quadro.id);
       if (error) throw error;
     },
