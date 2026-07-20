@@ -50,8 +50,8 @@ export function FunilColumn({
   );
 
   return (
-    <div className="flex flex-col w-[280px] min-w-[280px] max-w-[280px] shrink-0">
-      <div className="flex items-center justify-between gap-1 mb-3 group">
+    <div className="flex flex-col w-[280px] min-w-[280px] max-w-[280px] shrink-0 h-full">
+      <div className="flex items-center justify-between gap-1 mb-3 group shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${cores.dot}`} />
           {hasObs ? (
@@ -93,7 +93,7 @@ export function FunilColumn({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex-1 space-y-2 min-h-[140px] rounded-lg p-2 transition-colors ${
+        className={`flex-1 min-h-0 overflow-y-auto space-y-2 min-h-[140px] rounded-lg p-2 transition-colors ${
           isOver ? "bg-primary/5 ring-2 ring-primary/20" : "bg-muted/30"
         }`}
       >

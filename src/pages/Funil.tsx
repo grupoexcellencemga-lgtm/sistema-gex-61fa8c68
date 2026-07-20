@@ -740,11 +740,16 @@ const Funil = () => {
                 ) : (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <div className="space-y-2">
-                      <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden" onScroll={() => syncScroll("top")}>
+                      <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden shrink-0" onScroll={() => syncScroll("top")}>
                         <div style={{ width: boardWidth }} className="h-1" />
                       </div>
-                      <div ref={boardScrollRef} className="w-full overflow-x-auto overflow-y-hidden pb-2" onScroll={() => syncScroll("board")}>
-                        <div className="flex w-max gap-4">
+                      <div
+                        ref={boardScrollRef}
+                        className="w-full overflow-x-auto pb-2"
+                        style={{ height: "calc(100svh - 26rem)", minHeight: "280px" }}
+                        onScroll={() => syncScroll("board")}
+                      >
+                        <div className="flex w-max gap-4 h-full">
                           {etapasOrdenadas.map((etapa, idx) => (
                             <FunilColumn
                               key={etapa.id}
