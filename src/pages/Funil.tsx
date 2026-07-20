@@ -363,8 +363,6 @@ const Funil = () => {
     const targetEtapaId = over.id as string;
     const lead = leads.find((l) => l.id === leadId) as any;
     if (!lead || lead.etapa_id === targetEtapaId) return;
-    const targetEtapa = etapasMap.get(targetEtapaId);
-    if (targetEtapa?.tipo === "perdido") return;
     moveEtapaMutation.mutate({ id: leadId, fromEtapaId: lead.etapa_id, toEtapaId: targetEtapaId });
   };
 
