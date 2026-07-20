@@ -61,9 +61,9 @@ const Inicio = () => {
         .from("tarefas")
         .select("id, titulo, data_vencimento")
         .eq("responsavel_id", auth.user.id)
-        .eq("status", "pendente")
-        .lte("data_vencimento", hoje)
-        .order("data_vencimento", { ascending: true })
+        .in("status", ["pendente", "em_andamento"])
+        .or(`data_vencimento.lte.${hoje},data_vencimento.is.null`)
+        .order("data_vencimento", { ascending: true, nullsFirst: false })
         .limit(50);
       if (error) throw error;
       return data || [];
