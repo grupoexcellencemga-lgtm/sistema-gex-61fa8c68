@@ -167,6 +167,6 @@ export interface DashboardMetrics {
 // ─── Partial select types used in dropdowns ───
 export type ProdutoSelect = Pick<ProdutoRow, "id" | "nome" | "valor">;
 export type ComercialSelect = Pick<ComercialRow, "id" | "nome">;
-export type TurmaSelect = Pick<TurmaRow, "id" | "nome" | "produto_id">;
+export type TurmaSelect = Pick<TurmaRow, "id" | "nome" | "produto_id"> & { produtos?: { nome: string } | null };
 export type ProfissionalSelect = Pick<ProfissionalRow, "id" | "nome">;
 export type ProfileSelect = Pick<ProfileRow, "user_id" | "nome">;

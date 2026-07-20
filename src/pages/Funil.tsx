@@ -149,7 +149,7 @@ const Funil = () => {
   const { data: turmas = [] } = useQuery<TurmaSelect[]>({
     queryKey: ["turmas-funil"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("turmas").select("id, nome, produto_id").is("deleted_at", null).order("nome");
+      const { data, error } = await (supabase as any).from("turmas").select("id, nome, produto_id, produtos(nome)").is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
@@ -597,7 +597,9 @@ const Funil = () => {
                     >
                       <option value="">Selecione a turma...</option>
                       {turmas.map((t) => (
-                        <option key={t.id} value={t.id}>{t.nome}</option>
+                        <option key={t.id} value={t.id}>
+                          {t.produtos?.nome ? `${t.produtos.nome} · ${t.nome}` : t.nome}
+                        </option>
                       ))}
                     </select>
                   )}
