@@ -341,20 +341,30 @@ const Funil = () => {
   const deleteQuadroMutation = useMutation({
     mutationFn: async (quadro: FunilQuadro) => {
       const { data: quadroEtapas, error: etapasErr } = await (supabase as any)
-        .from("funil_etapas")
-        .select("id")
-        .eq("quadro_id", quadro.id);
+        .from("funil_etapas").select("id").eq("quadro_id", quadro.id);
       if (etapasErr) throw etapasErr;
 
-      const quadroEtapaIds = new Set((quadroEtapas || []).map((e: any) => e.id as string));
+      const etapaIdsList = (quadroEtapas || []).map((e: any) => e.id as string);
+      const quadroEtapaIds = new Set(etapaIdsList);
+
+      // Block if there are active (visible) leads
       const leadCount = leads.filter((l: any) => quadroEtapaIds.has(l.etapa_id)).length;
       if (leadCount > 0) throw new Error(`Mova os ${leadCount} lead(s) deste quadro antes de excluí-lo.`);
 
-      if (quadroEtapas && quadroEtapas.length > 0) {
+      if (etapaIdsList.length > 0) {
+        // Fetch all leads in these etapas (including soft-deleted)
+        const { data: allLeads } = await (supabase as any)
+          .from("leads").select("id").in("etapa_id", etapaIdsList);
+        const leadIds = (allLeads || []).map((l: any) => l.id as string);
+
+        if (leadIds.length > 0) {
+          await (supabase as any).from("tarefas").update({ lead_id: null }).in("lead_id", leadIds);
+          await (supabase as any).from("atividades").delete().in("lead_id", leadIds);
+          await (supabase as any).from("leads").delete().in("id", leadIds);
+        }
+
         const { error: delEtapasErr } = await (supabase as any)
-          .from("funil_etapas")
-          .delete()
-          .eq("quadro_id", quadro.id);
+          .from("funil_etapas").delete().eq("quadro_id", quadro.id);
         if (delEtapasErr) throw delEtapasErr;
       }
 
