@@ -149,9 +149,13 @@ const Funil = () => {
   const { data: turmas = [] } = useQuery<TurmaSelect[]>({
     queryKey: ["turmas-funil"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("turmas").select("id, nome, produto_id, produtos(nome)").is("deleted_at", null).order("nome");
+      const { data, error } = await (supabase as any).from("turmas").select("id, nome, produto_id, produtos(nome)").is("deleted_at", null);
       if (error) throw error;
-      return data;
+      return (data || []).sort((a: TurmaSelect, b: TurmaSelect) => {
+        const pa = a.produtos?.nome ?? "";
+        const pb = b.produtos?.nome ?? "";
+        return pa.localeCompare(pb, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR");
+      });
     },
   });
 
