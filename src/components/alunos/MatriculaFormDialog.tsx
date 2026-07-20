@@ -114,7 +114,7 @@ export const MatriculaFormDialog = ({
         : { percentual: 0, nome };
     }
 
-    if (isLink || isBoleto) {
+    if (isLink) {
       const nome = `${parcelas}x`;
 
       const found = taxas.find(
@@ -122,10 +122,7 @@ export const MatriculaFormDialog = ({
       );
 
       return found
-        ? {
-            percentual: Number(found.percentual),
-            nome: `${isBoleto ? "Boleto" : "Link"} ${found.nome}`,
-          }
+        ? { percentual: Number(found.percentual), nome: `Link ${found.nome}` }
         : { percentual: 0, nome };
     }
 
@@ -504,7 +501,7 @@ export const MatriculaFormDialog = ({
                   </div>
                 </div>
 
-                {(isCredito || isLink || isBoleto || isDebito) && (
+                {(isCredito || isLink || isDebito) && (
                   <div className="flex items-center gap-2 pt-1">
                     <Switch
                       checked={matriculaForm.repassar_taxa || false}
@@ -522,7 +519,7 @@ export const MatriculaFormDialog = ({
                 )}
 
                 {matriculaForm.repassar_taxa &&
-                  (isCredito || isLink || isBoleto || isDebito) && (
+                  (isCredito || isLink || isDebito) && (
                     <p className="text-xs text-primary font-medium">
                       O cliente pagará{" "}
                       {formatCurrency(taxaCalc.valorCobrado)} (valor + taxa)
@@ -530,7 +527,7 @@ export const MatriculaFormDialog = ({
                   )}
 
                 {!matriculaForm.repassar_taxa &&
-                  (isCredito || isLink || isBoleto || isDebito) && (
+                  (isCredito || isLink || isDebito) && (
                     <p className="text-xs text-muted-foreground font-medium">
                       Líquido lançado: {formatCurrency(taxaCalc.valorLiquido)}
                     </p>

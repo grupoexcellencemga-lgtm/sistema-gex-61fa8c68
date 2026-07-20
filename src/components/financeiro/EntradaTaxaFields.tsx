@@ -64,7 +64,7 @@ export const EntradaTaxaFields = ({
     if (isCredito) {
       tipoTaxa = "maquininha";
       nomeTaxa = n === 1 ? "Crédito 1x" : `Crédito ${n}x`;
-    } else if (isLink || isBoleto) {
+    } else if (isLink) {
       tipoTaxa = "link";
       nomeTaxa = `${n}x`;
     }

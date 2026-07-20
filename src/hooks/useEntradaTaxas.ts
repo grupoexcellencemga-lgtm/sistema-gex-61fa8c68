@@ -73,7 +73,7 @@ export function useEntradaTaxas(
       formaPagamento === "boleto" || formaAtual?.tipo === "boleto";
 
     const showTaxa =
-      !!formaAtual?.abre_taxa || isCredito || isDebito || isLink || isBoleto;
+      !!formaAtual?.abre_taxa || isCredito || isDebito || isLink;
 
     const showParcelas =
       !!formaAtual?.abre_parcelas || isCredito || isLink || isBoleto;
@@ -102,7 +102,7 @@ export function useEntradaTaxas(
           taxaNome = found.nome;
           taxaPercentual = Number(found.percentual);
         }
-      } else if (isLink || isBoleto) {
+      } else if (isLink) {
         const nome = `${parcelas}x`;
 
         const found = taxas.find(
@@ -110,7 +110,7 @@ export function useEntradaTaxas(
         );
 
         if (found) {
-          taxaNome = `${isBoleto ? "Boleto" : "Link"} ${found.nome}`;
+          taxaNome = `Link ${found.nome}`;
           taxaPercentual = Number(found.percentual);
         }
       }

@@ -120,7 +120,7 @@ export const AlunoDetailSheet = (props: Props) => {
   const getFormaLabel = (codigo: string | null | undefined) => getFormaPagamentoLabel(codigo, formasPagamento);
   const getFormaConfig = (codigo: string | null | undefined) => formasPagamento.find((f) => f.codigo === codigo);
 
-  const formasComTaxa = ["credito", "cartao", "cartao_credito", "recorrencia_cartao", "debito", "link", "boleto"];
+  const formasComTaxa = ["credito", "cartao", "cartao_credito", "recorrencia_cartao", "debito", "link"];
 
   const getValorTaxaMaquina = (p: any) => {
     const taxa = Number(p?.taxa_cartao) || 0;
@@ -167,8 +167,7 @@ export const AlunoDetailSheet = (props: Props) => {
     ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
   const novoIsDebito = novoTipoForma === "debito" || novoPagForm.forma_pagamento === "debito";
   const novoIsLink = novoTipoForma === "link" || novoPagForm.forma_pagamento === "link";
-  const novoIsBoleto = novoTipoForma === "boleto" || novoPagForm.forma_pagamento === "boleto";
-  const novoShowTaxa = Boolean(novoFormaConfig?.abre_taxa) || novoIsCartaoCredito || novoIsDebito || novoIsLink || novoIsBoleto;
+  const novoShowTaxa = Boolean(novoFormaConfig?.abre_taxa) || novoIsCartaoCredito || novoIsDebito || novoIsLink;
 
   const novoTaxaAutoCalc = useMemo(() => {
     if (!novoShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
@@ -184,14 +183,14 @@ export const AlunoDetailSheet = (props: Props) => {
       return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
     }
 
-    if (novoIsLink || novoIsBoleto) {
+    if (novoIsLink) {
       const nome = `${novoParcelasCalc}x`;
       const found = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === nome);
       return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
     }
 
     return { percentual: 0, nome: "" };
-  }, [novoShowTaxa, novoIsDebito, novoIsCartaoCredito, novoIsLink, novoIsBoleto, novoParcelasCalc, taxasSistema]);
+  }, [novoShowTaxa, novoIsDebito, novoIsCartaoCredito, novoIsLink, novoParcelasCalc, taxasSistema]);
 
   const novoTaxaPercentual = novoTaxaAutoCalc.percentual;
 

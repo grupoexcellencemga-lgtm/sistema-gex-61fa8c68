@@ -121,8 +121,7 @@ export function ProcessoFormDialog({
     !!formaAtual?.abre_taxa ||
     isCredito ||
     form.forma_pagamento === "debito" ||
-    form.forma_pagamento === "link" ||
-    form.forma_pagamento === "boleto";
+    form.forma_pagamento === "link";
 
   const selectAluno = (alunoId: string) => {
     const aluno = alunos.find((a: any) => a.id === alunoId);
@@ -164,7 +163,7 @@ export function ProcessoFormDialog({
           : "1",
       taxa_cartao:
         forma?.abre_taxa ||
-        ["credito", "cartao", "cartao_credito", "debito", "link", "boleto"].includes(v)
+        ["credito", "cartao", "cartao_credito", "debito", "link"].includes(v)
           ? f.taxa_cartao
           : "",
     }));
