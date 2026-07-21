@@ -92,10 +92,15 @@ export function usePermissions() {
     const roleDefaults = ROLE_DEFAULTS[userRole ?? ""] ?? ["dashboard", "configuracoes"];
     const overrides = new Map(customPermissions?.map((p) => [p.page_key, p.allowed]) ?? []);
 
-    return ALL_PAGES.map((p) => p.key).filter((key) => {
+    const pages = ALL_PAGES.map((p) => p.key).filter((key) => {
       if (overrides.has(key)) return overrides.get(key);
       return roleDefaults.includes(key);
     });
+
+    // Início (dashboard) é sempre acessível para qualquer usuário logado
+    if (!pages.includes("dashboard")) pages.unshift("dashboard");
+
+    return pages;
   })();
 
   const canAccess = (pageKey: PageKey) => allowedPages.includes(pageKey);
