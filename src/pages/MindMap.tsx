@@ -280,7 +280,13 @@ const MindMap = () => {
   const updateNodeData = useCallback(
     (nodeId: string, updates: Record<string, any>) => {
       setNodes((nds) =>
-        nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n)
+        nds.map((n) => {
+          if (n.id !== nodeId) return n;
+          const newData = { ...n.data, ...updates };
+          const newNode = { ...n, data: newData };
+          if ("locked" in updates) newNode.draggable = !updates.locked;
+          return newNode;
+        })
       );
     },
     [setNodes]

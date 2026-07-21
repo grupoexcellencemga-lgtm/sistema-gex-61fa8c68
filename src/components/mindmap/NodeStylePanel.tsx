@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Bold, Italic, Image as ImageIcon, StickyNote, ExternalLink, Trash2, Upload, Loader2,
-  Minus, Circle, MoreHorizontal, Video,
+  Minus, Circle, MoreHorizontal, Video, Lock,
 } from "lucide-react";
 
 const NODE_COLORS = [
@@ -35,6 +35,20 @@ interface NodeStylePanelProps {
 
 export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeStylePanelProps) {
   const d = node.data;
+  if (d.locked) {
+    return (
+      <div className="bg-card border border-amber-500/50 rounded-lg p-4 shadow-lg w-56 flex flex-col items-center gap-3 text-center">
+        <Lock className="h-6 w-6 text-amber-500" />
+        <p className="text-xs text-muted-foreground">Este bloco está <span className="font-semibold text-amber-500">bloqueado</span>. Clique no cadeado para desbloquear e editar.</p>
+        <button
+          className="text-xs underline text-primary hover:text-primary/80"
+          onClick={() => onUpdate(node.id, { locked: false })}
+        >
+          Desbloquear agora
+        </button>
+      </div>
+    );
+  }
   const [noteOpen, setNoteOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);

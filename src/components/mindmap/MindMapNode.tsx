@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useEffect } from "react";
 import { Handle, Position, type NodeProps, useReactFlow } from "@xyflow/react";
-import { Plus, StickyNote, ExternalLink, Image as ImageIcon, Video } from "lucide-react";
+import { Plus, StickyNote, ExternalLink, Image as ImageIcon, Video, Lock, LockOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function getVideoEmbedUrl(url: string): string | null {
@@ -35,10 +35,24 @@ function MindMapNode({ id, data, selected }: NodeProps) {
     setLabel(data.label as string);
   }, [data.label]);
 
+  const locked = data.locked as boolean | undefined;
+
   const onDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    if (locked) return;
     setEditing(true);
-  }, []);
+  }, [locked]);
+
+  const toggleLock = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id !== id) return n;
+        const newLocked = !n.data.locked;
+        return { ...n, draggable: !newLocked, data: { ...n.data, locked: newLocked } };
+      })
+    );
+  }, [id, setNodes]);
 
   const commitLabel = useCallback(() => {
     setEditing(false);
@@ -207,8 +221,22 @@ function MindMapNode({ id, data, selected }: NodeProps) {
       </div>
       <Handle type="source" position={Position.Right} className="!w-3 !h-3 !border-2 !border-background" style={{ backgroundColor: color }} />
 
+      {/* Lock button (top-right corner) */}
+      <button
+        className={cn(
+          "absolute -top-2.5 -right-2.5 rounded-full w-5 h-5 flex items-center justify-center shadow-md transition-all z-10",
+          locked
+            ? "opacity-100 bg-amber-500 text-white hover:bg-amber-600"
+            : "opacity-0 group-hover:opacity-100 bg-muted text-muted-foreground hover:bg-muted/80"
+        )}
+        onClick={toggleLock}
+        title={locked ? "Desbloquear bloco" : "Bloquear bloco (congelar)"}
+      >
+        {locked ? <Lock className="h-2.5 w-2.5" /> : <LockOpen className="h-2.5 w-2.5" />}
+      </button>
+
       {/* Add child button (right side) */}
-      {onAddChild && (
+      {onAddChild && !locked && (
         <button
           className="absolute -right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:scale-110"
           onClick={(e) => { e.stopPropagation(); onAddChild(id); }}
@@ -219,7 +247,7 @@ function MindMapNode({ id, data, selected }: NodeProps) {
       )}
 
       {/* Add sibling button (bottom) */}
-      {onAddSibling && (
+      {onAddSibling && !locked && (
         <button
           className="absolute left-1/2 -translate-x-1/2 -bottom-6 opacity-0 group-hover:opacity-100 transition-opacity bg-secondary text-secondary-foreground rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:scale-110"
           onClick={(e) => { e.stopPropagation(); onAddSibling(id); }}
@@ -251,5 +279,6 @@ export default memo(MindMapNode, (prev, next) => {
   if (pd.borderStyle !== nd.borderStyle) return false;
   if (pd.borderColor !== nd.borderColor) return false;
   if (pd.nodeWidth !== nd.nodeWidth) return false;
+  if (pd.locked !== nd.locked) return false;
   return true;
 });
