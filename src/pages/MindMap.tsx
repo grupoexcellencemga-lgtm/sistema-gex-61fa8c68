@@ -49,6 +49,7 @@ const MindMap = () => {
   const [editingName, setEditingName] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const styleHistoryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[]; cut: boolean } | null>(null);
@@ -149,8 +150,13 @@ const MindMap = () => {
     }
   }, [nodes, edges, selectedMapId, autoSave]);
 
+  const onNodeDragStart = useCallback(() => {
+    pushHistory();
+  }, [pushHistory]);
+
   const onConnect = useCallback(
     (params: Connection) => {
+      pushHistory();
       setEdges((eds) =>
         addEdge({
           ...params,
@@ -159,12 +165,13 @@ const MindMap = () => {
         }, eds)
       );
     },
-    [setEdges]
+    [setEdges, pushHistory]
   );
 
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       if (!selectedMapId || !reactFlowInstance) return;
+      pushHistory();
       const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const newNode: Node = {
         id: crypto.randomUUID(),
@@ -174,7 +181,7 @@ const MindMap = () => {
       };
       setNodes((nds) => [...nds, newNode]);
     },
-    [selectedMapId, reactFlowInstance, setNodes]
+    [selectedMapId, reactFlowInstance, setNodes, pushHistory]
   );
 
   // Add child
@@ -182,6 +189,7 @@ const MindMap = () => {
     (parentId: string) => {
       const parentNode = nodes.find((n) => n.id === parentId);
       if (!parentNode) return;
+      pushHistory();
       const childId = crypto.randomUUID();
       const newNode: Node = {
         id: childId,
@@ -201,7 +209,7 @@ const MindMap = () => {
       setEdges((eds) => [...eds, newEdge]);
       setSelectedNodeId(childId);
     },
-    [nodes, setNodes, setEdges]
+    [nodes, setNodes, setEdges, pushHistory]
   );
 
   // Add sibling
@@ -210,6 +218,7 @@ const MindMap = () => {
       const parentEdge = edges.find((e) => e.target === nodeId);
       const currentNode = nodes.find((n) => n.id === nodeId);
       if (!currentNode) return;
+      pushHistory();
       const siblingId = crypto.randomUUID();
       const newNode: Node = {
         id: siblingId,
@@ -232,7 +241,7 @@ const MindMap = () => {
       }
       setSelectedNodeId(siblingId);
     },
-    [nodes, edges, setNodes, setEdges]
+    [nodes, edges, setNodes, setEdges, pushHistory]
   );
 
   // Delete node
@@ -296,9 +305,11 @@ const MindMap = () => {
     setSelectedNodeId(newNodes[0]?.id ?? null);
   }, [clipboard, setNodes, setEdges]);
 
-  // Update node data from style panel
+  // Update node data from style panel (debounced history so rapid style clicks don't flood)
   const updateNodeData = useCallback(
     (nodeId: string, updates: Record<string, any>) => {
+      if (styleHistoryRef.current) clearTimeout(styleHistoryRef.current);
+      styleHistoryRef.current = setTimeout(() => pushHistory(), 600);
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id !== nodeId) return n;
@@ -309,7 +320,7 @@ const MindMap = () => {
         })
       );
     },
-    [setNodes]
+    [setNodes, pushHistory]
   );
 
   // Bulk image upload: creates one child node per image
@@ -568,6 +579,7 @@ const MindMap = () => {
             onDoubleClick={onPaneDoubleClick}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
+            onNodeDragStart={onNodeDragStart}
             nodeTypes={nodeTypes}
             fitView
             deleteKeyCode={[]}
