@@ -138,7 +138,7 @@ const Tarefas = () => {
     const porSecao = (() => {
       if (section === "geral") return tarefas.filter((t: any) => (t.escopo ?? "geral") === "geral");
       if (isAdmin) return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual");
-      return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual" && t.responsavel_id === user?.id);
+      return tarefas.filter((t: any) => (t.escopo ?? "geral") === "individual" && (t.responsavel_id === user?.id || t.created_by === user?.id));
     })();
     return porSecao.filter((t: any) => {
       if (t.turma_id && t.turmas?.data_fim && t.turmas.data_fim < inicioMesAtual) return false;
