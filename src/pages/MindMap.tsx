@@ -50,7 +50,7 @@ const MindMap = () => {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-  const [clipboard, setClipboard] = useState<{ node: Node; cut: boolean } | null>(null);
+  const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[]; cut: boolean } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const MAX_HISTORY = 30;
@@ -244,37 +244,55 @@ const MindMap = () => {
     [setNodes, setEdges, selectedNodeId, pushHistory]
   );
 
-  // Copy / Cut / Paste
+  // Copy / Cut / Paste (multi-node)
   const copyNode = useCallback((nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
-    if (node) setClipboard({ node: { ...node }, cut: false });
+    if (!node) return;
+    setClipboard({ nodes: [node], edges: [], cut: false });
   }, [nodes]);
 
   const cutNode = useCallback((nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
-    if (node) {
-      setClipboard({ node: { ...node }, cut: true });
-      deleteNode(nodeId);
-    }
+    if (!node) return;
+    setClipboard({ nodes: [node], edges: [], cut: true });
+    deleteNode(nodeId);
   }, [nodes, deleteNode]);
 
+  // Copy all currently selected nodes (Ctrl+C / Ctrl+X from keyboard)
+  const copySelectedNodes = useCallback((cut = false) => {
+    const selected = nodes.filter((n) => n.selected);
+    const toCopy = selected.length > 0 ? selected : (selectedNodeId ? nodes.filter((n) => n.id === selectedNodeId) : []);
+    if (toCopy.length === 0) return;
+    const ids = new Set(toCopy.map((n) => n.id));
+    const internalEdges = edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+    setClipboard({ nodes: toCopy.map((n) => ({ ...n })), edges: internalEdges, cut });
+    if (cut) {
+      pushHistory();
+      setNodes((nds) => nds.filter((n) => !ids.has(n.id)));
+      setEdges((eds) => eds.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
+    }
+  }, [nodes, edges, selectedNodeId, pushHistory, setNodes, setEdges]);
+
   const pasteNode = useCallback(() => {
-    if (!clipboard) return;
-    const newId = crypto.randomUUID();
-    const newNode: Node = {
-      ...clipboard.node,
-      id: newId,
-      position: {
-        x: clipboard.node.position.x + 40,
-        y: clipboard.node.position.y + 40,
-      },
+    if (!clipboard || clipboard.nodes.length === 0) return;
+    const idMap = new Map<string, string>();
+    clipboard.nodes.forEach((n) => idMap.set(n.id, crypto.randomUUID()));
+    const newNodes: Node[] = clipboard.nodes.map((n) => ({
+      ...n,
+      id: idMap.get(n.id)!,
+      position: { x: n.position.x + 40, y: n.position.y + 40 },
       selected: false,
-    };
-    setNodes((nds) => [...nds, newNode]);
-    setSelectedNodeId(newId);
-    if (!clipboard.cut) return;
-    setClipboard({ ...clipboard, cut: false });
-  }, [clipboard, setNodes]);
+    }));
+    const newEdges: Edge[] = clipboard.edges.map((e) => ({
+      ...e,
+      id: crypto.randomUUID(),
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    }));
+    setNodes((nds) => [...nds, ...newNodes]);
+    setEdges((eds) => [...eds, ...newEdges]);
+    setSelectedNodeId(newNodes[0]?.id ?? null);
+  }, [clipboard, setNodes, setEdges]);
 
   // Update node data from style panel
   const updateNodeData = useCallback(
@@ -384,14 +402,14 @@ const MindMap = () => {
       }
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "z") { e.preventDefault(); undo(); return; }
-        if (e.key === "c" && selectedNodeId) { e.preventDefault(); copyNode(selectedNodeId); }
-        if (e.key === "x" && selectedNodeId) { e.preventDefault(); cutNode(selectedNodeId); }
+        if (e.key === "c") { e.preventDefault(); copySelectedNodes(false); }
+        if (e.key === "x") { e.preventDefault(); copySelectedNodes(true); }
         if (e.key === "v") { e.preventDefault(); pasteNode(); }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedNodeId, selectedMapId, addChildToNode, addSiblingToNode, deleteNode, copyNode, cutNode, pasteNode, undo]);
+  }, [selectedNodeId, selectedMapId, addChildToNode, addSiblingToNode, deleteNode, copySelectedNodes, pasteNode, undo]);
 
   // Enrich nodes with callbacks
   const enrichedNodes = useMemo(
