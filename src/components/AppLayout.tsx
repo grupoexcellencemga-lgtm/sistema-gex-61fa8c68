@@ -5,7 +5,8 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
 
 const routeTitles: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Início",
+  "/dashboard": "Dashboard",
   "/alunos": "Alunos",
   "/jornada": "Jornada",
   "/produtos": "Produtos",

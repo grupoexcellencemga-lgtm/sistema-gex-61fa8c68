@@ -5,7 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 // All navigable pages with their keys
 export const ALL_PAGES = [
-  { key: "dashboard", label: "Dashboard", path: "/" },
+  { key: "inicio", label: "Início", path: "/" },
+  { key: "dashboard", label: "Dashboard", path: "/dashboard" },
   { key: "alunos", label: "Alunos", path: "/alunos" },
   { key: "jornada", label: "Jornada", path: "/jornada" },
   { key: "produtos", label: "Produtos", path: "/produtos" },
@@ -34,10 +35,10 @@ export type PageKey = (typeof ALL_PAGES)[number]["key"];
 // Default pages per role (baseline)
 export const ROLE_DEFAULTS: Record<string, PageKey[]> = {
   admin: ALL_PAGES.map((p) => p.key) as PageKey[],
-  comercial: ["dashboard", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
-  financeiro: ["dashboard", "financeiro", "relatorios", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
-  suporte: ["dashboard", "alunos", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
-  profissional: ["dashboard", "processo-individual", "processo-empresarial", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  comercial: ["inicio", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  financeiro: ["inicio", "financeiro", "relatorios", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  suporte: ["inicio", "alunos", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  profissional: ["inicio", "processo-individual", "processo-empresarial", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
 };
 
 export function usePermissions() {
@@ -89,7 +90,7 @@ export function usePermissions() {
     if (!user) return [];
     if (isAdmin) return ALL_PAGES.map((p) => p.key); // Admin sees everything
 
-    const roleDefaults = ROLE_DEFAULTS[userRole ?? ""] ?? ["dashboard", "configuracoes"];
+    const roleDefaults = ROLE_DEFAULTS[userRole ?? ""] ?? ["inicio", "configuracoes"];
     const overrides = new Map(customPermissions?.map((p) => [p.page_key, p.allowed]) ?? []);
 
     const pages = ALL_PAGES.map((p) => p.key).filter((key) => {
@@ -97,8 +98,8 @@ export function usePermissions() {
       return roleDefaults.includes(key);
     });
 
-    // Início (dashboard) é sempre acessível para qualquer usuário logado
-    if (!pages.includes("dashboard")) pages.unshift("dashboard");
+    // Início é sempre acessível para qualquer usuário logado
+    if (!pages.includes("inicio")) pages.unshift("inicio");
 
     return pages;
   })();

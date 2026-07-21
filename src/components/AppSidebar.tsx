@@ -18,7 +18,7 @@ const menuGroups = [
   {
     label: "Principal",
     items: [
-      { title: "Início", url: "/", icon: Home, pageKey: "dashboard" as PageKey },
+      { title: "Início", url: "/", icon: Home, pageKey: "inicio" as PageKey },
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, pageKey: "dashboard" as PageKey },
       { title: "Alunos", url: "/alunos", icon: Users, pageKey: "alunos" as PageKey },
       { title: "Jornada", url: "/jornada", icon: Route, pageKey: "jornada" as PageKey },
