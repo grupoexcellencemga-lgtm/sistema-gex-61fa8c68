@@ -15,6 +15,7 @@ import {
   BackgroundVariant,
   Panel,
   MarkerType,
+  SelectionMode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Edit2, Check, X, Download, PanelLeftClose, PanelLeft, Brain, Undo2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Download, PanelLeftClose, PanelLeft, Brain, Undo2, Hand, MousePointer2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import MindMapNode from "@/components/mindmap/MindMapNode";
@@ -54,6 +55,7 @@ const MindMap = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const MAX_HISTORY = 30;
+  const [interactionMode, setInteractionMode] = useState<"pan" | "select">("pan");
 
   const pushHistory = useCallback(() => {
     setHistory((prev) => [...prev.slice(-(MAX_HISTORY - 1)), { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }]);
@@ -570,6 +572,10 @@ const MindMap = () => {
             fitView
             deleteKeyCode={[]}
             className="bg-background"
+            panOnDrag={interactionMode === "pan" ? true : [1, 2]}
+            selectionOnDrag={interactionMode === "select"}
+            selectionMode={SelectionMode.Partial}
+            multiSelectionKeyCode="Control"
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--muted-foreground) / 0.15)" />
             <MiniMap
@@ -604,6 +610,35 @@ const MindMap = () => {
                 <NodeStylePanel node={selectedNode} onUpdate={updateNodeData} onBulkImages={addMultipleImageNodes} />
               </Panel>
             )}
+
+            {/* Interaction mode toolbar */}
+            <Panel position="bottom-center">
+              <div className="flex items-center gap-1 bg-card border border-border rounded-lg px-2 py-1.5 shadow-lg mb-2">
+                <Button
+                  size="icon"
+                  variant={interactionMode === "pan" ? "default" : "ghost"}
+                  className="h-7 w-7"
+                  onClick={() => setInteractionMode("pan")}
+                  title="Mão livre — arrastar move o canvas"
+                >
+                  <Hand className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant={interactionMode === "select" ? "default" : "ghost"}
+                  className="h-7 w-7"
+                  onClick={() => setInteractionMode("select")}
+                  title="Seletor — arraste para selecionar vários blocos"
+                >
+                  <MousePointer2 className="h-4 w-4" />
+                </Button>
+                {interactionMode === "select" && (
+                  <span className="text-[10px] text-muted-foreground ml-1 pr-1">
+                    Arraste para selecionar
+                  </span>
+                )}
+              </div>
+            </Panel>
           </ReactFlow>
         )}
       </div>
