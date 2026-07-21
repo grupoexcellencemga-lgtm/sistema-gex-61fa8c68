@@ -8,7 +8,7 @@ interface NodeContextMenuProps {
   onClose: () => void;
   onCopy: (nodeId: string) => void;
   onCut: (nodeId: string) => void;
-  onPaste: (nodeId: string) => void;
+  onPaste: () => void;
   onAddNote: (nodeId: string) => void;
   onAddLink: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
@@ -32,7 +32,7 @@ export default function NodeContextMenu({
   const items = [
     { label: "Copiar", icon: Copy, action: () => onCopy(nodeId), shortcut: "Ctrl+C" },
     { label: "Recortar", icon: Scissors, action: () => onCut(nodeId), shortcut: "Ctrl+X" },
-    { label: "Colar", icon: ClipboardPaste, action: () => onPaste(nodeId), shortcut: "Ctrl+V" },
+    { label: "Colar", icon: ClipboardPaste, action: () => onPaste(), shortcut: "Ctrl+V" },
     null,
     { label: "Adicionar filho", icon: Plus, action: () => onAddChild(nodeId), shortcut: "Tab" },
     { label: "Adicionar nota", icon: StickyNote, action: () => onAddNote(nodeId) },

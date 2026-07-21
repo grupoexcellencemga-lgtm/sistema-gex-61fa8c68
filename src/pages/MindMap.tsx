@@ -258,34 +258,23 @@ const MindMap = () => {
     }
   }, [nodes, deleteNode]);
 
-  const pasteNode = useCallback((targetNodeId?: string) => {
+  const pasteNode = useCallback(() => {
     if (!clipboard) return;
     const newId = crypto.randomUUID();
-    const targetNode = targetNodeId ? nodes.find((n) => n.id === targetNodeId) : null;
     const newNode: Node = {
       ...clipboard.node,
       id: newId,
       position: {
-        x: (targetNode?.position.x ?? clipboard.node.position.x) + 40,
-        y: (targetNode?.position.y ?? clipboard.node.position.y) + 40,
+        x: clipboard.node.position.x + 40,
+        y: clipboard.node.position.y + 40,
       },
       selected: false,
     };
     setNodes((nds) => [...nds, newNode]);
-    if (targetNodeId) {
-      setEdges((eds) => [...eds, {
-        id: `e-${targetNodeId}-${newId}`,
-        source: targetNodeId,
-        target: newId,
-        type: "smoothstep",
-        style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--primary))" },
-      }]);
-    }
     setSelectedNodeId(newId);
     if (!clipboard.cut) return;
     setClipboard({ ...clipboard, cut: false });
-  }, [clipboard, nodes, setNodes, setEdges]);
+  }, [clipboard, setNodes]);
 
   // Update node data from style panel
   const updateNodeData = useCallback(
@@ -391,7 +380,7 @@ const MindMap = () => {
         if (e.key === "z") { e.preventDefault(); undo(); return; }
         if (e.key === "c" && selectedNodeId) { e.preventDefault(); copyNode(selectedNodeId); }
         if (e.key === "x" && selectedNodeId) { e.preventDefault(); cutNode(selectedNodeId); }
-        if (e.key === "v") { e.preventDefault(); pasteNode(selectedNodeId || undefined); }
+        if (e.key === "v") { e.preventDefault(); pasteNode(); }
       }
     };
     window.addEventListener("keydown", handler);
