@@ -45,7 +45,7 @@ export function usePermissions() {
   const { user } = useAuth();
 
   // Check if user is admin
-  const { data: isAdmin } = useQuery({
+  const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: async () => {
       if (!user) return false;
@@ -53,6 +53,7 @@ export function usePermissions() {
       return !!data;
     },
     enabled: !!user,
+    retry: 1,
   });
 
   // Get user role
@@ -111,5 +112,5 @@ export function usePermissions() {
     return allowedPages.includes(page.key);
   };
 
-  return { allowedPages, canAccess, canAccessPath, isAdmin: !!isAdmin, userRole, isReady: isAdmin !== undefined };
+  return { allowedPages, canAccess, canAccessPath, isAdmin: !!isAdmin, userRole, isReady: !isAdminLoading };
 }
