@@ -219,6 +219,12 @@ export const AlunoDetailSheet = (props: Props) => {
   const totalPago = pagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalPendente = pagamentos.filter((p: any) => p.status === "pendente").reduce((s: number, p: any) => s + Number(p.valor), 0);
 
+  // Soma real de todos os pagamentos vinculados a cada matrícula
+  const totalPorMatricula = (matriculaId: string) =>
+    pagamentos
+      .filter((p: any) => p.matricula_id === matriculaId)
+      .reduce((s: number, p: any) => s + Number(p.valor), 0);
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -345,10 +351,15 @@ export const AlunoDetailSheet = (props: Props) => {
                             </div>
                             <p className="text-xs text-muted-foreground">Turma: {m.turmas?.nome || "—"}</p>
                             <p className="text-xs text-muted-foreground">{formatDate(m.data_inicio)} → {formatDate(m.data_fim)}</p>
-                            <div className="flex gap-3 mt-1 text-xs">
-                              <span>Total: {formatCurrency(Number(m.valor_total || 0))}</span>
+                            <div className="flex flex-wrap gap-3 mt-1 text-xs">
+                              <span>Contrato: {formatCurrency(Number(m.valor_total || 0))}</span>
                               {Number(m.desconto) > 0 && <span className="text-emerald-600">Desc: -{formatCurrency(Number(m.desconto))}</span>}
                               <span className="font-semibold">Final: {formatCurrency(Number(m.valor_final || 0))}</span>
+                              {totalPorMatricula(m.id) > Number(m.valor_final || 0) && (
+                                <span className="font-semibold text-primary">
+                                  Total vinculado: {formatCurrency(totalPorMatricula(m.id))}
+                                </span>
+                              )}
                             </div>
                             {m.observacoes && <p className="text-xs text-muted-foreground mt-1">{m.observacoes}</p>}
 
