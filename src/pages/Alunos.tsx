@@ -751,11 +751,13 @@ const Alunos = () => {
 
       const isCartao = ["credito", "cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);
       const isDebito = novoPagForm.forma_pagamento === "debito";
-      const isLinkBoleto = ["link", "boleto"].includes(novoPagForm.forma_pagamento);
+      const isBoleto = novoPagForm.forma_pagamento === "boleto";
+      const isLink = novoPagForm.forma_pagamento === "link";
       // Boleto NÃO tem taxa de máquina (só cartão, débito e link).
-      const temTaxaMaquina = isCartao || isDebito || novoPagForm.forma_pagamento === "link";
+      const temTaxaMaquina = isCartao || isDebito || isLink;
       const taxaCartao = temTaxaMaquina ? parseFloat(novoPagForm.taxa_cartao) || 0 : 0;
-      const parcelasCartao = isCartao || isLinkBoleto ? parseInt(novoPagForm.parcelas_cartao) || 1 : null;
+      const parcelasCartao = isCartao || isLink ? parseInt(novoPagForm.parcelas_cartao) || 1 : null;
+      const parcelasBoleto = isBoleto ? parseInt(novoPagForm.parcelas_cartao) || 1 : 1;
       const taxaCalc = calcTaxaMaquina(
         valor,
         temTaxaMaquina ? taxaCartao : 0,
@@ -766,22 +768,47 @@ const Alunos = () => {
         ? taxaCalc.valorCobrado
         : taxaCalc.valorLiquido;
 
-      const { error } = await supabase.from("pagamentos").insert({
-        aluno_id: selectedAluno.id,
-        produto_id: novoPagForm.produto_id || null,
-        matricula_id: novoPagForm.matricula_id || null,
-        valor: Math.round(valorCobrado * 100) / 100,
-        forma_pagamento: novoPagForm.forma_pagamento || null,
-        data_vencimento: novoPagForm.data_vencimento,
-        status: "pendente",
-        conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
-        parcelas: 1,
-        parcela_atual: 1,
-        parcelas_cartao: parcelasCartao,
-        taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
-      });
-
-      if (error) throw error;
+      if (isBoleto && parcelasBoleto > 1) {
+        // Cria uma linha por parcela, com vencimento mensal
+        const valorParcela = Math.round((valorCobrado / parcelasBoleto) * 100) / 100;
+        const addMes = (dataStr: string, meses: number) => {
+          const d = new Date(dataStr + "T12:00:00");
+          d.setMonth(d.getMonth() + meses);
+          return d.toISOString().split("T")[0];
+        };
+        const registros = Array.from({ length: parcelasBoleto }, (_, i) => ({
+          aluno_id: selectedAluno.id,
+          produto_id: novoPagForm.produto_id || null,
+          matricula_id: novoPagForm.matricula_id || null,
+          valor: valorParcela,
+          forma_pagamento: "boleto",
+          data_vencimento: addMes(novoPagForm.data_vencimento, i),
+          status: "pendente",
+          conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
+          parcelas: parcelasBoleto,
+          parcela_atual: i + 1,
+          parcelas_cartao: null,
+          taxa_cartao: null,
+        }));
+        const { error } = await supabase.from("pagamentos").insert(registros);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("pagamentos").insert({
+          aluno_id: selectedAluno.id,
+          produto_id: novoPagForm.produto_id || null,
+          matricula_id: novoPagForm.matricula_id || null,
+          valor: Math.round(valorCobrado * 100) / 100,
+          forma_pagamento: novoPagForm.forma_pagamento || null,
+          data_vencimento: novoPagForm.data_vencimento,
+          status: "pendente",
+          conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
+          parcelas: 1,
+          parcela_atual: 1,
+          parcelas_cartao: parcelasCartao,
+          taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
+        });
+        if (error) throw error;
+      }
 
       const matNome = matriculas.find((m: any) => m.id === novoPagForm.matricula_id)?.produtos?.nome;
 

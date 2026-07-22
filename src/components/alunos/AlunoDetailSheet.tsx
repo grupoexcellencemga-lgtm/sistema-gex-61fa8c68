@@ -926,6 +926,32 @@ export const AlunoDetailSheet = (props: Props) => {
                 </SelectContent>
               </Select>
             </div>
+            {/* Parcelas para boleto (sem taxa) */}
+            {novoPagForm.forma_pagamento === "boleto" && (
+              <div className="rounded-md border p-3 bg-accent/30 space-y-2">
+                <div>
+                  <Label>Parcelas de boleto</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="24"
+                    value={novoPagForm.parcelas_cartao || "1"}
+                    onChange={(e) => setNovoPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
+                    placeholder="1"
+                  />
+                </div>
+                {parseInt(novoPagForm.parcelas_cartao) > 1 && novoPagForm.valor && (
+                  <p className="text-xs text-muted-foreground">
+                    {parseInt(novoPagForm.parcelas_cartao)}× de{" "}
+                    <strong>
+                      {formatCurrency(parseFloat(novoPagForm.valor) / parseInt(novoPagForm.parcelas_cartao))}
+                    </strong>{" "}
+                    — vencimentos mensais a partir da data acima.
+                  </p>
+                )}
+              </div>
+            )}
+
             {novoShowTaxa && (
               <div className="rounded-md border p-3 bg-accent/30 space-y-2">
                 <div>
