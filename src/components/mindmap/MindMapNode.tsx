@@ -69,8 +69,15 @@ function MindMapNode({ id, data, selected }: NodeProps) {
   const bold = data.bold as boolean | undefined;
   const italic = data.italic as boolean | undefined;
   const fontSize = (data.fontSize as number) || 14;
+  const textAlign = (data.textAlign as string) || "center";
+  const listStyle = (data.listStyle as string) || "none";
   const isRoot = data.isRoot !== false; // default true for backward compat
   const textColor = isRoot ? ((data.textColor as string) || "#ffffff") : ((data.textColor as string) || "#000000");
+
+  const displayLabel = listStyle === "none" ? label : (() => {
+    const prefix = listStyle === "dash" ? "- " : listStyle === "bullet" ? "• " : "◦ ";
+    return label.split("\n").map((line) => line.trim() ? prefix + line : line).join("\n");
+  })();
   const borderStyle = (data.borderStyle as string) || "solid";
   const borderColor = (data.borderColor as string) || "transparent";
   const nodeWidth = (data.nodeWidth as number) || 160;
@@ -157,8 +164,8 @@ function MindMapNode({ id, data, selected }: NodeProps) {
         {editing ? (
           <textarea
             autoFocus
-            className="bg-transparent text-sm font-medium w-full text-center outline-none resize-none nodrag nopan nowheel"
-            style={{ color: textColor, minHeight: "1.5em", overflow: "hidden" }}
+            className="bg-transparent text-sm font-medium w-full outline-none resize-none nodrag nopan nowheel"
+            style={{ color: textColor, minHeight: "1.5em", overflow: "hidden", textAlign: textAlign as any }}
             value={label}
             onChange={(e) => {
               setLabel(e.target.value);
@@ -185,9 +192,12 @@ function MindMapNode({ id, data, selected }: NodeProps) {
               fontWeight: bold ? "bold" : "normal",
               fontStyle: italic ? "italic" : "normal",
               fontSize: `${fontSize}px`,
+              textAlign: textAlign as any,
+              display: "block",
+              width: "100%",
             }}
           >
-            {label}
+            {displayLabel}
           </span>
         )}
 
@@ -280,5 +290,7 @@ export default memo(MindMapNode, (prev, next) => {
   if (pd.borderColor !== nd.borderColor) return false;
   if (pd.nodeWidth !== nd.nodeWidth) return false;
   if (pd.locked !== nd.locked) return false;
+  if (pd.textAlign !== nd.textAlign) return false;
+  if (pd.listStyle !== nd.listStyle) return false;
   return true;
 });

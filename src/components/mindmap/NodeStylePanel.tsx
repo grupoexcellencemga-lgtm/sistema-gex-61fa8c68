@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Bold, Italic, Image as ImageIcon, StickyNote, ExternalLink, Trash2, Upload, Loader2,
-  Minus, Circle, MoreHorizontal, Video, Lock,
+  Minus, Circle, MoreHorizontal, Video, Lock, AlignLeft, AlignCenter, AlignRight,
 } from "lucide-react";
 
 const NODE_COLORS = [
@@ -160,6 +160,24 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
             ))}
           </select>
         </div>
+        {/* Alignment */}
+        <div className="flex gap-1 mt-1">
+          {([
+            { value: "left",   Icon: AlignLeft },
+            { value: "center", Icon: AlignCenter },
+            { value: "right",  Icon: AlignRight },
+          ] as const).map(({ value, Icon }) => (
+            <Button
+              key={value}
+              size="icon"
+              variant={(d.textAlign || "center") === value ? "default" : "outline"}
+              className="h-7 w-7"
+              onClick={() => update("textAlign", value)}
+            >
+              <Icon className="h-3 w-3" />
+            </Button>
+          ))}
+        </div>
         <Label className="text-[10px] text-muted-foreground mt-1 block">Cor do texto</Label>
         <div className="flex gap-1 flex-wrap">
           {TEXT_COLORS.map((c) => (
@@ -194,6 +212,29 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
               onClick={() => update("nodeWidth", s.value)}
             >
               {s.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* List style */}
+      <div>
+        <Label className="text-[11px] text-muted-foreground mb-1 block">Lista / marcadores</Label>
+        <div className="flex gap-1">
+          {([
+            { value: "none",   label: "Sem"  },
+            { value: "dash",   label: "—"    },
+            { value: "bullet", label: "•"    },
+            { value: "circle", label: "◦"    },
+          ] as const).map(({ value, label }) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={(d.listStyle || "none") === value ? "default" : "outline"}
+              className="h-7 flex-1 text-[11px]"
+              onClick={() => update("listStyle", value)}
+            >
+              {label}
             </Button>
           ))}
         </div>
