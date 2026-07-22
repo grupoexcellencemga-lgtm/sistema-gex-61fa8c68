@@ -16,6 +16,7 @@ import {
   Panel,
   MarkerType,
   SelectionMode,
+  ConnectionMode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
@@ -615,6 +616,7 @@ const MindMap = () => {
             selectionOnDrag={interactionMode === "select"}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode="Control"
+            connectionMode={ConnectionMode.Loose}
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--muted-foreground) / 0.15)" />
             <MiniMap

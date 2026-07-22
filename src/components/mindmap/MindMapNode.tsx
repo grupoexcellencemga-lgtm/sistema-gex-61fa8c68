@@ -97,7 +97,7 @@ function MindMapNode({ id, data, selected }: NodeProps) {
       onDoubleClick={onDoubleClick}
       onContextMenu={handleContextMenu}
     >
-      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !border-background" style={{ backgroundColor: color }} />
+      <Handle type="source" id="left" position={Position.Left} className="!w-2 !h-2 !border-background" style={{ backgroundColor: color }} />
       <div
         className={cn(
           "px-4 py-2 rounded-xl text-center transition-all overflow-hidden",
@@ -229,7 +229,7 @@ function MindMapNode({ id, data, selected }: NodeProps) {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !border-2 !border-background" style={{ backgroundColor: color }} />
+      <Handle type="source" id="right" position={Position.Right} className="!w-3 !h-3 !border-2 !border-background" style={{ backgroundColor: color }} />
 
       {/* Lock button (top-right corner) */}
       <button
