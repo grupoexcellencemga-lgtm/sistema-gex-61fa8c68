@@ -50,6 +50,12 @@ const MindMap = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const styleHistoryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  const selectedMapIdRef = useRef(selectedMapId);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { selectedMapIdRef.current = selectedMapId; }, [selectedMapId]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[]; cut: boolean } | null>(null);
@@ -92,7 +98,7 @@ const MindMap = () => {
     enabled: !!user,
   });
 
-  // Load selected map
+  // Load selected map — staleTime 0 garante que sempre busca do banco ao voltar
   const { data: currentMap } = useQuery({
     queryKey: ["mindmap", selectedMapId],
     queryFn: async () => {
@@ -106,7 +112,28 @@ const MindMap = () => {
       return data;
     },
     enabled: !!selectedMapId,
+    staleTime: 0,
   });
+
+  // Salva imediatamente (cancela debounce pendente)
+  const saveImmediately = useCallback(async (mapId: string) => {
+    if (!mapId) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    await supabase.from("mindmaps").update({
+      nodes: nodesRef.current as any,
+      edges: edgesRef.current as any,
+      updated_at: new Date().toISOString(),
+    }).eq("id", mapId);
+  }, []);
+
+  // Troca de mapa: salva o atual antes de mudar
+  const handleMapSelect = useCallback(async (newMapId: string) => {
+    const prev = selectedMapIdRef.current;
+    if (prev && prev !== newMapId) {
+      await saveImmediately(prev);
+    }
+    setSelectedMapId(newMapId);
+  }, [saveImmediately]);
 
   useEffect(() => {
     if (currentMap) {
@@ -543,7 +570,7 @@ const MindMap = () => {
                   </form>
                 ) : (
                   <>
-                    <span className="flex-1 truncate" onClick={() => setSelectedMapId(map.id)}>{map.nome}</span>
+                    <span className="flex-1 truncate" onClick={() => handleMapSelect(map.id)}>{map.nome}</span>
                     <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => { setEditingMapId(map.id); setEditingName(map.nome); }}>
                       <Edit2 className="h-3 w-3" />
                     </Button>
