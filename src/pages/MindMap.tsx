@@ -436,9 +436,18 @@ const MindMap = () => {
         addSiblingToNode(selectedNodeId);
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeId) {
+      if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        deleteNode(selectedNodeId);
+        if (selectedNodeId) {
+          deleteNode(selectedNodeId);
+        } else {
+          const selectedEdges = edges.filter((ed) => ed.selected);
+          if (selectedEdges.length > 0) {
+            pushHistory();
+            const ids = new Set(selectedEdges.map((ed) => ed.id));
+            setEdges((eds) => eds.filter((ed) => !ids.has(ed.id)));
+          }
+        }
         return;
       }
       if (e.ctrlKey || e.metaKey) {
