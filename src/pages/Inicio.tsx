@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -8,7 +8,7 @@ import { ProximosEventosCard } from "@/components/dashboard/ProximosEventosCard"
 import { formatCurrency } from "@/lib/formatters";
 import {
   Users, CalendarPlus, CalendarDays, CircleCheck, ListChecks, Calendar,
-  AlertTriangle, Cake, ChevronRight, DollarSign,
+  AlertTriangle, Cake, ChevronRight, DollarSign, CheckCircle2, Circle,
 } from "lucide-react";
 
 function formatarNome(nome: string): string {
@@ -106,6 +106,50 @@ const Inicio = () => {
       ];
       return itens;
     },
+  });
+
+  const queryClient = useQueryClient();
+
+  const { data: agendaChecks = [] } = useQuery({
+    queryKey: ["inicio-agenda-checks", hoje],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("agenda_item_checks")
+        .select("item_id")
+        .eq("data", hoje);
+      return (data || []).map((r: any) => r.item_id as string);
+    },
+    refetchInterval: 30_000,
+  });
+
+  const toggleCheck = useMutation({
+    mutationFn: async ({ itemId, checked }: { itemId: string; checked: boolean }) => {
+      if (checked) {
+        await (supabase as any)
+          .from("agenda_item_checks")
+          .delete()
+          .eq("item_id", itemId)
+          .eq("data", hoje);
+      } else {
+        const { data: auth } = await supabase.auth.getUser();
+        await (supabase as any)
+          .from("agenda_item_checks")
+          .insert({ item_id: itemId, data: hoje, concluido_por: auth.user?.id });
+      }
+    },
+    onMutate: async ({ itemId, checked }) => {
+      await queryClient.cancelQueries({ queryKey: ["inicio-agenda-checks", hoje] });
+      const prev = queryClient.getQueryData<string[]>(["inicio-agenda-checks", hoje]) ?? [];
+      queryClient.setQueryData(
+        ["inicio-agenda-checks", hoje],
+        checked ? prev.filter((id) => id !== itemId) : [...prev, itemId],
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["inicio-agenda-checks", hoje], ctx.prev);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["inicio-agenda-checks", hoje] }),
   });
 
   const temAcessoFinanceiro = canAccess("financeiro");
@@ -256,19 +300,43 @@ const Inicio = () => {
               <p className="text-sm text-muted-foreground py-2">Nada na agenda de hoje.</p>
             ) : (
               <div className="space-y-0.5">
-                {agenda.map((a: any) => (
-                  <button
-                    key={a.id}
-                    onClick={() => a.href && navigate(a.href)}
-                    className="w-full flex items-center gap-2 text-sm py-1.5 px-1.5 rounded-md text-left hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
-                      {a.tipo}
-                    </span>
-                    <span className="flex-1 truncate">{a.titulo}</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  </button>
-                ))}
+                {agenda.map((a: any) => {
+                  const checked = agendaChecks.includes(a.id);
+                  return (
+                    <div
+                      key={a.id}
+                      className={`w-full flex items-center gap-2 text-sm py-1.5 px-1.5 rounded-md transition-colors ${checked ? "opacity-50" : ""}`}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCheck.mutate({ itemId: a.id, checked });
+                        }}
+                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                        title={checked ? "Desmarcar" : "Marcar como feito"}
+                      >
+                        {checked
+                          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          : <Circle className="h-4 w-4" />}
+                      </button>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                        {a.tipo}
+                      </span>
+                      <button
+                        className={`flex-1 text-left truncate ${checked ? "line-through text-muted-foreground" : ""}`}
+                        onClick={() => a.href && navigate(a.href)}
+                      >
+                        {a.titulo}
+                      </button>
+                      {!checked && (
+                        <ChevronRight
+                          className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-pointer"
+                          onClick={() => a.href && navigate(a.href)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
