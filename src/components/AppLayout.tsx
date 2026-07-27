@@ -27,6 +27,7 @@ const routeTitles: Record<string, string> = {
   "/configuracoes": "Configurações",
   "/divulgacao": "Divulgação",
   "/funil": "Funil",
+  "/conteudo": "Produção de Conteúdo",
 };
 
 export function AppLayout({ children }: { children: React.ReactNode }) {

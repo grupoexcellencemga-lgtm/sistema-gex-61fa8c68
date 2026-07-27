@@ -28,6 +28,7 @@ export const ALL_PAGES = [
   { key: "tarefas", label: "Tarefas", path: "/tarefas" },
   { key: "divulgacao", label: "Divulgação", path: "/divulgacao" },
   { key: "funil", label: "Funil de Vendas", path: "/funil" },
+  { key: "conteudo", label: "Produção de Conteúdo", path: "/conteudo" },
 ] as const;
 
 export type PageKey = (typeof ALL_PAGES)[number]["key"];
@@ -35,7 +36,7 @@ export type PageKey = (typeof ALL_PAGES)[number]["key"];
 // Default pages per role (baseline)
 export const ROLE_DEFAULTS: Record<string, PageKey[]> = {
   admin: ALL_PAGES.map((p) => p.key) as PageKey[],
-  comercial: ["inicio", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  comercial: ["inicio", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "aniversarios", "tarefas", "divulgacao", "conteudo", "configuracoes"],
   financeiro: ["inicio", "financeiro", "relatorios", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
   suporte: ["inicio", "alunos", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
   profissional: ["inicio", "processo-individual", "processo-empresarial", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],

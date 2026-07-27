@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Package, GraduationCap, Calendar,
-  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays, Home
+  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays, Home, Clapperboard,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { APP_VERSION } from "@/lib/version";
@@ -46,6 +46,7 @@ const menuGroups = [
       { title: "Tarefas", url: "/tarefas", icon: CheckSquare, pageKey: "tarefas" as PageKey },
       { title: "Quadros de Divulgação", url: "/divulgacao", icon: Megaphone, pageKey: "divulgacao" as PageKey },
       { title: "Mind Map", url: "/mindmap", icon: Brain, pageKey: "mindmap" as PageKey },
+      { title: "Produção de Conteúdo", url: "/conteudo", icon: Clapperboard, pageKey: "conteudo" as PageKey },
     ],
   },
   {
