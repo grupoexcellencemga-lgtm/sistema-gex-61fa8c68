@@ -78,7 +78,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary dark:bg-gradient-to-br dark:from-[#B9975B] dark:to-[#C9A870] shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary dark:bg-gradient-to-br dark:from-[#F97316] dark:to-[#F59E0B] shadow-sm">
             <span className="text-sm font-bold text-primary-foreground">GE</span>
           </div>
           {!collapsed && (
@@ -113,7 +113,7 @@ export function AppSidebar() {
                           to={item.url}
                           end={item.url === "/"}
                           className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 dark:text-[#8B8B9E] hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-white/5 transition-all duration-200 border-l-2 border-transparent relative group"
-                          activeClassName="bg-sidebar-accent text-primary font-medium dark:bg-gradient-to-r dark:from-primary/15 dark:to-transparent dark:text-[#B9975B] dark:border-primary border-primary [&>svg]:text-primary [&>svg]:drop-shadow-[0_0_5px_rgba(185,151,91,0.8)]"
+                          activeClassName="bg-sidebar-accent text-primary font-medium dark:bg-gradient-to-r dark:from-primary/15 dark:to-transparent dark:text-[#F97316] dark:border-primary border-primary [&>svg]:text-primary [&>svg]:drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]"
                         >
                           <item.icon className="h-4 w-4 shrink-0 transition-all duration-200 group-hover:text-sidebar-foreground dark:group-hover:text-white" />
                           {!collapsed && <span>{item.title}</span>}
