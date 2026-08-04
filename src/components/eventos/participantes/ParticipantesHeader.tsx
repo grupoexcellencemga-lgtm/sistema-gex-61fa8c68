@@ -14,7 +14,9 @@ import {
   MapPin,
   CheckCircle2,
   Package,
+  Link2,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   formatDate,
   formatCurrencyNullable as formatCurrency,
@@ -161,6 +163,16 @@ export function ParticipantesHeader({
           </Button>
           <Button variant="outline" size="sm" onClick={onOpenMetrics}>
             <BarChart3 className="h-4 w-4 mr-1" /> Métricas
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const link = `${window.location.origin}/inscricao/${evento.id}`;
+              navigator.clipboard.writeText(link).then(() => toast.success("Link de inscrição copiado!"));
+            }}
+          >
+            <Link2 className="h-4 w-4 mr-1" /> Link de inscrição
           </Button>
           <Button size="sm" onClick={onOpenAdd}>
             <UserPlus className="h-4 w-4 mr-1" /> Adicionar

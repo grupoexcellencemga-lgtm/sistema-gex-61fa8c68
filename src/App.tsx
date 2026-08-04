@@ -42,6 +42,7 @@ const Tarefas = lazy(() => import("./pages/Tarefas"));
 const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 const Funil = lazy(() => import("./pages/Funil"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Inscricao = lazy(() => import("./pages/Inscricao"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,6 +68,17 @@ const AppRoutes = () => {
 
   if (!isReady) {
     return <LoadingScreen />;
+  }
+
+  // Public route — accessible regardless of auth state
+  if (location.pathname.startsWith("/inscricao/")) {
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/inscricao/:eventoId" element={<Inscricao />} />
+        </Routes>
+      </Suspense>
+    );
   }
 
   if (!user) {
