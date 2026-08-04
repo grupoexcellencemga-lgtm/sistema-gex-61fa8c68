@@ -20,7 +20,7 @@ const Inscricao = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("eventos")
-        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status")
+        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status, pergunta_inscricao")
         .eq("id", eventoId)
         .is("deleted_at", null)
         .single();
@@ -193,11 +193,11 @@ const Inscricao = () => {
               </div>
 
               <div className="space-y-1">
-                <Label>Como ficou sabendo deste evento?</Label>
+                <Label>{evento.pergunta_inscricao || "Como ficou sabendo deste evento?"}</Label>
                 <Textarea
                   value={form.observacoes}
                   onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
-                  placeholder="Instagram, indicação, WhatsApp..."
+                  placeholder={evento.pergunta_inscricao ? "" : "Instagram, indicação, WhatsApp..."}
                   rows={2}
                 />
               </div>

@@ -174,6 +174,7 @@ const Eventos = () => {
         descricao: data.descricao || null, pago: data.pago,
         valor: data.pago && data.valor ? parseFloat(data.valor) : 0, comunidade: data.comunidade,
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
+        pergunta_inscricao: data.pergunta_inscricao || null,
       }).select("id, nome, tipo, data").single();
       if (error) throw error;
 
@@ -228,6 +229,7 @@ const Eventos = () => {
         descricao: data.descricao || null, pago: data.pago,
         valor: data.pago && data.valor ? parseFloat(data.valor) : 0, comunidade: data.comunidade,
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
+        pergunta_inscricao: data.pergunta_inscricao || null,
       }).eq("id", id);
       if (error) throw error;
 
@@ -263,6 +265,7 @@ const Eventos = () => {
           descricao: form.descricao || null, pago: form.pago,
           valor: form.pago && form.valor ? parseFloat(form.valor) : 0, comunidade: form.comunidade,
           produto_id: form.produto_id || null, turma_id: form.turma_id || null,
+          pergunta_inscricao: form.pergunta_inscricao || null,
         }));
       }
     },
@@ -289,6 +292,7 @@ const Eventos = () => {
       comunidade: e.comunidade || false, vincular_turma: !!(e.produto_id && !e.comunidade),
       produto_id: e.produto_id || "", turma_id: e.turma_id || "",
       checklist_template_id: e.checklist_template_id || "",
+      pergunta_inscricao: e.pergunta_inscricao || "",
     });
     setEditingId(e.id); setDialogOpen(true);
   };

@@ -23,13 +23,14 @@ export interface EventoForm {
   produto_id: string;
   turma_id: string;
   checklist_template_id: string;
+  pergunta_inscricao: string;
 }
 
 export const emptyForm: EventoForm = {
   nome: "", data: "", local: "", tipo: "", responsavelIds: [],
   limite_participantes: "", descricao: "", pago: false, valor: "",
   comunidade: false, vincular_turma: false, produto_id: "", turma_id: "",
-  checklist_template_id: "",
+  checklist_template_id: "", pergunta_inscricao: "",
 };
 
 interface Props {
@@ -208,6 +209,18 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
           <div className="space-y-2">
             <Label>Descrição</Label>
             <Textarea value={form.descricao} onChange={(e) => u("descricao", e.target.value)} placeholder="Descrição do evento" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Pergunta extra no formulário de inscrição</Label>
+            <Input
+              value={form.pergunta_inscricao}
+              onChange={(e) => u("pergunta_inscricao", e.target.value)}
+              placeholder='Ex: "Qual sua maior dificuldade hoje?" (opcional)'
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Se preenchida, esta pergunta substitui "Como ficou sabendo?" no formulário público.
+            </p>
           </div>
 
           <Button className="w-full" onClick={onSubmit} disabled={isPending}>
