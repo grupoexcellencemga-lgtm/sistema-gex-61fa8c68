@@ -49,8 +49,8 @@
     --sidebar-foreground: 220 39% 11%;
     --sidebar-primary: 39 90% 41%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 39 90% 41%; /* Light orange accent used in transparency */
-    --sidebar-accent-foreground: 25 95% 53%;
+    --sidebar-accent: 39 80% 93%;  /* tint claro âmbar */
+    --sidebar-accent-foreground: 39 90% 41%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 39 90% 41%;
     --sidebar-muted: 215 16% 47%;
