@@ -78,8 +78,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex shrink-0 items-center justify-center -ml-1">
-            <img src="/logo.png" alt="GEx" className="h-14 w-14 object-contain" />
+          <div className="shrink-0 overflow-hidden relative w-9 h-9">
+            <img src="/logo.png" alt="GEx" className="absolute w-16 h-16 -top-3.5 -left-3.5 object-contain" />
           </div>
           {!collapsed && (
             <div className="flex flex-col">
