@@ -40,7 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div
           className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-[0.04]"
           style={{
-            background: "radial-gradient(circle, #F5A623 0%, transparent 70%)",
+            background: "radial-gradient(circle, #B9975B 0%, transparent 70%)",
             transform: "translate(20%, -30%)",
           }}
         />
