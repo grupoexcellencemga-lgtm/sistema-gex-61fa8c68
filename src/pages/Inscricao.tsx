@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarDays, MapPin, CheckCircle2, Users, DollarSign } from "lucide-react";
-import { formatDate, formatCurrencyNullable as formatCurrency } from "@/lib/formatters";
+import { Loader2, CalendarDays, MapPin, CheckCircle2 } from "lucide-react";
+import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 
 const Inscricao = () => {
@@ -114,31 +114,11 @@ const Inscricao = () => {
       <div className="bg-primary text-primary-foreground py-10 px-4 text-center">
         <p className="text-sm uppercase tracking-widest opacity-80 mb-2">Inscrição</p>
         <h1 className="text-3xl font-bold max-w-xl mx-auto leading-tight">{evento.nome}</h1>
-        <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-sm opacity-90">
-          {evento.data && (
-            <span className="flex items-center gap-1.5">
-              <CalendarDays className="h-4 w-4" /> {formatDate(evento.data)}
-            </span>
-          )}
-          {evento.local && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" /> {evento.local}
-            </span>
-          )}
-          {evento.pago ? (
-            <span className="flex items-center gap-1.5">
-              <DollarSign className="h-4 w-4" /> {formatCurrency(evento.valor)}
-            </span>
-          ) : (
-            <span className="bg-white/20 rounded-full px-3 py-0.5 text-xs font-medium">Gratuito</span>
-          )}
-          {vagas !== null && (
-            <span className="flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              {esgotado ? "Vagas esgotadas" : `${vagas} vaga${vagas !== 1 ? "s" : ""} disponíve${vagas !== 1 ? "is" : "l"}`}
-            </span>
-          )}
-        </div>
+        {evento.data && (
+          <p className="mt-3 text-sm opacity-80 flex items-center justify-center gap-1.5">
+            <CalendarDays className="h-4 w-4" /> {formatDate(evento.data)}
+          </p>
+        )}
       </div>
 
       <div className="flex-1 flex items-start justify-center px-4 py-10">
