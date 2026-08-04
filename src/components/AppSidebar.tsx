@@ -78,17 +78,9 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div
-            className="shrink-0 w-9 h-9"
-            style={{
-              backgroundImage: "url(/logo.png)",
-              backgroundSize: "200%",
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-            }}
-            role="img"
-            aria-label="GEx"
-          />
+          <div className="shrink-0 flex items-center justify-center">
+            <img src="/logo.png" alt="GEx" className="h-9 w-9 object-contain" />
+          </div>
           {!collapsed && (
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
