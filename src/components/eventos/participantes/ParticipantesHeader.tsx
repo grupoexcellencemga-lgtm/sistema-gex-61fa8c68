@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { UTMLinksDialog } from "./UTMLinksDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,7 +17,6 @@ import {
   Package,
   Link2,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   formatDate,
   formatCurrencyNullable as formatCurrency,
@@ -48,6 +48,7 @@ export function ParticipantesHeader({
   onOpenAdd,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [utmOpen, setUtmOpen] = useState(false);
 
   const isPago = evento.pago;
   const total = participantes.length;
@@ -164,16 +165,10 @@ export function ParticipantesHeader({
           <Button variant="outline" size="sm" onClick={onOpenMetrics}>
             <BarChart3 className="h-4 w-4 mr-1" /> Métricas
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const link = `${window.location.origin}/inscricao/${evento.id}`;
-              navigator.clipboard.writeText(link).then(() => toast.success("Link de inscrição copiado!"));
-            }}
-          >
-            <Link2 className="h-4 w-4 mr-1" /> Link de inscrição
+          <Button variant="outline" size="sm" onClick={() => setUtmOpen(true)}>
+            <Link2 className="h-4 w-4 mr-1" /> Links de inscrição
           </Button>
+          <UTMLinksDialog open={utmOpen} onOpenChange={setUtmOpen} evento={evento} />
           <Button size="sm" onClick={onOpenAdd}>
             <UserPlus className="h-4 w-4 mr-1" /> Adicionar
           </Button>

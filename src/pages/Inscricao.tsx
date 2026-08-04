@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { toast } from "sonner";
 
 const Inscricao = () => {
   const { eventoId } = useParams<{ eventoId: string }>();
+  const [searchParams] = useSearchParams();
+  const utmSource = searchParams.get("utm_source") ?? undefined;
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", observacoes: "" });
   const [submitted, setSubmitted] = useState(false);
 
@@ -55,6 +57,7 @@ const Inscricao = () => {
         status_pagamento: evento?.pago ? "pendente" : "gratuito",
         presenca: false,
         comprovantes_urls: [],
+        utm_source: utmSource ?? null,
       });
       if (error) throw error;
     },
