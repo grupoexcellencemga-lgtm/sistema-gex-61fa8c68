@@ -129,6 +129,18 @@ const Funil = () => {
     enabled: !!selectedQuadroId,
   });
 
+  const { data: allEtapas = [] } = useQuery<FunilEtapa[]>({
+    queryKey: ["funil-etapas-all"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("*")
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as FunilEtapa[];
+    },
+  });
+
   const { data: produtos = [] } = useQuery<ProdutoSelect[]>({
     queryKey: ["produtos"],
     queryFn: async () => {
@@ -385,8 +397,7 @@ const Funil = () => {
   // ── Mutations: leads ──
   const insertMutation = useMutation({
     mutationFn: async (data: LeadForm) => {
-      const primeiraEtapa = [...etapas].sort((a, b) => a.ordem - b.ordem)[0];
-      if (!primeiraEtapa) throw new Error("Crie ao menos uma coluna no funil antes de cadastrar leads.");
+      if (!data.etapa_id) throw new Error("Selecione uma coluna no funil antes de cadastrar.");
       const { error } = await supabase.from("leads").insert({
         nome: data.nome,
         email: data.email || null,
@@ -396,7 +407,7 @@ const Funil = () => {
         origem: data.origem ? data.origem.toLowerCase() : null,
         observacoes: data.observacoes || null,
         responsavel_id: data.responsavel_id && data.responsavel_id !== "none" ? data.responsavel_id : null,
-        etapa_id: primeiraEtapa.id,
+        etapa_id: data.etapa_id,
       } as any);
       if (error) throw error;
     },
@@ -439,7 +450,11 @@ const Funil = () => {
       const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem });
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna criada"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas-all"] });
+      toast.success("Coluna criada");
+    },
     onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
   });
 
@@ -448,7 +463,11 @@ const Funil = () => {
       const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna atualizada"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas-all"] });
+      toast.success("Coluna atualizada");
+    },
     onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
   });
 
@@ -459,7 +478,11 @@ const Funil = () => {
       const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }); toast.success("Coluna excluída"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas-all"] });
+      toast.success("Coluna excluída");
+    },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
@@ -471,7 +494,10 @@ const Funil = () => {
       const error = results.find((r) => r.error)?.error;
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas", selectedQuadroId] });
+      queryClient.invalidateQueries({ queryKey: ["funil-etapas-all"] });
+    },
     onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
   });
 
@@ -507,6 +533,7 @@ const Funil = () => {
 
   const saveLead = () => {
     if (!form.nome.trim()) { toast.error("Nome é obrigatório"); return; }
+    if (!form.etapa_id) { toast.error("Selecione uma coluna no funil"); return; }
     insertMutation.mutate(form);
   };
 
@@ -525,6 +552,8 @@ const Funil = () => {
         isPending={insertMutation.isPending}
         produtos={produtos}
         comerciais={comerciais}
+        quadros={quadros}
+        allEtapas={allEtapas}
       />
       <FunilEtapaDialog
         open={etapaDialogOpen}
@@ -737,7 +766,11 @@ const Funil = () => {
                   <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />Nova Coluna
                   </Button>
-                  <Button onClick={() => { setForm(emptyLeadForm); setDialogOpen(true); }}>
+                  <Button onClick={() => {
+                    const primeiraEtapa = [...etapas].sort((a, b) => a.ordem - b.ordem)[0];
+                    setForm({ ...emptyLeadForm, quadro_id: selectedQuadroId || "", etapa_id: primeiraEtapa?.id || "" });
+                    setDialogOpen(true);
+                  }}>
                     <Plus className="h-4 w-4 mr-2" />Novo Lead
                   </Button>
                 </>

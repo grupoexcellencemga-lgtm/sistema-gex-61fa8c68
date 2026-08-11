@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { maskPhone } from "@/lib/utils";
-import { LeadForm, origens, cidades } from "./funilUtils";
+import { LeadForm, origens, cidades, type FunilEtapa } from "./funilUtils";
 
 interface Props {
   open: boolean;
@@ -17,11 +17,24 @@ interface Props {
   isPending: boolean;
   produtos: any[];
   comerciais: any[];
+  quadros: { id: string; nome: string }[];
+  allEtapas: FunilEtapa[];
   title?: string;
 }
 
-export function LeadFormDialog({ open, onOpenChange, form, setForm, onSave, isPending, produtos, comerciais, title = "Cadastrar Novo Lead" }: Props) {
+export function LeadFormDialog({ open, onOpenChange, form, setForm, onSave, isPending, produtos, comerciais, quadros = [], allEtapas = [], title = "Cadastrar Novo Lead" }: Props) {
   const u = (field: keyof LeadForm, value: string) => setForm({ ...form, [field]: value });
+
+  const handleQuadroChange = (quadroId: string) => {
+    const primeiraEtapa = allEtapas
+      .filter((e) => e.quadro_id === quadroId)
+      .sort((a, b) => a.ordem - b.ordem)[0];
+    setForm({ ...form, quadro_id: quadroId, etapa_id: primeiraEtapa?.id || "" });
+  };
+
+  const etapasDoCuadro = allEtapas
+    .filter((e) => e.quadro_id === form.quadro_id)
+    .sort((a, b) => a.ordem - b.ordem);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -32,6 +45,27 @@ export function LeadFormDialog({ open, onOpenChange, form, setForm, onSave, isPe
             <Label>Nome *</Label>
             <Input value={form.nome} onChange={(e) => u("nome", e.target.value)} placeholder="Nome do lead" />
           </div>
+
+          {/* Funil + Coluna */}
+          <div>
+            <Label>Funil *</Label>
+            <Select value={form.quadro_id} onValueChange={handleQuadroChange}>
+              <SelectTrigger><SelectValue placeholder="Selecione o funil" /></SelectTrigger>
+              <SelectContent>
+                {quadros.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Coluna *</Label>
+            <Select value={form.etapa_id} onValueChange={(v) => u("etapa_id", v)} disabled={!form.quadro_id || etapasDoCuadro.length === 0}>
+              <SelectTrigger><SelectValue placeholder="Selecione a coluna" /></SelectTrigger>
+              <SelectContent>
+                {etapasDoCuadro.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label>Email</Label>
             <Input type="email" value={form.email} onChange={(e) => u("email", e.target.value)} placeholder="email@email.com" />
