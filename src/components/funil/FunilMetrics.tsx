@@ -1,5 +1,5 @@
 import { MetricCard } from "@/components/MetricCard";
-import { Users, TrendingUp, Clock, UserX, DollarSign } from "lucide-react";
+import { Users, TrendingUp, Clock, UserX, DollarSign, CalendarDays } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import type { LeadRow, ProdutoSelect } from "@/types";
 import { calcularTaxaConversao, calcularTempoMedioConversao, type FunilEtapa } from "./funilUtils";
@@ -8,9 +8,44 @@ interface Props {
   leads: LeadRow[];
   produtos: ProdutoSelect[];
   etapas: FunilEtapa[];
+  dataFiltro?: string;
 }
 
-export function FunilMetrics({ leads, produtos, etapas }: Props) {
+export function FunilMetrics({ leads, produtos, etapas, dataFiltro }: Props) {
+  // ── Modo "Ver por dia" ──
+  if (dataFiltro) {
+    const leadsNoDia = leads.filter((l) => l.created_at.slice(0, 10) === dataFiltro);
+    const etapasOrdenadas = [...etapas].sort((a, b) => a.ordem - b.ordem);
+    const [ano, mes, dia] = dataFiltro.split("-");
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+
+    return (
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-primary">{dataFormatada}</span>
+          <span className="text-sm text-muted-foreground">·</span>
+          <span className="text-sm font-semibold">{leadsNoDia.length} lead{leadsNoDia.length !== 1 ? "s" : ""} adicionado{leadsNoDia.length !== 1 ? "s" : ""}</span>
+        </div>
+        {leadsNoDia.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {etapasOrdenadas.map((etapa) => {
+              const count = leadsNoDia.filter((l) => (l as any).etapa_id === etapa.id).length;
+              if (count === 0) return null;
+              return (
+                <div key={etapa.id} className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">{etapa.nome}:</span>
+                  <span className="text-sm font-semibold">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Modo padrão (métricas mensais) ──
   const now = new Date();
   const mesAtual = now.getMonth();
   const anoAtual = now.getFullYear();

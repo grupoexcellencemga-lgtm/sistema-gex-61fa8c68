@@ -41,10 +41,11 @@ interface Filters {
   produto_interesse: string;
   origem: string;
   cidade: string;
+  data: string;
 }
 
 const defaultFilters: Filters = {
-  search: "", responsavel_id: "todos", produto_interesse: "todos", origem: "todos", cidade: "todos",
+  search: "", responsavel_id: "todos", produto_interesse: "todos", origem: "todos", cidade: "todos", data: "",
 };
 
 const Funil = () => {
@@ -215,6 +216,7 @@ const Funil = () => {
       if (filters.produto_interesse !== "todos" && l.produto_interesse !== filters.produto_interesse) return false;
       if (filters.origem !== "todos" && l.origem !== filters.origem) return false;
       if (filters.cidade !== "todos" && l.cidade !== filters.cidade) return false;
+      if (filters.data && l.created_at.slice(0, 10) !== filters.data) return false;
       return true;
     });
   }, [quadroLeads, debouncedSearch, filters]);
@@ -749,7 +751,7 @@ const Funil = () => {
               </div>
             ) : (
               <>
-                {!loading && <FunilMetrics leads={quadroLeads} produtos={produtos} etapas={etapas} />}
+                {!loading && <FunilMetrics leads={quadroLeads} produtos={produtos} etapas={etapas} dataFiltro={filters.data || undefined} />}
                 <FunilFilters filters={filters} setFilters={setFilters} comerciais={comerciais} produtos={produtos} />
 
                 {loading ? (

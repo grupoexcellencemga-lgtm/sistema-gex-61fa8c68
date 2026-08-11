@@ -1,7 +1,8 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, CalendarDays, X } from "lucide-react";
 import { origens, cidades } from "./funilUtils";
 import type { ProdutoSelect, ComercialSelect } from "@/types";
 
@@ -11,6 +12,7 @@ interface Filters {
   produto_interesse: string;
   origem: string;
   cidade: string;
+  data: string;
 }
 
 interface Props {
@@ -76,6 +78,28 @@ export function FunilFilters({ filters, setFilters, comerciais, produtos }: Prop
             {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="w-[160px]">
+        <Label className="text-xs">Ver por dia</Label>
+        <div className="relative flex items-center">
+          <CalendarDays className="absolute left-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="date"
+            value={filters.data}
+            onChange={(e) => u("data", e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {filters.data && (
+            <Button
+              variant="ghost" size="icon"
+              className="absolute right-0 h-9 w-7 shrink-0"
+              onClick={() => u("data", "")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
