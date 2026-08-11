@@ -23,7 +23,9 @@ import {
   Sparkles,
   AlertTriangle,
   RefreshCw,
+  Globe,
 } from "lucide-react";
+import { PaginaPublicaTab } from "./pagina-publica/PaginaPublicaTab";
 import { toast } from "sonner";
 import {
   definirChecklistDoEvento,
@@ -226,6 +228,7 @@ export function EventoDetailSheet({
           <TabsTrigger value="materiais" className="gap-1"><Package className="h-4 w-4" /> Materiais</TabsTrigger>
           <TabsTrigger value="notificacoes" className="gap-1"><Bell className="h-4 w-4" /> Notificações</TabsTrigger>
           <TabsTrigger value="historico" className="gap-1"><History className="h-4 w-4" /> Histórico</TabsTrigger>
+          <TabsTrigger value="pagina-publica" className="gap-1"><Globe className="h-4 w-4" /> Página Pública</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-4">
@@ -375,6 +378,10 @@ export function EventoDetailSheet({
 
         <TabsContent value="historico">
           <EventoHistoricoTab eventoId={evento.id} />
+        </TabsContent>
+
+        <TabsContent value="pagina-publica" className="space-y-4">
+          <PaginaPublicaTab evento={eventoAtual} />
         </TabsContent>
       </Tabs>
     </div>
