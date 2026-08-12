@@ -59,9 +59,11 @@ export interface SecaoEstilo {
 
 export interface SecaoDados {
   // hero
+  variante?: string;
   titulo_override?: string;
   subtitulo?: string;
   cta_texto?: string;
+  eyebrow?: string;
   // sobre
   texto?: string;
   imagem_url?: string;

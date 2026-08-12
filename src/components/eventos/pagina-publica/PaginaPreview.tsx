@@ -89,6 +89,183 @@ export function SecaoHero({
   );
 }
 
+/* ─── Hero Editorial ──────────────────────────────────────── */
+export function SecaoHeroEditorial({
+  evento,
+  dados,
+  estilo,
+  onInscrever,
+}: {
+  evento: any;
+  dados: any;
+  estilo?: SecaoEstilo;
+  onInscrever: () => void;
+}) {
+  const stone = "#F2EFE8";
+  const dark = "#0B0B0B";
+  const gold = "#B69A61";
+  const muted = "#88847C";
+
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo) }}>
+      {/* Thin top rule */}
+      <div style={{ height: "1px", backgroundColor: `${dark}1A` }} />
+
+      {/* Main grid */}
+      <div
+        className="mx-auto grid md:grid-cols-12 items-center gap-8 md:gap-12 px-6 md:px-16"
+        style={{ maxWidth: "1280px", paddingTop: "clamp(48px, 6vw, 96px)", paddingBottom: "clamp(48px, 6vw, 96px)" }}
+      >
+        {/* Left: text content */}
+        <div className="md:col-span-7 flex flex-col gap-5">
+          {/* Eyebrow */}
+          <div className="flex items-center gap-2.5">
+            <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+              {dados?.eyebrow || "EVENTO EXCLUSIVO"}
+            </span>
+            <span style={{ height: "1px", width: "24px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+          </div>
+
+          {/* Headline */}
+          <h1
+            style={{
+              color: dark,
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "-0.04em",
+              lineHeight: 0.92,
+              fontSize: "clamp(36px, 5vw, 72px)",
+              margin: 0,
+            }}
+          >
+            {evento.nome}
+          </h1>
+
+          {/* Thin rule */}
+          <div style={{ height: "1px", backgroundColor: `${dark}26`, maxWidth: "200px" }} />
+
+          {/* Subtitle */}
+          {dados?.subtitulo && (
+            <p style={{ color: "#55524D", fontSize: "17px", lineHeight: 1.65, maxWidth: "480px", margin: 0 }}>
+              {dados.subtitulo}
+            </p>
+          )}
+
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-5" style={{ color: muted, fontSize: "13px" }}>
+            {evento.data && (
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" style={{ color: gold }} />
+                {formatDate(evento.data)}
+              </span>
+            )}
+            {evento.local && (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" style={{ color: gold }} />
+                {evento.local}
+              </span>
+            )}
+          </div>
+
+          {/* CTA */}
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              onClick={onInscrever}
+              className="group/cta"
+              style={{
+                backgroundColor: dark,
+                color: stone,
+                padding: "14px 28px",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                transition: "background-color 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = gold)}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = dark)}
+            >
+              {dados?.cta_texto || "Saiba mais"} →
+            </button>
+            {evento.valor > 0 && (
+              <span style={{ color: muted, fontSize: "14px" }}>{formatValor(evento.valor)}</span>
+            )}
+            {!evento.pago && (
+              <span style={{ color: gold, fontWeight: 600, fontSize: "14px" }}>Gratuito</span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: photo */}
+        <div className="md:col-span-5">
+          <div style={{ aspectRatio: "4/5", overflow: "hidden", borderRadius: "4px", position: "relative" }}>
+            {evento.banner_url ? (
+              <img
+                src={evento.banner_url}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9) contrast(1.03)" }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(135deg, #E2DDD3 0%, #C8C4BC 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span style={{ color: muted, fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  Foto do evento
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom info strip */}
+      <div style={{ borderTop: `1px solid ${dark}1A`, borderBottom: `1px solid ${dark}1A` }}>
+        <div
+          className="mx-auto flex flex-wrap gap-8 px-6 md:px-16"
+          style={{ maxWidth: "1280px", paddingTop: "14px", paddingBottom: "14px" }}
+        >
+          {evento.data && (
+            <div>
+              <span style={{ color: gold, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", fontSize: "10px", display: "block", marginBottom: "2px" }}>
+                Data
+              </span>
+              <span style={{ color: muted, fontSize: "13px" }}>{formatDate(evento.data)}</span>
+            </div>
+          )}
+          {evento.local && (
+            <div>
+              <span style={{ color: gold, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", fontSize: "10px", display: "block", marginBottom: "2px" }}>
+                Local
+              </span>
+              <span style={{ color: muted, fontSize: "13px" }}>{evento.local}</span>
+            </div>
+          )}
+          {evento.valor > 0 && (
+            <div>
+              <span style={{ color: gold, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", fontSize: "10px", display: "block", marginBottom: "2px" }}>
+                Investimento
+              </span>
+              <span style={{ color: muted, fontSize: "13px" }}>{formatValor(evento.valor)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── Sobre ───────────────────────────────────────────────── */
 export function SecaoSobre({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   if (!dados?.texto) return null;
@@ -386,7 +563,10 @@ export function SecaoCTA({
 export function renderSecao(secao: Secao, evento: any, onInscrever: () => void) {
   const { tipo, dados, estilo } = secao;
   switch (tipo) {
-    case "hero":         return <SecaoHero evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
+    case "hero":
+      if (dados?.variante === "editorial")
+        return <SecaoHeroEditorial evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
+      return <SecaoHero evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
     case "sobre":        return <SecaoSobre dados={dados} estilo={estilo} />;
     case "beneficios":   return <SecaoBeneficios dados={dados} estilo={estilo} />;
     case "garantias":    return <SecaoGarantias dados={dados} estilo={estilo} />;

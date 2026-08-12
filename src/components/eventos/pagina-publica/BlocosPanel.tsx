@@ -138,6 +138,33 @@ function ThumbFaq() {
   );
 }
 
+function ThumbHeroEditorial() {
+  return (
+    <div className="w-full h-full overflow-hidden rounded-sm" style={{ backgroundColor: "#F2EFE8" }}>
+      <div style={{ height: "1px", backgroundColor: "rgba(11,11,11,0.15)" }} />
+      <div className="flex gap-1.5 p-2" style={{ height: "calc(100% - 7px)" }}>
+        {/* Left: text */}
+        <div className="flex flex-col justify-center gap-1 flex-1">
+          <div style={{ height: "1px", width: "18px", backgroundColor: "#B69A61" }} />
+          <div style={{ height: "3px", backgroundColor: "#0B0B0B", borderRadius: "1px", width: "100%" }} />
+          <div style={{ height: "3px", backgroundColor: "#0B0B0B", borderRadius: "1px", width: "85%" }} />
+          <div style={{ height: "3px", backgroundColor: "#0B0B0B", borderRadius: "1px", width: "65%" }} />
+          <div style={{ height: "0.5px", backgroundColor: "rgba(11,11,11,0.2)", margin: "2px 0" }} />
+          <div style={{ height: "1.5px", backgroundColor: "#88847C", borderRadius: "1px", width: "100%", opacity: 0.5 }} />
+          <div style={{ height: "1.5px", backgroundColor: "#88847C", borderRadius: "1px", width: "70%", opacity: 0.5 }} />
+          <div style={{ height: "6px", backgroundColor: "#0B0B0B", borderRadius: "1px", width: "42%", marginTop: "3px" }} />
+        </div>
+        {/* Right: photo */}
+        <div style={{ width: "38%", backgroundColor: "#C8C4BC", borderRadius: "2px", flexShrink: 0, aspectRatio: "4/5" }} />
+      </div>
+      <div style={{ borderTop: "0.5px solid rgba(11,11,11,0.15)", height: "6px", display: "flex", alignItems: "center", gap: "6px", padding: "0 8px" }}>
+        <div style={{ height: "1.5px", width: "22px", backgroundColor: "#B69A61", borderRadius: "1px" }} />
+        <div style={{ height: "1.5px", width: "16px", backgroundColor: "#88847C", borderRadius: "1px", opacity: 0.5 }} />
+      </div>
+    </div>
+  );
+}
+
 function ThumbLocal() {
   return (
     <div className="w-full h-full p-2.5 bg-white dark:bg-zinc-900 flex flex-col justify-center">
@@ -160,6 +187,7 @@ interface BlocoTemplate {
   nome: string;
   categoria: string;
   thumbnail: React.ReactNode;
+  initialDados?: Record<string, any>;
 }
 
 const CATEGORIAS = [
@@ -176,6 +204,7 @@ const CATEGORIAS = [
 
 const TEMPLATES: BlocoTemplate[] = [
   { tipo: "hero",         nome: "Header_01",      categoria: "Headers",     thumbnail: <ThumbHero /> },
+  { tipo: "hero",         nome: "Header_02",      categoria: "Headers",     thumbnail: <ThumbHeroEditorial />, initialDados: { variante: "editorial", subtitulo: "", cta_texto: "Saiba mais", eyebrow: "EVENTO EXCLUSIVO" } },
   { tipo: "sobre",        nome: "Sobre_01",        categoria: "Sobre",       thumbnail: <ThumbSobre /> },
   { tipo: "beneficios",   nome: "Benefício_01",    categoria: "Benefícios",  thumbnail: <ThumbBeneficios /> },
   { tipo: "garantias",    nome: "Garantias_01",    categoria: "Garantias",   thumbnail: <ThumbGarantias /> },
@@ -190,7 +219,7 @@ const TEMPLATES: BlocoTemplate[] = [
 
 interface Props {
   onClose: () => void;
-  onSelect: (tipo: SecaoTipo) => void;
+  onSelect: (tipo: SecaoTipo, initialDados?: Record<string, any>) => void;
 }
 
 export function BlocosPanel({ onClose, onSelect }: Props) {
@@ -260,7 +289,7 @@ export function BlocosPanel({ onClose, onSelect }: Props) {
             <button
               key={tpl.nome}
               className="w-full text-left group/card"
-              onClick={() => onSelect(tpl.tipo)}
+              onClick={() => onSelect(tpl.tipo, tpl.initialDados)}
               title={`Adicionar ${tpl.nome}`}
             >
               <div className="rounded-lg border overflow-hidden group-hover/card:border-cyan-400 group-hover/card:shadow-md transition-all">

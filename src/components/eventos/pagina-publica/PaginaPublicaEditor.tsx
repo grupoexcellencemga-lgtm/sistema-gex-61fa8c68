@@ -208,13 +208,13 @@ export function PaginaPublicaEditor({
     salvar.mutate({ pagina_secoes: reordenadas });
   };
 
-  const adicionarSecao = (tipo: SecaoTipo, atIndex: number) => {
+  const adicionarSecao = (tipo: SecaoTipo, atIndex: number, initialDados?: Record<string, any>) => {
     const nova: Secao = {
       id: crypto.randomUUID(),
       tipo,
       ativo: true,
       ordem: atIndex,
-      dados: { ...DEFAULT_DADOS[tipo] },
+      dados: { ...DEFAULT_DADOS[tipo], ...(initialDados ?? {}) },
     };
     const copia = [...localSecoes];
     copia.splice(atIndex, 0, nova);
@@ -410,7 +410,7 @@ export function PaginaPublicaEditor({
           {leftPanel === "blocos" && (
             <BlocosPanel
               onClose={() => setLeftPanel(null)}
-              onSelect={(tipo) => adicionarSecao(tipo, addAtIndex)}
+              onSelect={(tipo, initialDados) => adicionarSecao(tipo, addAtIndex, initialDados)}
             />
           )}
 
