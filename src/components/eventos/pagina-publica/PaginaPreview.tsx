@@ -266,6 +266,393 @@ export function SecaoHeroEditorial({
   );
 }
 
+/* ─── Sobre Editorial (ExperienceSection) ────────────────── */
+export function SecaoSobreEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  if (!dados?.texto) return null;
+  const dark = "#0B0B0B", cream = "#F2EFE8", gold = "#B69A61";
+  return (
+    <section style={{ backgroundColor: dark, color: cream, ...buildSectionStyle(estilo), padding: "clamp(80px,10vw,160px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="grid md:grid-cols-12 gap-8 items-start">
+          <div className="md:col-span-3 flex items-center gap-3">
+            <span style={{ color: `${cream}99`, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+              {dados.titulo_secao || "A EXPERIÊNCIA"}
+            </span>
+            <span style={{ height: "1px", width: "40px", backgroundColor: `${cream}2B`, display: "inline-block" }} />
+          </div>
+          <div className="md:col-span-9">
+            <p style={{ fontWeight: 800, textTransform: "uppercase", color: cream, lineHeight: 0.92, letterSpacing: "-0.05em", fontSize: "clamp(32px,6vw,80px)", whiteSpace: "pre-line", margin: 0 }}>
+              {dados.texto}
+            </p>
+          </div>
+        </div>
+        <div style={{ height: "1px", backgroundColor: `${cream}2B`, margin: "clamp(55px,8vw,110px) 0" }} />
+        {dados.imagem_url && (
+          <div className="grid md:grid-cols-12">
+            <div className="md:col-span-9 md:col-start-4">
+              <img src={dados.imagem_url} alt="" style={{ width: "100%", height: "clamp(260px,35vw,480px)", objectFit: "cover", filter: "saturate(0.6)" }} />
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Benefícios Editorial (CommunityExperienceSection) ───── */
+export function SecaoBeneficiosEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const lista: Beneficio[] = dados?.beneficios ?? [];
+  if (!lista.length) return null;
+  const stone = "#F2EFE8", dark = "#0B0B0B", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo), padding: "clamp(80px,9vw,150px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="grid md:grid-cols-12 gap-8 md:gap-12 items-start">
+          <div className="md:col-span-7 flex flex-col gap-8">
+            <div className="flex items-center gap-2.5">
+              <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                {dados.titulo_secao || "O QUE VOCÊ VAI VIVER"}
+              </span>
+              <span style={{ height: "1px", width: "24px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+            </div>
+            <div>
+              {lista.map((b) => (
+                <div key={b.id} style={{ borderTop: `1px solid ${dark}1A`, padding: "clamp(18px,2.5vw,28px) 0" }}>
+                  <div className="flex items-start gap-4">
+                    <span style={{ fontSize: "22px", minWidth: "28px", lineHeight: 1 }}>{b.icone}</span>
+                    <div>
+                      <h3 style={{ color: dark, fontWeight: 700, fontSize: "15px", letterSpacing: "-0.02em", marginBottom: "5px", textTransform: "uppercase" }}>{b.titulo}</h3>
+                      <p style={{ color: muted, fontSize: "14px", lineHeight: 1.65, margin: 0 }}>{b.texto}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ borderTop: `1px solid ${dark}1A` }} />
+            </div>
+          </div>
+          <div className="md:col-span-5 hidden md:block" style={{ position: "relative", height: "460px" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, width: "78%", height: "72%", backgroundColor: "#E2DDD3", borderRadius: "4px" }} />
+            <div style={{ position: "absolute", bottom: 0, right: 0, width: "62%", height: "54%", backgroundColor: "#C8C4BC", borderRadius: "4px", border: `4px solid ${stone}` }} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Palestrantes Editorial (JourneyLeaderSection) ───────── */
+export function SecaoPalestrantesEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const lista: Palestrante[] = dados?.palestrantes ?? [];
+  if (!lista.length) return null;
+  const lider = lista[0];
+  const stone = "#F2EFE8", dark = "#0B0B0B", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo), padding: "clamp(100px,12vw,190px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="flex items-center gap-3 mb-12">
+          <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+            03
+          </span>
+          <span style={{ height: "1px", width: "32px", backgroundColor: `${dark}29`, display: "inline-block" }} />
+          <span style={{ color: muted, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+            QUEM CONDUZ
+          </span>
+        </div>
+        <h2 style={{ fontWeight: 800, textTransform: "uppercase", color: dark, lineHeight: 0.90, letterSpacing: "-0.05em", fontSize: "clamp(40px,7vw,100px)", maxWidth: "1100px", marginBottom: "clamp(60px,8vw,120px)" }}>
+          {lider.nome}
+        </h2>
+        <div className="grid md:grid-cols-12 gap-8 md:gap-16 items-start">
+          <div className="md:col-span-5">
+            {lider.foto_url ? (
+              <img src={lider.foto_url} alt={lider.nome} style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: "4px", filter: "saturate(0.85)" }} />
+            ) : (
+              <div style={{ width: "100%", aspectRatio: "3/4", backgroundColor: "#C8C4BC", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: muted, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Foto</span>
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-7 flex flex-col justify-center gap-6 pt-4">
+            <div>
+              <p style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "6px" }}>
+                {lider.cargo || "LÍDER & MENTORA"}
+              </p>
+              <h3 style={{ color: dark, fontSize: "clamp(22px,2.5vw,32px)", fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>{lider.nome}</h3>
+            </div>
+            <div style={{ height: "1px", backgroundColor: `${dark}1A`, maxWidth: "120px" }} />
+            <p style={{ color: muted, fontSize: "16px", lineHeight: 1.7, margin: 0 }}>{lider.bio}</p>
+            {lista.length > 1 && (
+              <div className="flex flex-wrap gap-4 pt-2">
+                {lista.slice(1).map((p) => (
+                  <div key={p.id} className="flex items-center gap-2.5">
+                    {p.foto_url ? (
+                      <img src={p.foto_url} alt={p.nome} style={{ width: "40px", height: "40px", borderRadius: "50%", objectFit: "cover", filter: "saturate(0.8)" }} />
+                    ) : (
+                      <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#C8C4BC" }} />
+                    )}
+                    <div>
+                      <p style={{ color: dark, fontSize: "13px", fontWeight: 700, margin: 0 }}>{p.nome}</p>
+                      <p style={{ color: muted, fontSize: "11px", margin: 0 }}>{p.cargo}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Agenda Editorial (JourneyMapSection) ────────────────── */
+export function SecaoAgendaEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const lista: AgendaItem[] = dados?.itens ?? [];
+  if (!lista.length) return null;
+  const active = lista[activeIdx];
+  const dark = "#0B0B0B", cream = "#F2EFE8", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: dark, color: cream, ...buildSectionStyle(estilo), padding: "clamp(80px,9vw,150px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="flex items-center gap-2.5 mb-12">
+          <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            {dados.titulo_secao || "A JORNADA"}
+          </span>
+          <span style={{ height: "1px", width: "24px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+        </div>
+        {/* Tab strip */}
+        <div className="flex flex-wrap gap-1 mb-10" style={{ borderBottom: `1px solid ${cream}1A` }}>
+          {lista.map((item, i) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveIdx(i)}
+              style={{
+                padding: "8px 20px 10px",
+                fontSize: "13px",
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                color: i === activeIdx ? cream : `${cream}66`,
+                backgroundColor: "transparent",
+                border: "none",
+                borderBottom: i === activeIdx ? `2px solid ${gold}` : "2px solid transparent",
+                cursor: "pointer",
+                transition: "color 0.2s",
+                marginBottom: "-1px",
+              }}
+            >
+              {String(i + 1).padStart(2, "0")}
+            </button>
+          ))}
+        </div>
+        {/* Active content */}
+        <div className="grid md:grid-cols-12 gap-8 md:gap-12 items-start">
+          <div className="md:col-span-7 flex flex-col gap-5">
+            <div>
+              <p style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", margin: "0 0 8px" }}>
+                {active.hora_inicio && active.hora_fim ? `${active.hora_inicio} – ${active.hora_fim}` : active.hora_inicio || ""}
+              </p>
+              <h3 style={{ color: cream, fontWeight: 800, fontSize: "clamp(22px,3vw,38px)", letterSpacing: "-0.04em", lineHeight: 1.05, margin: 0, textTransform: "uppercase" }}>
+                {active.titulo}
+              </h3>
+            </div>
+            {active.descricao && (
+              <p style={{ color: `${cream}CC`, fontSize: "15px", lineHeight: 1.7, borderLeft: `2px solid ${gold}`, paddingLeft: "16px", margin: 0 }}>
+                {active.descricao}
+              </p>
+            )}
+          </div>
+          <div className="md:col-span-5 hidden md:flex items-center justify-end">
+            <div style={{ fontSize: "clamp(80px,12vw,140px)", fontWeight: 900, color: `${cream}0D`, lineHeight: 1, letterSpacing: "-0.05em", userSelect: "none" }}>
+              {String(activeIdx + 1).padStart(2, "0")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Depoimentos Editorial (TestimonialsSection) ─────────── */
+export function SecaoDepoimentosEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const lista: Depoimento[] = dados?.depoimentos ?? [];
+  if (!lista.length) return null;
+  const current = lista[currentIdx];
+  const stone = "#F2EFE8", dark = "#0B0B0B", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo), padding: "clamp(80px,9vw,150px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="flex items-center gap-2.5 mb-12">
+          <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            PROVA SOCIAL
+          </span>
+          <span style={{ height: "1px", width: "24px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+        </div>
+        <div className="grid md:grid-cols-12 gap-8 md:gap-12 items-center">
+          {/* Photo */}
+          <div className="md:col-span-5">
+            <div style={{ aspectRatio: "4/5", borderRadius: "16px", overflow: "hidden", backgroundColor: "#E2DDD3", position: "relative" }}>
+              {current.foto_url ? (
+                <img src={current.foto_url} alt={current.nome} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9) contrast(1.03)" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ color: muted, fontSize: "11px", textTransform: "uppercase" }}>Foto</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Quote */}
+          <div className="md:col-span-6 flex flex-col gap-5">
+            <span style={{ fontSize: "56px", fontFamily: "serif", color: gold, lineHeight: 1, display: "block", marginBottom: "-12px", userSelect: "none" }}>"</span>
+            <blockquote style={{ color: dark, fontSize: "clamp(18px,2.2vw,26px)", lineHeight: 1.4, fontWeight: 500, letterSpacing: "-0.02em", margin: 0 }}>
+              {current.texto.replace(/^["""]|["""]$/g, "")}
+            </blockquote>
+            <div style={{ borderTop: `1px solid ${dark}1A`, paddingTop: "16px", maxWidth: "280px" }}>
+              <p style={{ color: dark, fontSize: "16px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.01em", margin: "0 0 2px" }}>{current.nome}</p>
+              <p style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>{current.cargo}</p>
+            </div>
+            {/* Thumbnail navigation */}
+            {lista.length > 1 && (
+              <div className="flex items-center gap-3 pt-2">
+                {lista.map((d, i) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setCurrentIdx(i)}
+                    style={{
+                      width: "44px", height: "52px", borderRadius: "6px", overflow: "hidden",
+                      opacity: i === currentIdx ? 1 : 0.45,
+                      outline: i === currentIdx ? `2px solid ${gold}` : "none",
+                      outlineOffset: "2px",
+                      transform: i === currentIdx ? "scale(1.05)" : "scale(1)",
+                      transition: "all 0.2s",
+                      cursor: "pointer",
+                      backgroundColor: "#C8C4BC",
+                      border: "none",
+                      padding: 0,
+                    }}
+                  >
+                    {d.foto_url && <img src={d.foto_url} alt={d.nome} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                  </button>
+                ))}
+                <div className="flex items-center gap-2 ml-auto">
+                  <button onClick={() => setCurrentIdx((currentIdx - 1 + lista.length) % lista.length)} style={{ width: "40px", height: "40px", borderRadius: "50%", border: `1px solid ${dark}33`, backgroundColor: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: dark, fontSize: "16px" }}>‹</button>
+                  <button onClick={() => setCurrentIdx((currentIdx + 1) % lista.length)} style={{ width: "40px", height: "40px", borderRadius: "50%", border: `1px solid ${dark}33`, backgroundColor: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: dark, fontSize: "16px" }}>›</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Garantias Editorial (CommunityDecisionSection) ─────── */
+export function SecaoGarantiasEditorial({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const lista: Garantia[] = dados?.garantias ?? [];
+  if (!lista.length) return null;
+  const stone = "#F2EFE8", dark = "#0B0B0B", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo), padding: "clamp(80px,9vw,150px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="flex items-center gap-2.5 mb-10">
+          <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            INVESTIMENTO
+          </span>
+          <span style={{ height: "1px", width: "24px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+        </div>
+        <div className="grid md:grid-cols-12 gap-8 md:gap-16 items-start">
+          <div className="md:col-span-6 flex flex-col gap-4">
+            <h2 style={{ color: dark, fontWeight: 800, fontSize: "clamp(28px,3.5vw,48px)", letterSpacing: "-0.04em", lineHeight: 1.1, margin: 0 }}>
+              {dados.titulo_secao || "Seu investimento para viver essa transformação"}
+            </h2>
+          </div>
+          <div className="md:col-span-6">
+            <div style={{ border: `1px solid ${dark}1A`, borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ backgroundColor: dark, padding: "clamp(24px,3vw,40px)" }}>
+                <p style={{ color: `${stone}99`, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", margin: "0 0 8px" }}>
+                  INCLUÍDO NA JORNADA
+                </p>
+                <div style={{ color: stone, fontSize: "clamp(28px,3.5vw,42px)", fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1.1 }}>
+                  {lista.length} benefícios
+                </div>
+              </div>
+              <div style={{ backgroundColor: `${stone}`, padding: "clamp(20px,2.5vw,32px)" }}>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {lista.map((g) => (
+                    <li key={g.id} className="flex items-start gap-3">
+                      <span style={{ color: gold, fontSize: "16px", lineHeight: 1.4, minWidth: "20px" }}>{g.icone}</span>
+                      <span style={{ color: dark, fontSize: "14px", lineHeight: 1.5 }}>{g.texto}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── FAQ Editorial (CommunityFinalSection) ───────────────── */
+export function SecaoFaqEditorial({ dados, estilo, onInscrever }: { dados: any; estilo?: SecaoEstilo; onInscrever: () => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const lista: FaqItem[] = dados?.faqs ?? [];
+  if (!lista.length) return null;
+  const stone = "#F2EFE8", dark = "#0B0B0B", gold = "#B69A61", muted = "#88847C";
+  return (
+    <section style={{ backgroundColor: stone, ...buildSectionStyle(estilo), padding: "clamp(80px,9vw,150px) 0" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(24px,4vw,72px)" }}>
+        <div className="grid md:grid-cols-12 gap-8 md:gap-16 items-start">
+          {/* Left: label + CTA */}
+          <div className="md:col-span-4 flex flex-col gap-6">
+            <div className="flex items-center gap-2.5">
+              <span style={{ color: gold, fontSize: "11px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" }}>DÚVIDAS FREQUENTES</span>
+              <span style={{ height: "1px", width: "20px", backgroundColor: `${gold}66`, display: "inline-block" }} />
+            </div>
+            <h2 style={{ color: dark, fontWeight: 800, fontSize: "clamp(28px,3vw,44px)", letterSpacing: "-0.04em", lineHeight: 1.05, margin: 0 }}>
+              {dados.titulo_secao || "Perguntas & Respostas"}
+            </h2>
+            <button
+              onClick={onInscrever}
+              style={{ alignSelf: "flex-start", marginTop: "8px", backgroundColor: dark, color: stone, padding: "13px 24px", fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", transition: "background-color 0.2s" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = gold)}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = dark)}
+            >
+              {dados?.cta_texto || "QUERO PARTICIPAR"} →
+            </button>
+          </div>
+          {/* Right: accordion */}
+          <div className="md:col-span-8">
+            {lista.map((item, i) => (
+              <div key={item.id} style={{ borderTop: `1px solid ${dark}1A` }}>
+                <button
+                  onClick={() => setOpenId(openId === item.id ? null : item.id)}
+                  className="w-full text-left flex items-start gap-4 py-5"
+                  style={{ backgroundColor: "transparent", border: "none", cursor: "pointer" }}
+                >
+                  <span style={{ color: gold, fontSize: "12px", fontWeight: 700, letterSpacing: "0.1em", minWidth: "28px", paddingTop: "2px" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span style={{ color: dark, fontSize: "clamp(14px,1.5vw,17px)", fontWeight: 600, flex: 1, letterSpacing: "-0.01em" }}>{item.pergunta}</span>
+                  <span style={{ color: muted, fontSize: "18px", lineHeight: 1, transition: "transform 0.2s", transform: openId === item.id ? "rotate(45deg)" : "none" }}>+</span>
+                </button>
+                {openId === item.id && (
+                  <div style={{ paddingLeft: "44px", paddingBottom: "20px" }}>
+                    <p style={{ color: muted, fontSize: "15px", lineHeight: 1.7, margin: 0 }}>{item.resposta}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${dark}1A` }} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── Sobre ───────────────────────────────────────────────── */
 export function SecaoSobre({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   if (!dados?.texto) return null;
@@ -567,14 +954,28 @@ export function renderSecao(secao: Secao, evento: any, onInscrever: () => void) 
       if (dados?.variante === "editorial")
         return <SecaoHeroEditorial evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
       return <SecaoHero evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
-    case "sobre":        return <SecaoSobre dados={dados} estilo={estilo} />;
-    case "beneficios":   return <SecaoBeneficios dados={dados} estilo={estilo} />;
-    case "garantias":    return <SecaoGarantias dados={dados} estilo={estilo} />;
-    case "palestrantes": return <SecaoPalestrantes dados={dados} estilo={estilo} />;
-    case "agenda":       return <SecaoAgenda dados={dados} estilo={estilo} />;
-    case "depoimentos":  return <SecaoDepoimentos dados={dados} estilo={estilo} />;
+    case "sobre":
+      if (dados?.variante === "editorial") return <SecaoSobreEditorial dados={dados} estilo={estilo} />;
+      return <SecaoSobre dados={dados} estilo={estilo} />;
+    case "beneficios":
+      if (dados?.variante === "editorial") return <SecaoBeneficiosEditorial dados={dados} estilo={estilo} />;
+      return <SecaoBeneficios dados={dados} estilo={estilo} />;
+    case "garantias":
+      if (dados?.variante === "editorial") return <SecaoGarantiasEditorial dados={dados} estilo={estilo} />;
+      return <SecaoGarantias dados={dados} estilo={estilo} />;
+    case "palestrantes":
+      if (dados?.variante === "editorial") return <SecaoPalestrantesEditorial dados={dados} estilo={estilo} />;
+      return <SecaoPalestrantes dados={dados} estilo={estilo} />;
+    case "agenda":
+      if (dados?.variante === "editorial") return <SecaoAgendaEditorial dados={dados} estilo={estilo} />;
+      return <SecaoAgenda dados={dados} estilo={estilo} />;
+    case "depoimentos":
+      if (dados?.variante === "editorial") return <SecaoDepoimentosEditorial dados={dados} estilo={estilo} />;
+      return <SecaoDepoimentos dados={dados} estilo={estilo} />;
     case "local":        return <SecaoLocal dados={dados} estilo={estilo} />;
-    case "faq":          return <SecaoFaq dados={dados} estilo={estilo} />;
+    case "faq":
+      if (dados?.variante === "editorial") return <SecaoFaqEditorial dados={dados} estilo={estilo} onInscrever={onInscrever} />;
+      return <SecaoFaq dados={dados} estilo={estilo} />;
     default:             return null;
   }
 }
