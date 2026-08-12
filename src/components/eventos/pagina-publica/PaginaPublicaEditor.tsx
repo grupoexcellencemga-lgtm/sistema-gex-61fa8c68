@@ -1,33 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
-  Globe,
-  Link2,
-  Upload,
-  Plus,
-  ChevronUp,
-  ChevronDown,
-  Trash2,
-  Eye,
-  EyeOff,
-  Loader2,
-  ImageIcon,
-  ExternalLink,
-  X,
-  Settings2,
-  Layers,
+  Globe, Link2, Upload, Plus, Loader2, ImageIcon,
+  ExternalLink, X, Settings2, ChevronLeft, Layers,
+  Eye, EyeOff, Trash2, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Secao, SecaoTipo, SECAO_LABELS, SECAO_ICONS } from "./types";
+import type { Secao, SecaoTipo } from "./types";
+import { SECAO_LABELS, SECAO_ICONS } from "./types";
 import { SecaoEditor } from "./SecaoEditor";
-import { PaginaPreview } from "./PaginaPreview";
+import { PaginaPublicaCanvas } from "./PaginaPublicaCanvas";
 
 function slugify(text: string) {
   return text
@@ -55,6 +44,8 @@ const DEFAULT_DADOS: Record<SecaoTipo, any> = {
   faq:          { faqs: [] },
 };
 
+type DrawerMode = "section" | "settings" | "add" | null;
+
 export function PaginaPublicaEditor({
   evento,
   open,
@@ -67,7 +58,6 @@ export function PaginaPublicaEditor({
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [addingSecao, setAddingSecao] = useState(false);
 
   const [localEvento, setLocalEvento] = useState<any>(evento);
   const [localSecoes, setLocalSecoes] = useState<Secao[]>(() =>
@@ -76,7 +66,11 @@ export function PaginaPublicaEditor({
       : []
   );
 
-  // Sync when the dialog reopens with fresh data
+  // Drawer state
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
+  const [activeSecaoId, setActiveSecaoId] = useState<string | null>(null);
+  const [addAtIndex, setAddAtIndex] = useState<number>(0);
+
   useEffect(() => {
     if (open) {
       setLocalEvento(evento);
@@ -103,6 +97,56 @@ export function PaginaPublicaEditor({
     },
     onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
   });
+
+  /* ── Section operations ─────────────────────────────── */
+
+  const atualizarSecoes = (novas: Secao[]) => {
+    const reordenadas = novas.map((s, i) => ({ ...s, ordem: i }));
+    setLocalSecoes(reordenadas);
+    salvar.mutate({ pagina_secoes: reordenadas });
+  };
+
+  const adicionarSecao = (tipo: SecaoTipo, atIndex: number) => {
+    const nova: Secao = {
+      id: crypto.randomUUID(),
+      tipo,
+      ativo: true,
+      ordem: atIndex,
+      dados: { ...DEFAULT_DADOS[tipo] },
+    };
+    const copia = [...localSecoes];
+    copia.splice(atIndex, 0, nova);
+    atualizarSecoes(copia);
+    // Open editor for new section
+    setActiveSecaoId(nova.id);
+    setDrawerMode("section");
+  };
+
+  const removerSecao = (id: string) => {
+    atualizarSecoes(localSecoes.filter((s) => s.id !== id));
+    if (activeSecaoId === id) {
+      setActiveSecaoId(null);
+      setDrawerMode(null);
+    }
+  };
+
+  const moverSecao = (id: string, dir: -1 | 1) => {
+    const sorted = [...localSecoes].sort((a, b) => a.ordem - b.ordem);
+    const idx = sorted.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+    const alvo = idx + dir;
+    if (alvo < 0 || alvo >= sorted.length) return;
+    [sorted[idx], sorted[alvo]] = [sorted[alvo], sorted[idx]];
+    atualizarSecoes(sorted);
+  };
+
+  const toggleSecao = (id: string) =>
+    atualizarSecoes(localSecoes.map((s) => (s.id === id ? { ...s, ativo: !s.ativo } : s)));
+
+  const atualizarSecao = (id: string, dados: any) =>
+    atualizarSecoes(localSecoes.map((s) => (s.id === id ? { ...s, dados } : s)));
+
+  /* ── Global settings ────────────────────────────────── */
 
   const updateSlug = (slug: string) => {
     const v = slug || null;
@@ -147,46 +191,15 @@ export function PaginaPublicaEditor({
     }
   };
 
-  const atualizarSecoes = (novas: Secao[]) => {
-    const reordenadas = novas.map((s, i) => ({ ...s, ordem: i }));
-    setLocalSecoes(reordenadas);
-    salvar.mutate({ pagina_secoes: reordenadas });
-  };
-
-  const adicionarSecao = (tipo: SecaoTipo) => {
-    const nova: Secao = {
-      id: crypto.randomUUID(),
-      tipo,
-      ativo: true,
-      ordem: localSecoes.length,
-      dados: { ...DEFAULT_DADOS[tipo] },
-    };
-    atualizarSecoes([...localSecoes, nova]);
-    setAddingSecao(false);
-  };
-
-  const removerSecao = (id: string) =>
-    atualizarSecoes(localSecoes.filter((s) => s.id !== id));
-
-  const moverSecao = (id: string, dir: -1 | 1) => {
-    const idx = localSecoes.findIndex((s) => s.id === id);
-    if (idx < 0) return;
-    const novas = [...localSecoes];
-    const alvo = idx + dir;
-    if (alvo < 0 || alvo >= novas.length) return;
-    [novas[idx], novas[alvo]] = [novas[alvo], novas[idx]];
-    atualizarSecoes(novas);
-  };
-
-  const atualizarSecao = (id: string, dados: any) =>
-    atualizarSecoes(localSecoes.map((s) => (s.id === id ? { ...s, dados } : s)));
-
-  const toggleSecao = (id: string) =>
-    atualizarSecoes(localSecoes.map((s) => (s.id === id ? { ...s, ativo: !s.ativo } : s)));
+  /* ── Derived ────────────────────────────────────────── */
 
   const slugGerado = slugify(evento.nome || "");
   const linkPublico = localEvento?.slug
     ? `${window.location.origin}/e/${localEvento.slug}`
+    : null;
+
+  const activeSecao = activeSecaoId
+    ? localSecoes.find((s) => s.id === activeSecaoId) ?? null
     : null;
 
   const secoesUsadas = localSecoes.map((s) => s.tipo);
@@ -194,301 +207,361 @@ export function PaginaPublicaEditor({
     (t) => t === "faq" || t === "depoimentos" || !secoesUsadas.includes(t)
   );
 
+  const closeDrawer = () => {
+    setDrawerMode(null);
+    setActiveSecaoId(null);
+  };
+
+  const handleSelectSecao = (id: string) => {
+    setActiveSecaoId(id);
+    setDrawerMode("section");
+  };
+
+  const handleAddSecao = (atIndex: number) => {
+    setAddAtIndex(atIndex);
+    setDrawerMode("add");
+    setActiveSecaoId(null);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-[96vw] sm:w-[96vw] sm:h-[92vh] sm:max-h-[92vh] p-0 flex flex-col gap-0 overflow-hidden [&>button:last-child]:hidden">
 
-        {/* ── Header ─────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-3 border-b bg-background shrink-0 gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Globe className="h-5 w-5 text-amber-600 shrink-0" />
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{evento.nome}</p>
-              <p className="text-xs text-muted-foreground">Editor de página pública</p>
-            </div>
+        <DialogTitle className="sr-only">Editor de página pública — {evento.nome}</DialogTitle>
+        {/* ── Top bar ───────────────────────────────────── */}
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-background shrink-0">
+          {/* Left */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <Globe className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="font-semibold text-sm truncate">{evento.nome}</span>
+            {localEvento.pagina_publica_ativa && (
+              <Badge className="bg-green-600 text-white text-xs shrink-0">Ao vivo</Badge>
+            )}
+            {salvar.isPending && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
+            )}
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:block">
-                {localEvento.pagina_publica_ativa ? "Publicada" : "Rascunho"}
-              </span>
-              {localEvento.pagina_publica_ativa && (
-                <Badge className="bg-green-600 text-white text-xs">Ao vivo</Badge>
-              )}
-              <Switch
-                checked={!!localEvento.pagina_publica_ativa}
-                onCheckedChange={setAtiva}
-              />
-            </div>
+          {/* Center actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant={drawerMode === "settings" ? "secondary" : "outline"}
+              size="sm"
+              className="gap-1.5 h-8"
+              onClick={() => drawerMode === "settings" ? closeDrawer() : (setDrawerMode("settings"), setActiveSecaoId(null))}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              Configurações
+            </Button>
+            <Button
+              variant={drawerMode === "add" ? "secondary" : "outline"}
+              size="sm"
+              className="gap-1.5 h-8"
+              onClick={() => drawerMode === "add" ? closeDrawer() : handleAddSecao(localSecoes.length)}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Seções
+            </Button>
+          </div>
 
+          {/* Right */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-sm text-muted-foreground hidden sm:block">
+              {localEvento.pagina_publica_ativa ? "Publicada" : "Rascunho"}
+            </span>
+            <Switch
+              checked={!!localEvento.pagina_publica_ativa}
+              onCheckedChange={setAtiva}
+            />
             {linkPublico && (
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
                 <a href={linkPublico} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Ver ao vivo
+                  <ExternalLink className="h-3.5 w-3.5" /> Ver ao vivo
                 </a>
               </Button>
             )}
-
-            {salvar.isPending && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {/* ── Split view ─────────────────────────────────────── */}
+        {/* ── Body: Canvas + Drawer ─────────────────────── */}
         <div className="flex flex-1 overflow-hidden">
 
-          {/* LEFT — Editor */}
-          <div className="w-[360px] shrink-0 border-r overflow-y-auto bg-muted/10">
-            <div className="p-4 space-y-5">
-
-              {/* Configurações */}
-              <div className="space-y-4">
-                <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Settings2 className="h-3.5 w-3.5" /> Configurações
-                </h3>
-
-                {/* Slug */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5">
-                    <Link2 className="h-3 w-3" /> URL da página
-                  </Label>
-                  <div className="flex gap-1.5 items-center">
-                    <span className="text-xs text-muted-foreground bg-muted border rounded-md px-2 h-8 flex items-center shrink-0">
-                      /e/
-                    </span>
-                    <Input
-                      className="flex-1 h-8 text-sm"
-                      defaultValue={localEvento?.slug ?? ""}
-                      onBlur={(e) => updateSlug(e.target.value)}
-                      placeholder={slugGerado}
-                    />
-                  </div>
-                  {!localEvento?.slug && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full h-7 text-xs"
-                      onClick={() => updateSlug(slugGerado)}
-                    >
-                      Gerar automático
-                    </Button>
-                  )}
-                  {localEvento?.slug && (
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {window.location.origin}/e/{localEvento.slug}
-                    </p>
-                  )}
-                </div>
-
-                {/* Banner */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5">
-                    <ImageIcon className="h-3 w-3" /> Banner
-                  </Label>
-                  {localEvento?.banner_url ? (
-                    <div className="relative rounded-lg overflow-hidden border aspect-[3/1]">
-                      <img
-                        src={localEvento.banner_url}
-                        alt="Banner"
-                        className="w-full h-full object-cover"
-                      />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute bottom-1.5 right-1.5 shadow text-xs h-7"
-                        onClick={() => fileRef.current?.click()}
-                      >
-                        Trocar
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => fileRef.current?.click()}
-                      className="w-full border-2 border-dashed rounded-lg aspect-[3/1] flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                    >
-                      {uploadingBanner ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <>
-                          <Upload className="h-5 w-5" />
-                          <span className="text-xs">Enviar banner</span>
-                          <span className="text-[10px] opacity-70">JPG · PNG · WebP · máx 5 MB</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) uploadBanner(f);
-                      e.target.value = "";
-                    }}
-                  />
-                </div>
-
-                {/* Link de pagamento */}
-                {evento.pago && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Link de pagamento</Label>
-                    <Input
-                      className="h-8 text-sm"
-                      defaultValue={localEvento?.link_pagamento ?? ""}
-                      placeholder="https://asaas.com/... ou Sicoob..."
-                      onBlur={(e) => updateLinkPagamento(e.target.value)}
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Após inscrever, o participante vai para este link.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t" />
-
-              {/* Seções */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5" /> Seções
-                  </h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    onClick={() => setAddingSecao((v) => !v)}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
-                  </Button>
-                </div>
-
-                {addingSecao && (
-                  <div className="border rounded-lg p-2.5 bg-background">
-                    <p className="text-[11px] text-muted-foreground mb-2 font-medium">
-                      Escolha o tipo:
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {secoesDisponiveis.map((tipo) => (
-                        <Button
-                          key={tipo}
-                          size="sm"
-                          variant="secondary"
-                          className="h-7 text-xs"
-                          onClick={() => adicionarSecao(tipo)}
-                        >
-                          {SECAO_ICONS[tipo]} {SECAO_LABELS[tipo]}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {localSecoes.length === 0 && !addingSecao && (
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center text-muted-foreground">
-                    <Globe className="h-7 w-7 mx-auto mb-2 opacity-30" />
-                    <p className="text-xs">Adicione seções para montar a landing page.</p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  {localSecoes.map((secao, idx) => (
-                    <div
-                      key={secao.id}
-                      className={`border rounded-lg overflow-hidden transition-opacity bg-background ${
-                        !secao.ativo ? "opacity-50" : ""
-                      }`}
-                    >
-                      {/* Cabeçalho da seção */}
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-muted/40">
-                        <span className="text-sm">{SECAO_ICONS[secao.tipo]}</span>
-                        <span className="text-xs font-medium flex-1">
-                          {SECAO_LABELS[secao.tipo]}
-                        </span>
-                        {!secao.ativo && (
-                          <Badge variant="outline" className="text-[10px] h-4 px-1">
-                            Oculta
-                          </Badge>
-                        )}
-                        <div className="flex items-center gap-0.5">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={() => moverSecao(secao.id, -1)}
-                            disabled={idx === 0}
-                          >
-                            <ChevronUp className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={() => moverSecao(secao.id, 1)}
-                            disabled={idx === localSecoes.length - 1}
-                          >
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            title={secao.ativo ? "Ocultar seção" : "Mostrar seção"}
-                            onClick={() => toggleSecao(secao.id)}
-                          >
-                            {secao.ativo ? (
-                              <Eye className="h-3 w-3" />
-                            ) : (
-                              <EyeOff className="h-3 w-3" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => removerSecao(secao.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {/* Editor */}
-                      <div className="p-2.5">
-                        <SecaoEditor
-                          secao={secao}
-                          evento={localEvento}
-                          onChange={(dados) => atualizarSecao(secao.id, dados)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT — Live Preview */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-background">
-            {/* Preview label */}
-            <div className="sticky top-0 z-10 bg-black/70 text-white text-[11px] text-center py-1 backdrop-blur-sm">
-              Prévia ao vivo — como o visitante verá a página
-            </div>
-            <PaginaPreview
+          {/* Canvas */}
+          <div className="flex-1 overflow-y-auto bg-background">
+            <PaginaPublicaCanvas
               evento={localEvento}
               secoes={localSecoes}
-              onInscrever={() => {}}
+              activeSecaoId={activeSecaoId}
+              onSelectSecao={handleSelectSecao}
+              onMoveSecao={moverSecao}
+              onRemoveSecao={removerSecao}
+              onToggleSecao={toggleSecao}
+              onAddSecao={handleAddSecao}
             />
           </div>
+
+          {/* Right Drawer */}
+          {drawerMode && (
+            <div className="w-[340px] shrink-0 border-l flex flex-col bg-background overflow-hidden">
+              {/* Drawer header */}
+              <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={closeDrawer}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-semibold flex-1">
+                  {drawerMode === "settings" && "Configurações"}
+                  {drawerMode === "add" && "Adicionar bloco"}
+                  {drawerMode === "section" && activeSecao && (
+                    <span className="flex items-center gap-1.5">
+                      <span>{SECAO_ICONS[activeSecao.tipo]}</span>
+                      {SECAO_LABELS[activeSecao.tipo]}
+                    </span>
+                  )}
+                </span>
+                {drawerMode === "section" && activeSecao && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon" variant="ghost" className="h-7 w-7"
+                      title={activeSecao.ativo ? "Ocultar" : "Mostrar"}
+                      onClick={() => toggleSecao(activeSecao.id)}
+                    >
+                      {activeSecao.ativo ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                      title="Remover seção"
+                      onClick={() => removerSecao(activeSecao.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer content */}
+              <div className="flex-1 overflow-y-auto">
+
+                {/* ── Settings panel ── */}
+                {drawerMode === "settings" && (
+                  <div className="p-4 space-y-5">
+                    {/* Slug */}
+                    <div className="space-y-2">
+                      <Label className="text-xs flex items-center gap-1.5 font-semibold">
+                        <Link2 className="h-3.5 w-3.5" /> URL da página
+                      </Label>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground bg-muted border rounded-md px-2 h-8 flex items-center shrink-0">
+                          /e/
+                        </span>
+                        <Input
+                          className="flex-1 h-8 text-sm"
+                          defaultValue={localEvento?.slug ?? ""}
+                          onBlur={(e) => updateSlug(e.target.value)}
+                          placeholder={slugGerado}
+                        />
+                      </div>
+                      {!localEvento?.slug ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-7 text-xs"
+                          onClick={() => updateSlug(slugGerado)}
+                        >
+                          Gerar automático
+                        </Button>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground truncate break-all">
+                          {window.location.origin}/e/{localEvento.slug}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="border-t" />
+
+                    {/* Banner */}
+                    <div className="space-y-2">
+                      <Label className="text-xs flex items-center gap-1.5 font-semibold">
+                        <ImageIcon className="h-3.5 w-3.5" /> Banner do evento
+                      </Label>
+                      {localEvento?.banner_url ? (
+                        <div className="relative rounded-lg overflow-hidden border aspect-[3/1]">
+                          <img
+                            src={localEvento.banner_url}
+                            alt="Banner"
+                            className="w-full h-full object-cover"
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="absolute bottom-2 right-2 shadow text-xs h-7"
+                            onClick={() => fileRef.current?.click()}
+                          >
+                            Trocar imagem
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => fileRef.current?.click()}
+                          className="w-full border-2 border-dashed rounded-lg aspect-[3/1] flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                        >
+                          {uploadingBanner ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <>
+                              <Upload className="h-5 w-5" />
+                              <span className="text-sm">Enviar banner</span>
+                              <span className="text-xs opacity-60">JPG · PNG · WebP · máx 5 MB</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadBanner(f);
+                          e.target.value = "";
+                        }}
+                      />
+                    </div>
+
+                    {/* Link de pagamento */}
+                    {evento.pago && (
+                      <>
+                        <div className="border-t" />
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold">Link de pagamento</Label>
+                          <Input
+                            className="h-8 text-sm"
+                            defaultValue={localEvento?.link_pagamento ?? ""}
+                            placeholder="https://asaas.com/... ou Sicoob..."
+                            onBlur={(e) => updateLinkPagamento(e.target.value)}
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Após inscrever, o participante é redirecionado para este link.
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="border-t" />
+
+                    {/* Publicação */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5" /> Publicação
+                      </Label>
+                      <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {localEvento.pagina_publica_ativa ? "Página ao vivo" : "Rascunho"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {localEvento.pagina_publica_ativa
+                              ? "Visível para qualquer pessoa com o link"
+                              : "Somente você pode ver"}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={!!localEvento.pagina_publica_ativa}
+                          onCheckedChange={setAtiva}
+                        />
+                      </div>
+                      {linkPublico && (
+                        <Button variant="outline" size="sm" className="w-full gap-2" asChild>
+                          <a href={linkPublico} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" /> Ver página ao vivo
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Add section picker ── */}
+                {drawerMode === "add" && (
+                  <div className="p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Escolha o tipo de bloco para adicionar
+                      {addAtIndex < localSecoes.length ? ` na posição ${addAtIndex + 1}` : " ao final"}.
+                    </p>
+                    <div className="space-y-1.5">
+                      {secoesDisponiveis.map((tipo) => (
+                        <button
+                          key={tipo}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border bg-muted/10 hover:bg-primary/5 hover:border-primary/40 transition-colors text-left"
+                          onClick={() => {
+                            adicionarSecao(tipo, addAtIndex);
+                          }}
+                        >
+                          <span className="text-xl">{SECAO_ICONS[tipo]}</span>
+                          <div>
+                            <p className="text-sm font-medium">{SECAO_LABELS[tipo]}</p>
+                            <p className="text-xs text-muted-foreground">{SECAO_DESCRIPTIONS[tipo]}</p>
+                          </div>
+                        </button>
+                      ))}
+                      {secoesDisponiveis.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Todos os tipos de seção já estão na página.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Section editor ── */}
+                {drawerMode === "section" && activeSecao && (
+                  <div className="p-4 space-y-4">
+                    {/* Move controls */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground flex-1">
+                        Posição {localSecoes.sort((a,b)=>a.ordem-b.ordem).findIndex(s=>s.id===activeSecao.id)+1} de {localSecoes.length}
+                      </span>
+                      <Button
+                        size="sm" variant="outline" className="h-7 gap-1 text-xs"
+                        onClick={() => moverSecao(activeSecao.id, -1)}
+                        disabled={localSecoes.sort((a,b)=>a.ordem-b.ordem).findIndex(s=>s.id===activeSecao.id) === 0}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" /> Subir
+                      </Button>
+                      <Button
+                        size="sm" variant="outline" className="h-7 gap-1 text-xs"
+                        onClick={() => moverSecao(activeSecao.id, 1)}
+                        disabled={localSecoes.sort((a,b)=>a.ordem-b.ordem).findIndex(s=>s.id===activeSecao.id) === localSecoes.length-1}
+                      >
+                        Descer <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="border-t" />
+                    <SecaoEditor
+                      secao={activeSecao}
+                      evento={localEvento}
+                      onChange={(dados) => atualizarSecao(activeSecao.id, dados)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+const SECAO_DESCRIPTIONS: Record<SecaoTipo, string> = {
+  hero:         "Capa principal com banner, título e botão de inscrição",
+  sobre:        "Texto descritivo do evento com imagem opcional",
+  palestrantes: "Grade com foto, nome, cargo e bio de cada palestrante",
+  agenda:       "Programação com horários e atividades do dia",
+  depoimentos:  "Avaliações e relatos de participantes anteriores",
+  local:        "Endereço e link para o Google Maps",
+  faq:          "Perguntas frequentes em formato accordion",
+};
