@@ -386,7 +386,10 @@ export function PaginaPublicaEditor({
           <div className="w-12 border-r shrink-0 flex flex-col items-center py-3 gap-1.5 bg-background">
             <button
               title="Adicionar bloco"
-              onClick={() => toggleLeftPanel("blocos")}
+              onClick={() => {
+                if (leftPanel === "blocos") setLeftPanel(null);
+                else handleAddSecao(localSecoes.length);
+              }}
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
                 leftPanel === "blocos"
                   ? "bg-cyan-500 text-white"

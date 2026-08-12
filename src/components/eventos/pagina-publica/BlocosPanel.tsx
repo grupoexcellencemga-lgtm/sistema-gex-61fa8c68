@@ -257,18 +257,19 @@ export function BlocosPanel({ onClose, onSelect }: Props) {
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum bloco encontrado.</p>
           )}
           {templatesFiltrados.map((tpl) => (
-            <div key={tpl.nome} className="space-y-1">
-              <button
-                className="w-full rounded-lg border overflow-hidden hover:border-cyan-400 hover:shadow-md transition-all group"
-                onClick={() => onSelect(tpl.tipo)}
-                title={`Adicionar ${tpl.nome}`}
-              >
+            <button
+              key={tpl.nome}
+              className="w-full text-left group/card"
+              onClick={() => onSelect(tpl.tipo)}
+              title={`Adicionar ${tpl.nome}`}
+            >
+              <div className="rounded-lg border overflow-hidden group-hover/card:border-cyan-400 group-hover/card:shadow-md transition-all">
                 <div className="aspect-[16/9] bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                   {tpl.thumbnail}
                 </div>
-              </button>
-              <p className="text-xs text-muted-foreground pl-0.5">{tpl.nome}</p>
-            </div>
+              </div>
+              <p className="text-xs text-muted-foreground pl-0.5 mt-1 group-hover/card:text-foreground transition-colors">{tpl.nome}</p>
+            </button>
           ))}
         </div>
       </div>

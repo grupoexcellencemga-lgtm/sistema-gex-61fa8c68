@@ -5,6 +5,23 @@ import type { Secao } from "./types";
 import { SECAO_LABELS, SECAO_ICONS } from "./types";
 import { renderSecao } from "./PaginaPreview";
 
+/* Returns true when the section would render null (no content yet) */
+function secaoVazia(secao: Secao): boolean {
+  const d = secao.dados;
+  switch (secao.tipo) {
+    case "hero":         return false;
+    case "sobre":        return !d?.texto;
+    case "palestrantes": return !(d?.palestrantes?.length > 0);
+    case "agenda":       return !(d?.itens?.length > 0);
+    case "depoimentos":  return !(d?.depoimentos?.length > 0);
+    case "local":        return !d?.endereco && !d?.link_mapa;
+    case "faq":          return !(d?.faqs?.length > 0);
+    case "beneficios":   return !(d?.beneficios?.length > 0);
+    case "garantias":    return !(d?.garantias?.length > 0);
+    default:             return false;
+  }
+}
+
 /* ─── Add bloco button ────────────────────────────────────── */
 function AddBlocoButton({ onClick }: { onClick: () => void }) {
   return (
@@ -113,8 +130,16 @@ function SecaoWrapper({
           </div>
         </div>
 
-        {/* Section render */}
-        {renderSecao(secao, evento, () => {})}
+        {/* Section render — shows placeholder when section has no content yet */}
+        {secaoVazia(secao) ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-muted/20 border-y border-dashed border-muted-foreground/20 gap-2 text-muted-foreground select-none">
+            <span className="text-3xl">{SECAO_ICONS[secao.tipo]}</span>
+            <p className="text-sm font-medium">{SECAO_LABELS[secao.tipo]}</p>
+            <p className="text-xs opacity-70">Clique em "Editar" para adicionar conteúdo</p>
+          </div>
+        ) : (
+          renderSecao(secao, evento, () => {})
+        )}
       </div>
 
       {/* Add below */}
