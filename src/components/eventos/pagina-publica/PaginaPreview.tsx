@@ -2,22 +2,43 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
-import type { Secao, Palestrante, AgendaItem, Depoimento, FaqItem } from "./types";
+import type { Secao, Palestrante, AgendaItem, Depoimento, FaqItem, Beneficio, Garantia, SecaoEstilo } from "./types";
 
 const formatValor = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+function buildSectionStyle(estilo?: SecaoEstilo): React.CSSProperties {
+  const style: React.CSSProperties = {};
+  if (estilo?.bg_color) style.backgroundColor = estilo.bg_color;
+  return style;
+}
+
+const PADDING_CLASS: Record<string, string> = {
+  none: "py-0",
+  sm:   "py-8",
+  md:   "py-16",
+  lg:   "py-24",
+};
+
+function sectionPadding(estilo?: SecaoEstilo, fallback = "py-16") {
+  if (!estilo?.padding || estilo.padding === "md") return fallback;
+  return PADDING_CLASS[estilo.padding] ?? fallback;
+}
+
+/* ─── Hero ────────────────────────────────────────────────── */
 export function SecaoHero({
   evento,
   dados,
+  estilo,
   onInscrever,
 }: {
   evento: any;
   dados: any;
+  estilo?: SecaoEstilo;
   onInscrever: () => void;
 }) {
   return (
-    <section className="relative min-h-[60vh] flex items-end">
+    <section className="relative min-h-[60vh] flex items-end" style={buildSectionStyle(estilo)}>
       {evento.banner_url ? (
         <div className="absolute inset-0">
           <img src={evento.banner_url} alt="" className="w-full h-full object-cover" />
@@ -68,10 +89,14 @@ export function SecaoHero({
   );
 }
 
-export function SecaoSobre({ dados }: { dados: any }) {
+/* ─── Sobre ───────────────────────────────────────────────── */
+export function SecaoSobre({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   if (!dados?.texto) return null;
   return (
-    <section className="py-16 px-6">
+    <section
+      className={`${sectionPadding(estilo)} px-6`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-6">Sobre o evento</h2>
         <div className={`gap-10 ${dados.imagem_url ? "grid md:grid-cols-2" : ""}`}>
@@ -89,11 +114,67 @@ export function SecaoSobre({ dados }: { dados: any }) {
   );
 }
 
-export function SecaoPalestrantes({ dados }: { dados: any }) {
+/* ─── Benefícios ──────────────────────────────────────────── */
+export function SecaoBeneficios({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const lista: Beneficio[] = dados?.beneficios ?? [];
+  if (!lista.length) return null;
+  const titulo = dados?.titulo_secao ?? "Por que participar?";
+  return (
+    <section
+      className={`${sectionPadding(estilo)} px-6`}
+      style={buildSectionStyle(estilo)}
+    >
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-2xl font-bold mb-10 text-center">{titulo}</h2>
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-8">
+          {lista.map((b) => (
+            <div key={b.id} className="flex flex-col items-center text-center">
+              <span className="text-4xl mb-3">{b.icone}</span>
+              <h3 className="font-semibold text-base mb-1">{b.titulo}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{b.texto}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Garantias ───────────────────────────────────────────── */
+export function SecaoGarantias({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
+  const lista: Garantia[] = dados?.garantias ?? [];
+  if (!lista.length) return null;
+  return (
+    <section
+      className={`${sectionPadding(estilo, "py-10")} px-6 bg-muted/20`}
+      style={buildSectionStyle(estilo)}
+    >
+      <div className="max-w-4xl mx-auto">
+        <div className="flex flex-wrap justify-center gap-4">
+          {lista.map((g) => (
+            <div
+              key={g.id}
+              className="flex items-center gap-3 bg-background rounded-xl border px-5 py-3 shadow-sm"
+            >
+              <span className="text-2xl">{g.icone}</span>
+              <span className="text-sm font-medium">{g.texto}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Palestrantes ────────────────────────────────────────── */
+export function SecaoPalestrantes({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   const lista: Palestrante[] = dados?.palestrantes ?? [];
   if (!lista.length) return null;
   return (
-    <section className="py-16 px-6 bg-muted/30">
+    <section
+      className={`${sectionPadding(estilo)} px-6 bg-muted/30`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-8">Palestrantes</h2>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -123,11 +204,15 @@ export function SecaoPalestrantes({ dados }: { dados: any }) {
   );
 }
 
-export function SecaoAgenda({ dados }: { dados: any }) {
+/* ─── Agenda ──────────────────────────────────────────────── */
+export function SecaoAgenda({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   const lista: AgendaItem[] = dados?.itens ?? [];
   if (!lista.length) return null;
   return (
-    <section className="py-16 px-6">
+    <section
+      className={`${sectionPadding(estilo)} px-6`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-8">Programação</h2>
         <div className="space-y-0">
@@ -155,11 +240,15 @@ export function SecaoAgenda({ dados }: { dados: any }) {
   );
 }
 
-export function SecaoDepoimentos({ dados }: { dados: any }) {
+/* ─── Depoimentos ─────────────────────────────────────────── */
+export function SecaoDepoimentos({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   const lista: Depoimento[] = dados?.depoimentos ?? [];
   if (!lista.length) return null;
   return (
-    <section className="py-16 px-6 bg-muted/30">
+    <section
+      className={`${sectionPadding(estilo)} px-6 bg-muted/30`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-8">O que dizem sobre nossos eventos</h2>
         <div className="grid sm:grid-cols-2 gap-6">
@@ -191,10 +280,14 @@ export function SecaoDepoimentos({ dados }: { dados: any }) {
   );
 }
 
-export function SecaoLocal({ dados }: { dados: any }) {
+/* ─── Local ───────────────────────────────────────────────── */
+export function SecaoLocal({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   if (!dados?.endereco && !dados?.link_mapa) return null;
   return (
-    <section className="py-16 px-6">
+    <section
+      className={`${sectionPadding(estilo)} px-6`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-6">Local</h2>
         <div className="flex items-start gap-3">
@@ -218,12 +311,16 @@ export function SecaoLocal({ dados }: { dados: any }) {
   );
 }
 
-export function SecaoFaq({ dados }: { dados: any }) {
+/* ─── FAQ ─────────────────────────────────────────────────── */
+export function SecaoFaq({ dados, estilo }: { dados: any; estilo?: SecaoEstilo }) {
   const lista: FaqItem[] = dados?.faqs ?? [];
   const [aberto, setAberto] = useState<string | null>(null);
   if (!lista.length) return null;
   return (
-    <section className="py-16 px-6 bg-muted/30">
+    <section
+      className={`${sectionPadding(estilo)} px-6 bg-muted/30`}
+      style={buildSectionStyle(estilo)}
+    >
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-8">Perguntas frequentes</h2>
         <div className="space-y-2">
@@ -253,6 +350,7 @@ export function SecaoFaq({ dados }: { dados: any }) {
   );
 }
 
+/* ─── CTA ─────────────────────────────────────────────────── */
 export function SecaoCTA({
   evento,
   onInscrever,
@@ -284,6 +382,24 @@ export function SecaoCTA({
   );
 }
 
+/* ─── Render helper ───────────────────────────────────────── */
+export function renderSecao(secao: Secao, evento: any, onInscrever: () => void) {
+  const { tipo, dados, estilo } = secao;
+  switch (tipo) {
+    case "hero":         return <SecaoHero evento={evento} dados={dados} estilo={estilo} onInscrever={onInscrever} />;
+    case "sobre":        return <SecaoSobre dados={dados} estilo={estilo} />;
+    case "beneficios":   return <SecaoBeneficios dados={dados} estilo={estilo} />;
+    case "garantias":    return <SecaoGarantias dados={dados} estilo={estilo} />;
+    case "palestrantes": return <SecaoPalestrantes dados={dados} estilo={estilo} />;
+    case "agenda":       return <SecaoAgenda dados={dados} estilo={estilo} />;
+    case "depoimentos":  return <SecaoDepoimentos dados={dados} estilo={estilo} />;
+    case "local":        return <SecaoLocal dados={dados} estilo={estilo} />;
+    case "faq":          return <SecaoFaq dados={dados} estilo={estilo} />;
+    default:             return null;
+  }
+}
+
+/* ─── PaginaPreview (página pública final) ────────────────── */
 export function PaginaPreview({
   evento,
   secoes,
@@ -306,33 +422,11 @@ export function PaginaPreview({
           onInscrever={handleInscrever}
         />
       )}
-      {ativas.map((secao) => {
-        switch (secao.tipo) {
-          case "hero":
-            return (
-              <SecaoHero
-                key={secao.id}
-                evento={evento}
-                dados={secao.dados}
-                onInscrever={handleInscrever}
-              />
-            );
-          case "sobre":
-            return <SecaoSobre key={secao.id} dados={secao.dados} />;
-          case "palestrantes":
-            return <SecaoPalestrantes key={secao.id} dados={secao.dados} />;
-          case "agenda":
-            return <SecaoAgenda key={secao.id} dados={secao.dados} />;
-          case "depoimentos":
-            return <SecaoDepoimentos key={secao.id} dados={secao.dados} />;
-          case "local":
-            return <SecaoLocal key={secao.id} dados={secao.dados} />;
-          case "faq":
-            return <SecaoFaq key={secao.id} dados={secao.dados} />;
-          default:
-            return null;
-        }
-      })}
+      {ativas.map((secao) => (
+        <div key={secao.id}>
+          {renderSecao(secao, evento, handleInscrever)}
+        </div>
+      ))}
       {evento.status !== "finalizado" && evento.status !== "cancelado" && (
         <SecaoCTA evento={evento} onInscrever={handleInscrever} />
       )}

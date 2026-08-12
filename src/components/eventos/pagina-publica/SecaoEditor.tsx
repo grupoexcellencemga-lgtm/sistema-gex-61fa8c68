@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Secao, Palestrante, AgendaItem, Depoimento, FaqItem } from "./types";
+import type { Secao, Palestrante, AgendaItem, Depoimento, FaqItem, Beneficio, Garantia } from "./types";
 
 interface Props {
   secao: Secao;
@@ -76,6 +76,7 @@ function UploadFoto({
 export function SecaoEditor({ secao, evento, onChange }: Props) {
   const d = secao.dados;
 
+  /* ── Hero ─────────────────────────────────────────────── */
   if (secao.tipo === "hero") {
     return (
       <div className="space-y-3">
@@ -102,6 +103,7 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── Sobre ─────────────────────────────────────────────── */
   if (secao.tipo === "sobre") {
     return (
       <div className="space-y-3">
@@ -126,6 +128,109 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── Benefícios ────────────────────────────────────────── */
+  if (secao.tipo === "beneficios") {
+    const lista: Beneficio[] = d.beneficios ?? [];
+    const add = () =>
+      onChange({ ...d, beneficios: [...lista, { id: crypto.randomUUID(), icone: "✅", titulo: "", texto: "" }] });
+    const remove = (id: string) =>
+      onChange({ ...d, beneficios: lista.filter((b) => b.id !== id) });
+    const update = (id: string, patch: Partial<Beneficio>) =>
+      onChange({ ...d, beneficios: lista.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Título da seção</Label>
+          <Input
+            value={d.titulo_secao ?? ""}
+            onChange={(e) => onChange({ ...d, titulo_secao: e.target.value })}
+            placeholder="Por que participar?"
+          />
+        </div>
+        <div className="border-t" />
+        {lista.map((b) => (
+          <div key={b.id} className="border rounded-md p-3 space-y-2 bg-background">
+            <div className="flex items-start gap-2">
+              <div className="flex-1 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    className="w-16 text-center text-lg"
+                    value={b.icone}
+                    onChange={(e) => update(b.id, { icone: e.target.value })}
+                    placeholder="✅"
+                    maxLength={4}
+                  />
+                  <Input
+                    className="flex-1"
+                    value={b.titulo}
+                    onChange={(e) => update(b.id, { titulo: e.target.value })}
+                    placeholder="Título do benefício"
+                  />
+                </div>
+                <Textarea
+                  value={b.texto}
+                  onChange={(e) => update(b.id, { texto: e.target.value })}
+                  placeholder="Descrição curta do benefício"
+                  rows={2}
+                />
+              </div>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0" onClick={() => remove(b.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        <Button size="sm" variant="outline" onClick={add}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar benefício
+        </Button>
+      </div>
+    );
+  }
+
+  /* ── Garantias ────────────────────────────────────────── */
+  if (secao.tipo === "garantias") {
+    const lista: Garantia[] = d.garantias ?? [];
+    const add = () =>
+      onChange({ ...d, garantias: [...lista, { id: crypto.randomUUID(), icone: "🔒", texto: "" }] });
+    const remove = (id: string) =>
+      onChange({ ...d, garantias: lista.filter((g) => g.id !== id) });
+    const update = (id: string, patch: Partial<Garantia>) =>
+      onChange({ ...d, garantias: lista.map((g) => (g.id === id ? { ...g, ...patch } : g)) });
+
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Selos de garantia ou prova social exibidos em destaque.
+        </p>
+        {lista.map((g) => (
+          <div key={g.id} className="flex items-center gap-2">
+            <Input
+              className="w-16 text-center text-lg"
+              value={g.icone}
+              onChange={(e) => update(g.id, { icone: e.target.value })}
+              placeholder="🔒"
+              maxLength={4}
+            />
+            <Input
+              className="flex-1"
+              value={g.texto}
+              onChange={(e) => update(g.id, { texto: e.target.value })}
+              placeholder="Ex: 100% online e ao vivo"
+            />
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0" onClick={() => remove(g.id)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+        <Button size="sm" variant="outline" onClick={add}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar garantia
+        </Button>
+      </div>
+    );
+  }
+
+  /* ── Palestrantes ─────────────────────────────────────── */
   if (secao.tipo === "palestrantes") {
     const lista: Palestrante[] = d.palestrantes ?? [];
     const add = () =>
@@ -163,6 +268,7 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── Agenda ───────────────────────────────────────────── */
   if (secao.tipo === "agenda") {
     const lista: AgendaItem[] = d.itens ?? [];
     const add = () =>
@@ -214,6 +320,7 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── Depoimentos ──────────────────────────────────────── */
   if (secao.tipo === "depoimentos") {
     const lista: Depoimento[] = d.depoimentos ?? [];
     const add = () =>
@@ -251,6 +358,7 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── Local ────────────────────────────────────────────── */
   if (secao.tipo === "local") {
     return (
       <div className="space-y-3">
@@ -274,6 +382,7 @@ export function SecaoEditor({ secao, evento, onChange }: Props) {
     );
   }
 
+  /* ── FAQ ──────────────────────────────────────────────── */
   if (secao.tipo === "faq") {
     const lista: FaqItem[] = d.faqs ?? [];
     const add = () =>

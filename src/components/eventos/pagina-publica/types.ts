@@ -5,7 +5,9 @@ export type SecaoTipo =
   | "agenda"
   | "depoimentos"
   | "local"
-  | "faq";
+  | "faq"
+  | "beneficios"
+  | "garantias";
 
 export interface Palestrante {
   id: string;
@@ -37,6 +39,24 @@ export interface FaqItem {
   resposta: string;
 }
 
+export interface Beneficio {
+  id: string;
+  icone: string;
+  titulo: string;
+  texto: string;
+}
+
+export interface Garantia {
+  id: string;
+  icone: string;
+  texto: string;
+}
+
+export interface SecaoEstilo {
+  bg_color?: string;
+  padding?: "none" | "sm" | "md" | "lg";
+}
+
 export interface SecaoDados {
   // hero
   titulo_override?: string;
@@ -56,6 +76,11 @@ export interface SecaoDados {
   link_mapa?: string;
   // faq
   faqs?: FaqItem[];
+  // beneficios
+  titulo_secao?: string;
+  beneficios?: Beneficio[];
+  // garantias
+  garantias?: Garantia[];
 }
 
 export interface Secao {
@@ -64,6 +89,7 @@ export interface Secao {
   ativo: boolean;
   ordem: number;
   dados: SecaoDados;
+  estilo?: SecaoEstilo;
 }
 
 export const SECAO_LABELS: Record<SecaoTipo, string> = {
@@ -74,6 +100,8 @@ export const SECAO_LABELS: Record<SecaoTipo, string> = {
   depoimentos:  "Depoimentos",
   local:        "Local",
   faq:          "Perguntas frequentes",
+  beneficios:   "Benefícios",
+  garantias:    "Garantias",
 };
 
 export const SECAO_ICONS: Record<SecaoTipo, string> = {
@@ -84,4 +112,6 @@ export const SECAO_ICONS: Record<SecaoTipo, string> = {
   depoimentos:  "💬",
   local:        "📍",
   faq:          "❓",
+  beneficios:   "✅",
+  garantias:    "🔒",
 };
