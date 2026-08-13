@@ -18,6 +18,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const tipoLabels: Record<string, string> = {
   admin: "ADM Master",
@@ -29,6 +30,8 @@ const tipoLabels: Record<string, string> = {
 
 const UsuariosADM = () => {
   const { user: currentUser } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [deleteUser, setDeleteUser] = useState<{ user_id: string; nome: string } | null>(null);
@@ -48,12 +51,24 @@ const UsuariosADM = () => {
   });
 
   const { data: usuarios = [], isLoading } = useQuery({
-    queryKey: ["adm-users"],
+    queryKey: ["adm-users", empresaId],
     queryFn: async () => {
-      const { data: profiles } = await supabase.from("profiles").select("*");
-      const { data: roles } = await supabase.from("user_roles").select("*");
-      const { data: profissionais } = await supabase.from("profissionais").select("id, nome").is("deleted_at", null);
-      const { data: comerciais } = await supabase.from("comerciais").select("id, nome").is("deleted_at", null);
+      // Busca apenas user_ids vinculados à empresa atual
+      const { data: membros } = await (supabase as any)
+        .from("user_empresa")
+        .select("user_id")
+        .eq("empresa_id", empresaId!);
+
+      const userIds = (membros ?? []).map((m: any) => m.user_id);
+      if (userIds.length === 0) return [];
+
+      const [{ data: profiles }, { data: roles }, { data: profissionais }, { data: comerciais }] =
+        await Promise.all([
+          supabase.from("profiles").select("*").in("user_id", userIds),
+          supabase.from("user_roles").select("*").in("user_id", userIds),
+          supabase.from("profissionais").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null),
+          supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null),
+        ]);
 
       return (profiles ?? []).map((p: any) => {
         const role = roles?.find((r: any) => r.user_id === p.user_id)?.role ?? null;
@@ -67,6 +82,7 @@ const UsuariosADM = () => {
         };
       });
     },
+    enabled: !!empresaId,
   });
 
   const deleteMutation = useMutation({
