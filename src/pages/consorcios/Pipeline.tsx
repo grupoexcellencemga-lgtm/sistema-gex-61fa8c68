@@ -543,6 +543,18 @@ function LeadDetailDialog({
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const deleteInteracaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("consorcios_interacoes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchInteracoes();
+      toast.success("Comentário excluído");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
   if (!lead) return null;
 
   const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
@@ -553,7 +565,7 @@ function LeadDetailDialog({
 
   return (
     <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[900px] h-[85svh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] w-[1100px] h-[92svh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* ── Blue header ── */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shrink-0">
           <div className="flex items-start gap-4 px-5 py-4">
@@ -783,8 +795,8 @@ function LeadDetailDialog({
                     <p className="text-sm text-muted-foreground text-center py-10">Nenhum comentário ainda.</p>
                   ) : (
                     interacoes.map((i) => (
-                      <div key={i.id} className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-sm font-semibold text-primary">
+                      <div key={i.id} className="flex gap-3 group/comment">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-base">
                           {i.tipo === "ligacao" ? "📞" : i.tipo === "whatsapp" ? "💬" : i.tipo === "email" ? "✉️" : i.tipo === "reuniao" ? "📅" : i.tipo === "visita" ? "🚶" : "📝"}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -792,9 +804,18 @@ function LeadDetailDialog({
                             <span className="text-sm font-medium text-foreground">
                               {INTERACAO_TIPOS.find((t) => t.id === i.tipo)?.label ?? i.tipo}
                             </span>
-                            <span className="text-[11px] text-muted-foreground shrink-0">{fmtDate(i.created_at)}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[11px] text-muted-foreground">{fmtDate(i.created_at)}</span>
+                              <button
+                                onClick={() => { if (confirm("Excluir este comentário?")) deleteInteracaoMutation.mutate(i.id); }}
+                                className="opacity-0 group-hover/comment:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                title="Excluir comentário"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground leading-relaxed">{i.descricao}</p>
+                          <p className="text-sm text-muted-foreground leading-relaxed break-words">{i.descricao}</p>
                         </div>
                       </div>
                     ))
