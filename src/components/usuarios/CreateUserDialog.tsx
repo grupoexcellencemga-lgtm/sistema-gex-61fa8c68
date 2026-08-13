@@ -12,12 +12,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type TipoAcesso = "admin" | "financeiro" | "comercial" | "profissional" | "suporte";
+type TipoAcesso = "admin_master" | "admin" | "financeiro" | "comercial" | "profissional" | "suporte";
 
 export function CreateUserDialog() {
   const queryClient = useQueryClient();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+
+  const { data: currentUserPapel } = useQuery({
+    queryKey: ["current-user-papel", empresaId],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !empresaId) return "colaborador";
+      const { data } = await (supabase as any)
+        .from("user_empresa")
+        .select("papel")
+        .eq("user_id", user.id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      return (data?.papel ?? "colaborador") as string;
+    },
+    enabled: !!empresaId,
+  });
+
+  const isAdminMaster = currentUserPapel === "admin_master";
+
   const { data: profissionais = [] } = useProfissionais();
   const { data: comerciais = [] } = useQuery({
     queryKey: ["comerciais-ativos", empresaId],
@@ -38,7 +57,7 @@ export function CreateUserDialog() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [tipoAcesso, setTipoAcesso] = useState<TipoAcesso>("admin");
+  const [tipoAcesso, setTipoAcesso] = useState<TipoAcesso>("financeiro");
   const [profissionalId, setProfissionalId] = useState("");
   const [comercialId, setComercialId] = useState("");
 
@@ -47,9 +66,6 @@ export function CreateUserDialog() {
       if (!senha || senha.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres");
       if (senha !== confirmarSenha) throw new Error("As senhas não coincidem");
 
-      // Criação via Edge Function (Admin API): não dispara e-mail de confirmação,
-      // então não esbarra no limite de envio do provedor padrão do Supabase,
-      // e não troca a sessão do admin pela do usuário recém-criado.
       const { data, error } = await supabase.functions.invoke("admin-create-user", {
         body: { nome, email, senha, tipoAcesso, profissionalId, comercialId, empresaId },
       });
@@ -70,14 +86,18 @@ export function CreateUserDialog() {
     setEmail("");
     setSenha("");
     setConfirmarSenha("");
-    setTipoAcesso("profissional");
+    setTipoAcesso("financeiro");
     setProfissionalId("");
     setComercialId("");
   };
 
+  const noLinkedEntityRequired =
+    tipoAcesso === "admin_master" || tipoAcesso === "admin" ||
+    tipoAcesso === "financeiro" || tipoAcesso === "suporte";
+
   const canSubmit =
     nome && email && senha && senha.length >= 6 && senha === confirmarSenha &&
-    (tipoAcesso === "admin" || tipoAcesso === "financeiro" || tipoAcesso === "suporte" ||
+    (noLinkedEntityRequired ||
      (tipoAcesso === "profissional" && profissionalId) ||
      (tipoAcesso === "comercial" && comercialId));
 
@@ -113,7 +133,8 @@ export function CreateUserDialog() {
             <Select value={tipoAcesso} onValueChange={(v) => setTipoAcesso(v as TipoAcesso)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">ADM</SelectItem>
+                {isAdminMaster && <SelectItem value="admin_master">ADM Master</SelectItem>}
+                {isAdminMaster && <SelectItem value="admin">ADM</SelectItem>}
                 <SelectItem value="financeiro">Financeiro</SelectItem>
                 <SelectItem value="comercial">Vendedor / Comercial</SelectItem>
                 <SelectItem value="profissional">Profissional</SelectItem>
