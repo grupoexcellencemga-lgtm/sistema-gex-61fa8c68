@@ -179,17 +179,19 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   const { data: formasPagamento = [] } = useFormasPagamento();
 
   const { data: movimentacoesContas = [] } = useQuery({
-    queryKey: ["movimentacoes_contas"],
+    queryKey: ["movimentacoes_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("movimentacoes_contas" as any)
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: contasManuais = [] } = useQuery({
@@ -225,17 +227,19 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: comissoes = [] } = useQuery({
-    queryKey: ["comissoes-contas"],
+    queryKey: ["comissoes-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comissoes")
         .select("*, comerciais(nome), alunos(nome), produtos(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: processosIndividuais = [] } = useQuery({
@@ -255,16 +259,18 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({
-    queryKey: ["pgtos-processo-contas"],
+    queryKey: ["pgtos-processo-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: profissionais = [] } = useQuery({
@@ -283,30 +289,34 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: pagamentosProfissional = [] } = useQuery({
-    queryKey: ["pagamentos-profissional-contas"] ,
+    queryKey: ["pagamentos-profissional-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_profissional")
         .select("*, profissionais(nome), processos_individuais(cliente_nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: reembolsos = [] } = useQuery({
-    queryKey: ["reembolsos-contas"],
+    queryKey: ["reembolsos-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("reembolsos")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data_despesa", { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: processosEmpresariais = [] } = useQuery({
@@ -326,16 +336,18 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: pagamentosProcessoEmp = [] } = useQuery({
-    queryKey: ["pgtos-processo-emp-contas"],
+    queryKey: ["pgtos-processo-emp-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo_empresarial")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [] } = useQuery({

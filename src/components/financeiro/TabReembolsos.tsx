@@ -89,16 +89,18 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: reembolsos = [], isLoading } = useQuery({
-    queryKey: ["reembolsos"],
+    queryKey: ["reembolsos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("reembolsos")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: profissionais = [] } = useQuery({
@@ -195,7 +197,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reembolsos"] });
+      queryClient.invalidateQueries({ queryKey: ["reembolsos", empresaId] });
       setDialogOpen(false);
       setEditingItem(null);
       toast({
@@ -241,7 +243,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reembolsos"] });
+      queryClient.invalidateQueries({ queryKey: ["reembolsos", empresaId] });
       setPagarDialogOpen(false);
       setPayingItem(null);
       toast({ title: "Reembolso pago com sucesso!" });
@@ -266,7 +268,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reembolsos"] });
+      queryClient.invalidateQueries({ queryKey: ["reembolsos", empresaId] });
       queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast({ title: "Reembolso removido e despesa estornada" });
     },
@@ -321,6 +323,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       comprovante_url: primeiroComprovante?.url || null,
       comprovantes_urls,
       categoria_id: categoriaId || null,
+      empresa_id: empresaId,
     });
   };
 

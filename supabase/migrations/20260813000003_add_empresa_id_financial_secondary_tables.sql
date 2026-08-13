@@ -1,4 +1,6 @@
 -- Adiciona empresa_id nas tabelas financeiras secundárias que ainda não têm isolamento multi-tenant
+-- Inclui: comissoes, movimentacoes_contas, pagamentos_processo, pagamentos_processo_empresarial,
+--         pagamentos_profissional, transferencias_entre_contas, reembolsos
 
 -- 1. comissoes
 ALTER TABLE comissoes ADD COLUMN IF NOT EXISTS empresa_id uuid REFERENCES empresas(id);
@@ -35,6 +37,13 @@ UPDATE pagamentos_profissional pp SET empresa_id = p.empresa_id FROM profissiona
 UPDATE pagamentos_profissional SET empresa_id = '480e60de-ccd4-4472-bea5-612dbd4661e0' WHERE empresa_id IS NULL;
 ALTER TABLE pagamentos_profissional ALTER COLUMN empresa_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_pagamentos_profissional_empresa_id ON pagamentos_profissional(empresa_id);
+
+-- 7. reembolsos
+ALTER TABLE reembolsos ADD COLUMN IF NOT EXISTS empresa_id uuid REFERENCES empresas(id);
+UPDATE reembolsos r SET empresa_id = cb.empresa_id FROM contas_bancarias cb WHERE r.conta_bancaria_id = cb.id AND r.empresa_id IS NULL;
+UPDATE reembolsos SET empresa_id = '480e60de-ccd4-4472-bea5-612dbd4661e0' WHERE empresa_id IS NULL;
+ALTER TABLE reembolsos ALTER COLUMN empresa_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_reembolsos_empresa_id ON reembolsos(empresa_id);
 
 -- 6. transferencias_entre_contas
 ALTER TABLE transferencias_entre_contas ADD COLUMN IF NOT EXISTS empresa_id uuid REFERENCES empresas(id);
