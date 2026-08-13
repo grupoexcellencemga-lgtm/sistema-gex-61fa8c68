@@ -6,6 +6,7 @@ import { CategoriasSection } from "@/components/configuracoes/CategoriasSection"
 import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistTemplatesSection";
 import { ChecklistAreaResponsaveisSection } from "@/components/configuracoes/ChecklistAreaResponsaveisSection";
 import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSection";
+import { EmpresaIdentidadeSection } from "@/components/configuracoes/EmpresaIdentidadeSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
@@ -43,6 +44,7 @@ import {
   Percent,
   ListChecks,
   CalendarClock,
+  Paintbrush,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -140,6 +142,7 @@ const Configuracoes = () => {
   });
 
   const [nome, setNome] = useState("");
+  const [sobrenome, setSobrenome] = useState("");
   const [telefone, setTelefone] = useState("");
 
   const [notifConfig, setNotifConfig] = useState(defaultConfig);
@@ -154,8 +157,8 @@ const Configuracoes = () => {
 
   useEffect(() => {
     if (!profile) return;
-
-    setNome(profile.nome || "");
+    setNome((profile as any).nome || "");
+    setSobrenome((profile as any).sobrenome || "");
     setTelefone(profile.telefone ? maskPhone(profile.telefone) : "");
   }, [profile]);
 
@@ -199,7 +202,8 @@ const Configuracoes = () => {
         .update({
           nome,
           telefone: telefone || null,
-        })
+          sobrenome: sobrenome || null,
+        } as any)
         .eq("user_id", user.id);
 
       if (error) throw error;
@@ -373,6 +377,11 @@ const Configuracoes = () => {
               <CalendarClock className="h-4 w-4" />
               Google Agenda
             </TabsTrigger>
+
+            <TabsTrigger value="identidade" className="gap-1.5 shrink-0">
+              <Paintbrush className="h-4 w-4" />
+              Identidade Visual
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -389,9 +398,15 @@ const Configuracoes = () => {
                 </div>
               ) : (
                 <>
-                  <div>
-                    <Label>Nome</Label>
-                    <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Nome</Label>
+                      <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="João" />
+                    </div>
+                    <div>
+                      <Label>Sobrenome</Label>
+                      <Input value={sobrenome} onChange={(e) => setSobrenome(e.target.value)} placeholder="Silva" />
+                    </div>
                   </div>
 
                   <div>
@@ -641,6 +656,10 @@ const Configuracoes = () => {
 
         <TabsContent value="google-agenda" className="max-w-5xl space-y-6">
           <GoogleAgendaSection />
+        </TabsContent>
+
+        <TabsContent value="identidade" className="max-w-2xl space-y-6">
+          <EmpresaIdentidadeSection />
         </TabsContent>
       </Tabs>
     </div>
