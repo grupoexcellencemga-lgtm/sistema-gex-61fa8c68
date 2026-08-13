@@ -465,7 +465,7 @@ const Funil = () => {
   const insertEtapaMutation = useMutation({
     mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string; quadro_id: string }) => {
       const ordem = etapas.length;
-      const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem });
+      const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, ordem, empresa_id: empresaId });
       if (error) throw error;
     },
     onSuccess: () => {
