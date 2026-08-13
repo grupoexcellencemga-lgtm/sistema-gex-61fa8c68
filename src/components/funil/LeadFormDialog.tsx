@@ -111,6 +111,16 @@ export function LeadFormDialog({ open, onOpenChange, form, setForm, onSave, isPe
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>Valor potencial (R$)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.valor}
+              onChange={(e) => u("valor", e.target.value)}
+              placeholder="Ex.: 5000"
+            />
+          </div>
           <div className="col-span-2">
             <Label>Observações</Label>
             <Textarea value={form.observacoes} onChange={(e) => u("observacoes", e.target.value)} placeholder="Observações" />

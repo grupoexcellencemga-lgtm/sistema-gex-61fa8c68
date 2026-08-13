@@ -9,12 +9,13 @@ export interface LeadForm {
   responsavel_id: string;
   quadro_id: string;
   etapa_id: string;
+  valor: string;
 }
 
 export const emptyLeadForm: LeadForm = {
   nome: "", email: "", telefone: "", cidade: "",
   produto_interesse: "", origem: "", observacoes: "", responsavel_id: "",
-  quadro_id: "", etapa_id: "",
+  quadro_id: "", etapa_id: "", valor: "",
 };
 
 // Uma etapa (coluna) do funil — configurável em Configurações → Funil.

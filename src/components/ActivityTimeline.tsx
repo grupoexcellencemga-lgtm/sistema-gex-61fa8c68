@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { GraduationCap, CreditCard, ArrowRight, MessageSquare, Phone, Mail, FileText, Loader2 } from "lucide-react";
+import { GraduationCap, CreditCard, ArrowRight, MessageSquare, Phone, Mail, FileText, Calendar, Loader2 } from "lucide-react";
 
 const iconMap: Record<string, any> = {
   matricula: GraduationCap,
@@ -10,6 +10,8 @@ const iconMap: Record<string, any> = {
   email: Mail,
   observacao: MessageSquare,
   documento: FileText,
+  reuniao: Calendar,
+  nota: MessageSquare,
 };
 
 const colorMap: Record<string, string> = {
@@ -20,6 +22,8 @@ const colorMap: Record<string, string> = {
   email: "text-muted-foreground bg-secondary border-border",
   observacao: "text-muted-foreground bg-secondary border-border",
   documento: "text-muted-foreground bg-secondary border-border",
+  reuniao: "text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800",
+  nota: "text-muted-foreground bg-secondary border-border",
 };
 
 const formatTimeAgo = (dateStr: string) => {

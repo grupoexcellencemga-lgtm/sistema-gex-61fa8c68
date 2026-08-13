@@ -3,7 +3,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
-import { DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import type { LeadRow, ProdutoSelect, ComercialSelect, TurmaSelect } from "@/typ
 
 import { LeadForm, emptyLeadForm, type FunilEtapa } from "@/components/funil/funilUtils";
 import { FunilMetrics } from "@/components/funil/FunilMetrics";
+import { LeadCard } from "@/components/funil/LeadCard";
 import { FunilFilters } from "@/components/funil/FunilFilters";
 import { FunilColumn } from "@/components/funil/FunilColumn";
 import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
@@ -74,6 +75,8 @@ const Funil = () => {
   const [importTipo, setImportTipo] = useState<"evento" | "turma">("evento");
   const [importEventoId, setImportEventoId] = useState("");
   const [importTurmaId, setImportTurmaId] = useState("");
+
+  const [activeLead, setActiveLead] = useState<LeadRow | null>(null);
 
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -422,6 +425,7 @@ const Funil = () => {
         observacoes: data.observacoes || null,
         responsavel_id: data.responsavel_id && data.responsavel_id !== "none" ? data.responsavel_id : null,
         etapa_id: data.etapa_id,
+        valor: data.valor ? Number(data.valor) : null,
       } as any);
       if (error) throw error;
     },
@@ -535,7 +539,13 @@ const Funil = () => {
     if (confirm(`Excluir a coluna "${etapa.nome}"?`)) deleteEtapaMutation.mutate(etapa);
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const lead = leads.find((l) => l.id === event.active.id) ?? null;
+    setActiveLead(lead);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveLead(null);
     const { active, over } = event;
     if (!over) return;
     const leadId = active.id as string;
@@ -813,7 +823,7 @@ const Funil = () => {
                     </Button>
                   </div>
                 ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                     <div className="space-y-2">
                       <div ref={topScrollRef} className="w-full overflow-x-auto overflow-y-hidden shrink-0" onScroll={() => syncScroll("top")}>
                         <div style={{ width: boardWidth }} className="h-1" />
@@ -846,6 +856,16 @@ const Funil = () => {
                         </div>
                       </div>
                     </div>
+                    <DragOverlay dropAnimation={null}>
+                      {activeLead && (
+                        <LeadCard
+                          lead={activeLead}
+                          comercialNome={activeLead.responsavel_id ? comerciaisMap.get(activeLead.responsavel_id) : undefined}
+                          onClick={() => {}}
+                          isOverlay
+                        />
+                      )}
+                    </DragOverlay>
                   </DndContext>
                 )}
               </>

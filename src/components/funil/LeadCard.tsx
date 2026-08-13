@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, User, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
 
 interface Props {
@@ -11,28 +12,36 @@ interface Props {
   comercialNome?: string;
   onClick: () => void;
   onDelete?: () => void;
+  isOverlay?: boolean;
 }
 
-export function LeadCard({ lead, comercialNome, onClick, onDelete }: Props) {
+export function LeadCard({ lead, comercialNome, onClick, onDelete, isOverlay }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: { lead },
   });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 50 : undefined,
-    touchAction: "none" as const,
-  };
+  const style = isOverlay
+    ? undefined
+    : {
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.4 : 1,
+        zIndex: isDragging ? 50 : undefined,
+        touchAction: "none" as const,
+      };
 
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+    <div
+      ref={isOverlay ? undefined : setNodeRef}
+      style={style}
+      {...(isOverlay ? {} : { ...listeners, ...attributes })}
+    >
       <Card
-        className="group/card relative cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md border"
-        onClick={(e) => {
-          if (!isDragging) onClick();
-        }}
+        className={cn(
+          "group/card relative cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md border",
+          isOverlay && "shadow-xl rotate-1 cursor-grabbing ring-2 ring-primary/30"
+        )}
+        onClick={() => { if (!isDragging && !isOverlay) onClick(); }}
       >
         <CardContent className="p-3">
           {onDelete && (

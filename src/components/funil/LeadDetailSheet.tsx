@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { WhatsAppDialog } from "@/components/WhatsAppDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Mail, MapPin, ArrowRight, ArrowLeft, XCircle, Loader2, Clock, Pencil, UserCheck, User, Trash2 } from "lucide-react";
+import { Phone, Mail, MapPin, ArrowRight, ArrowLeft, XCircle, Loader2, Clock, Pencil, UserCheck, User, Trash2, Plus, DollarSign } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import { toast } from "sonner";
 import { ActivityTimeline, logActivity } from "@/components/ActivityTimeline";
@@ -42,6 +42,8 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
   const [convertForm, setConvertForm] = useState({ produto_id: "", turma_id: "" });
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [obsHtml, setObsHtml] = useState(lead?.observacoes || "");
+  const [interacaoTipo, setInteracaoTipo] = useState("nota");
+  const [interacaoDescricao, setInteracaoDescricao] = useState("");
 
   // Hooks precisam rodar sempre na mesma ordem/quantidade, mesmo quando o
   // sheet ainda não tem lead selecionado (fica montado com lead=null antes
@@ -61,6 +63,7 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
         origem: editForm.origem ? editForm.origem.toLowerCase() : null,
         observacoes: editForm.observacoes || null,
         responsavel_id: editForm.responsavel_id && editForm.responsavel_id !== "none" ? editForm.responsavel_id : null,
+        valor: editForm.valor ? Number(editForm.valor) : null,
       } as any).eq("id", lead.id);
       if (error) throw error;
     },
@@ -179,6 +182,19 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const addInteracaoMutation = useMutation({
+    mutationFn: async () => {
+      if (!interacaoDescricao.trim()) throw new Error("Descrição obrigatória");
+      await logActivity({ tipo: interacaoTipo, descricao: interacaoDescricao.trim(), lead_id: lead.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["atividades", undefined, lead.id] });
+      setInteracaoDescricao("");
+      toast.success("Interação registrada");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
   // Sync local obs editor whenever a different lead is opened
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setObsHtml(lead?.observacoes || ""); }, [lead?.id]);
@@ -202,6 +218,9 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
       origem: lead.origem || "",
       observacoes: lead.observacoes || "",
       responsavel_id: lead.responsavel_id || "",
+      quadro_id: "",
+      etapa_id: lead.etapa_id || "",
+      valor: lead.valor != null ? String(lead.valor) : "",
     });
     setEditing(true);
   };
@@ -272,6 +291,16 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   </div>
                 </div>
                 <div>
+                  <Label>Valor potencial (R$)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editForm.valor}
+                    onChange={(e) => u("valor", e.target.value)}
+                    placeholder="Ex.: 5000"
+                  />
+                </div>
+                <div>
                   <Label className="mb-1.5 block">Observações</Label>
                   <RichTextEditor
                     value={editForm.observacoes}
@@ -316,6 +345,15 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><span className="text-muted-foreground">Produto:</span><p>{lead.produto_interesse || "—"}</p></div>
                     <div><span className="text-muted-foreground">Origem:</span><p>{lead.origem || "—"}</p></div>
+                    {lead.valor != null && lead.valor > 0 && (
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-semibold text-foreground">
+                          {Number(lead.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                        <span className="text-muted-foreground text-xs">potencial</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -395,9 +433,37 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   <TarefasContextSection leadId={lead.id} />
                 </div>
 
-                {/* Timeline */}
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />Histórico</h3>
+                {/* Registro de interação */}
+                <div className="border-t pt-4 space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />Histórico</h3>
+                  <div className="flex gap-2">
+                    <Select value={interacaoTipo} onValueChange={setInteracaoTipo}>
+                      <SelectTrigger className="w-[130px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nota">📝 Nota</SelectItem>
+                        <SelectItem value="ligacao">📞 Ligação</SelectItem>
+                        <SelectItem value="reuniao">📅 Reunião</SelectItem>
+                        <SelectItem value="email">📧 E-mail</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      className="h-8 shrink-0"
+                      disabled={!interacaoDescricao.trim() || addInteracaoMutation.isPending}
+                      onClick={() => addInteracaoMutation.mutate()}
+                    >
+                      {addInteracaoMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={interacaoDescricao}
+                    onChange={(e) => setInteracaoDescricao(e.target.value)}
+                    placeholder="Descreva a interação..."
+                    rows={2}
+                    className="text-sm"
+                  />
                   <ActivityTimeline leadId={lead.id} />
                 </div>
               </>

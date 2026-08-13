@@ -75,6 +75,15 @@ export function FunilColumn({
           <span className="text-xs bg-secondary text-muted-foreground rounded-full px-2 py-0.5 shrink-0">
             {leads.length}
           </span>
+          {(() => {
+            const total = leads.reduce((acc, l) => acc + ((l as any).valor ?? 0), 0);
+            if (total <= 0) return null;
+            return (
+              <span className="text-[10px] text-muted-foreground font-medium shrink-0">
+                {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+              </span>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveLeft} onClick={() => onMoveEtapa(etapa, -1)} title="Mover para a esquerda">
