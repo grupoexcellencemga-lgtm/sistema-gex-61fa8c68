@@ -328,6 +328,11 @@ const Configuracoes = () => {
               Perfil
             </TabsTrigger>
 
+            <TabsTrigger value="identidade" className="gap-1.5 shrink-0">
+              <Paintbrush className="h-4 w-4" />
+              Identidade Visual
+            </TabsTrigger>
+
             <TabsTrigger value="empresa" className="gap-1.5 shrink-0">
               <Building2 className="h-4 w-4" />
               Empresa
@@ -376,11 +381,6 @@ const Configuracoes = () => {
             <TabsTrigger value="google-agenda" className="gap-1.5 shrink-0">
               <CalendarClock className="h-4 w-4" />
               Google Agenda
-            </TabsTrigger>
-
-            <TabsTrigger value="identidade" className="gap-1.5 shrink-0">
-              <Paintbrush className="h-4 w-4" />
-              Identidade Visual
             </TabsTrigger>
           </TabsList>
         </div>
