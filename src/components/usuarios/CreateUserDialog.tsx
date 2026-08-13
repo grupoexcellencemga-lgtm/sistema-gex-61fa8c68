@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfissionais } from "@/hooks/useProfissionais";
-import { useQuery } from "@tanstack/react-query";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -12,21 +12,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type TipoAcesso = "admin" | "profissional" | "comercial";
+type TipoAcesso = "admin" | "financeiro" | "comercial" | "profissional" | "suporte";
 
 export function CreateUserDialog() {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: profissionais = [] } = useProfissionais();
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais-ativos"],
+    queryKey: ["comerciais-ativos", empresaId],
     queryFn: async () => {
       const { data } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .order("nome");
       return data ?? [];
     },
+    enabled: !!empresaId,
   });
 
   const [open, setOpen] = useState(false);
@@ -34,7 +38,7 @@ export function CreateUserDialog() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [tipoAcesso, setTipoAcesso] = useState<TipoAcesso>("profissional");
+  const [tipoAcesso, setTipoAcesso] = useState<TipoAcesso>("admin");
   const [profissionalId, setProfissionalId] = useState("");
   const [comercialId, setComercialId] = useState("");
 
@@ -47,7 +51,7 @@ export function CreateUserDialog() {
       // então não esbarra no limite de envio do provedor padrão do Supabase,
       // e não troca a sessão do admin pela do usuário recém-criado.
       const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: { nome, email, senha, tipoAcesso, profissionalId, comercialId },
+        body: { nome, email, senha, tipoAcesso, profissionalId, comercialId, empresaId },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -73,7 +77,7 @@ export function CreateUserDialog() {
 
   const canSubmit =
     nome && email && senha && senha.length >= 6 && senha === confirmarSenha &&
-    (tipoAcesso === "admin" ||
+    (tipoAcesso === "admin" || tipoAcesso === "financeiro" || tipoAcesso === "suporte" ||
      (tipoAcesso === "profissional" && profissionalId) ||
      (tipoAcesso === "comercial" && comercialId));
 
@@ -109,9 +113,11 @@ export function CreateUserDialog() {
             <Select value={tipoAcesso} onValueChange={(v) => setTipoAcesso(v as TipoAcesso)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">ADM Master (acesso total)</SelectItem>
-                <SelectItem value="profissional">Profissional (vinculado a profissional)</SelectItem>
-                <SelectItem value="comercial">Vendedor / Comercial (vinculado a vendedor)</SelectItem>
+                <SelectItem value="admin">ADM</SelectItem>
+                <SelectItem value="financeiro">Financeiro</SelectItem>
+                <SelectItem value="comercial">Vendedor / Comercial</SelectItem>
+                <SelectItem value="profissional">Profissional</SelectItem>
+                <SelectItem value="suporte">Suporte</SelectItem>
               </SelectContent>
             </Select>
           </div>
