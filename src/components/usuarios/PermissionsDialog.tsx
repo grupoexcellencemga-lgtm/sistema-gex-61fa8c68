@@ -171,10 +171,10 @@ export function PermissionsDialog({
             <Select value={selectedRole} onValueChange={(v) => { setSelectedRole(v); setPermChecked({}); }}>
               <SelectTrigger><SelectValue placeholder="Selecione o tipo de acesso" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">ADM Master</SelectItem>
-                <SelectItem value="profissional">Profissional</SelectItem>
-                <SelectItem value="comercial">Vendedor / Comercial</SelectItem>
+                <SelectItem value="admin">ADM</SelectItem>
                 <SelectItem value="financeiro">Financeiro</SelectItem>
+                <SelectItem value="comercial">Vendedor / Comercial</SelectItem>
+                <SelectItem value="profissional">Profissional</SelectItem>
                 <SelectItem value="suporte">Suporte</SelectItem>
               </SelectContent>
             </Select>

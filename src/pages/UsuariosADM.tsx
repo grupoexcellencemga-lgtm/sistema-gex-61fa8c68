@@ -21,7 +21,8 @@ import { toast } from "sonner";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const tipoLabels: Record<string, string> = {
-  admin: "ADM Master",
+  admin_master: "ADM Master",
+  admin: "ADM",
   profissional: "Profissional",
   comercial: "Vendedor / Comercial",
   financeiro: "Financeiro",
@@ -53,13 +54,14 @@ const UsuariosADM = () => {
   const { data: usuarios = [], isLoading } = useQuery({
     queryKey: ["adm-users", empresaId],
     queryFn: async () => {
-      // Busca apenas user_ids vinculados à empresa atual
+      // Busca user_ids e papel vinculados à empresa atual
       const { data: membros } = await (supabase as any)
         .from("user_empresa")
-        .select("user_id")
+        .select("user_id, papel")
         .eq("empresa_id", empresaId!);
 
       const userIds = (membros ?? []).map((m: any) => m.user_id);
+      const papelMap = new Map((membros ?? []).map((m: any) => [m.user_id, m.papel]));
       if (userIds.length === 0) return [];
 
       const [{ data: profiles }, { data: roles }, { data: profissionais }, { data: comerciais }] =
@@ -72,11 +74,13 @@ const UsuariosADM = () => {
 
       return (profiles ?? []).map((p: any) => {
         const role = roles?.find((r: any) => r.user_id === p.user_id)?.role ?? null;
+        const papel = papelMap.get(p.user_id) ?? null;
         const prof = profissionais?.find((pr: any) => pr.id === p.profissional_id);
         const com = comerciais?.find((c: any) => c.id === p.comercial_id);
         return {
           ...p,
           role,
+          papel,
           profissional_nome: prof?.nome ?? null,
           comercial_nome: com?.nome ?? null,
         };
@@ -179,8 +183,10 @@ const UsuariosADM = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>
-                        {tipoLabels[u.role] ?? "Sem perfil"}
+                      <Badge variant={u.papel === "admin_master" || u.role === "admin" ? "default" : "secondary"}>
+                        {u.papel === "admin_master"
+                          ? "ADM Master"
+                          : tipoLabels[u.role] ?? "Sem perfil"}
                       </Badge>
                     </TableCell>
                     <TableCell>
