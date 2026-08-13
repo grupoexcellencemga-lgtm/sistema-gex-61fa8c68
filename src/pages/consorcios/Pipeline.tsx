@@ -565,7 +565,7 @@ function LeadDetailDialog({
 
   return (
     <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="!max-w-[98vw] !w-[min(1400px,98vw)] h-[92svh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent hideCloseButton className="!max-w-[88vw] !w-[min(1000px,88vw)] h-[90svh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* ── Blue header ── */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shrink-0">
           <div className="flex items-start gap-4 px-5 py-4">
@@ -601,24 +601,22 @@ function LeadDetailDialog({
             </div>
 
             {/* Value + close */}
-            <div className="text-right shrink-0 flex flex-col items-end gap-1">
+            <div className="shrink-0 flex flex-col items-end gap-1">
               {lead.valor_credito && (
-                <div className="text-2xl font-bold leading-none">
+                <div className="text-2xl font-bold leading-none text-right">
                   R$ {lead.valor_credito.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               )}
               {lead.prazo && (
                 <div className="text-xs text-blue-200">{lead.prazo} meses</div>
               )}
+              <button
+                onClick={onClose}
+                className="mt-1 h-7 w-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors self-end"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="shrink-0 h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors mt-0.5"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
@@ -808,7 +806,7 @@ function LeadDetailDialog({
                               <span className="text-[11px] text-muted-foreground">{fmtDate(i.created_at)}</span>
                               <button
                                 onClick={() => { if (confirm("Excluir este comentário?")) deleteInteracaoMutation.mutate(i.id); }}
-                                className="opacity-0 group-hover/comment:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                className="opacity-40 group-hover/comment:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
                                 title="Excluir comentário"
                               >
                                 <Trash2 className="h-3 w-3" />
