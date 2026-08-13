@@ -12,7 +12,7 @@ import {
   useSensors,
   useDroppable,
   useDraggable,
-  closestCenter,
+  pointerWithin,
 } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -132,6 +132,7 @@ function LeadCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
+    disabled: isOverlay,
   });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -1164,7 +1165,7 @@ const Pipeline = () => {
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >

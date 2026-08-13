@@ -19,6 +19,7 @@ export function LeadCard({ lead, comercialNome, onClick, onDelete, isOverlay }: 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: { lead },
+    disabled: isOverlay,
   });
 
   const style = isOverlay
