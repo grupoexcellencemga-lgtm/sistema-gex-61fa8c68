@@ -22,7 +22,8 @@ export interface ConsorcioLead {
   prazo: number | null;
   origem: Origem | null;
   indicado_por: string | null;
-  etapa: EtapaConsorcio;
+  etapa: EtapaConsorcio | null;
+  etapa_id: string | null;
   responsavel_id: string | null;
   observacoes: string | null;
   cidade: string | null;
@@ -48,7 +49,7 @@ export interface LeadConsorcioForm {
   prazo: string;
   origem: Origem | "";
   indicado_por: string;
-  etapa: EtapaConsorcio;
+  etapa_id: string;
   responsavel_id: string;
   observacoes: string;
   cidade: string;
@@ -64,7 +65,7 @@ export const EMPTY_LEAD_FORM: LeadConsorcioForm = {
   prazo: "",
   origem: "",
   indicado_por: "",
-  etapa: "novo_lead",
+  etapa_id: "",
   responsavel_id: "",
   observacoes: "",
   cidade: "",
@@ -138,7 +139,7 @@ export function formToPayload(form: LeadConsorcioForm) {
     prazo: form.prazo ? parseInt(form.prazo) : null,
     origem: form.origem || null,
     indicado_por: form.indicado_por.trim() || null,
-    etapa: form.etapa,
+    etapa_id: form.etapa_id || null,
     responsavel_id: form.responsavel_id || null,
     observacoes: form.observacoes.trim() || null,
     cidade: form.cidade.trim() || null,

@@ -2,17 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  useDraggable,
-  pointerWithin,
+  DndContext, DragEndEvent, DragOverlay, DragStartEvent,
+  PointerSensor, TouchSensor, useSensor, useSensors,
+  useDroppable, useDraggable, pointerWithin,
 } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -23,97 +15,38 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  Plus,
-  Phone,
-  MessageCircle,
-  Calendar,
-  FileText,
-  CheckCircle2,
-  XCircle,
-  UserPlus,
-  Loader2,
-  Trash2,
-  Search,
-  LayoutList,
+  Plus, MessageCircle, Loader2, Trash2, Search, LayoutList,
+  ChevronLeft, ChevronRight, Pencil,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Link } from "react-router-dom";
+import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
+import { ETAPA_CORES, type FunilEtapa } from "@/components/funil/funilUtils";
 import {
-  ConsorcioLead,
-  ConsorcioInteracao,
-  LeadConsorcioForm,
-  EMPTY_LEAD_FORM,
-  ETAPA_LIST,
-  SEGMENTOS,
-  ORIGENS,
-  INTERACAO_TIPOS,
-  formatCurrency,
-  whatsappHref,
-  fmtDate,
-  formToPayload,
-  type EtapaConsorcio,
-  type Segmento,
-  type InteracaoTipo,
+  ConsorcioLead, ConsorcioInteracao, LeadConsorcioForm,
+  EMPTY_LEAD_FORM, SEGMENTOS, ORIGENS, INTERACAO_TIPOS,
+  formatCurrency, whatsappHref, fmtDate, formToPayload,
+  type Segmento, type InteracaoTipo,
 } from "@/lib/consorcios";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 
-// ── Pipeline stages with icons and colors ─────────────────────────────────────
+// ── Default etapas when creating a new pipeline ────────────────────────────────
 
-const PIPELINE_STAGES = [
-  {
-    id: "novo_lead" as EtapaConsorcio,
-    label: "Novo Lead",
-    Icon: UserPlus,
-    colClass: "border-slate-200 bg-slate-50/80 dark:bg-slate-900/20 dark:border-slate-700",
-    headClass: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  },
-  {
-    id: "em_contato" as EtapaConsorcio,
-    label: "Em Contato",
-    Icon: Phone,
-    colClass: "border-blue-200 bg-blue-50/80 dark:bg-blue-950/20 dark:border-blue-800",
-    headClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300",
-  },
-  {
-    id: "reuniao_agendada" as EtapaConsorcio,
-    label: "Reunião Agendada",
-    Icon: Calendar,
-    colClass: "border-amber-200 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-800",
-    headClass: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
-  },
-  {
-    id: "proposta_enviada" as EtapaConsorcio,
-    label: "Proposta Enviada",
-    Icon: FileText,
-    colClass: "border-violet-200 bg-violet-50/80 dark:bg-violet-950/20 dark:border-violet-800",
-    headClass: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
-  },
-  {
-    id: "contrato_fechado" as EtapaConsorcio,
-    label: "Contrato Fechado",
-    Icon: CheckCircle2,
-    colClass: "border-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/20 dark:border-emerald-800",
-    headClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
-  },
-  {
-    id: "perdido" as EtapaConsorcio,
-    label: "Perdido",
-    Icon: XCircle,
-    colClass: "border-red-200 bg-red-50/80 dark:bg-red-950/20 dark:border-red-800",
-    headClass: "bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300",
-  },
-] as const;
+const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"] }> = [
+  { nome: "Novo Lead", cor: "slate", tipo: "em_andamento" },
+  { nome: "Em Contato", cor: "blue", tipo: "em_andamento" },
+  { nome: "Reunião Agendada", cor: "yellow", tipo: "em_andamento" },
+  { nome: "Proposta Enviada", cor: "purple", tipo: "em_andamento" },
+  { nome: "Contrato Fechado", cor: "green", tipo: "ganho" },
+  { nome: "Perdido", cor: "red", tipo: "perdido" },
+];
 
 // ── LeadCard ──────────────────────────────────────────────────────────────────
 
@@ -158,10 +91,7 @@ function LeadCard({
         <span className="text-sm font-medium leading-tight line-clamp-2 flex-1">{lead.nome}</span>
         <button
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
         >
           <Trash2 className="h-3 w-3" />
@@ -169,12 +99,7 @@ function LeadCard({
       </div>
 
       {seg && (
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full",
-            seg.className
-          )}
-        >
+        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full", seg.className)}>
           {seg.emoji} {seg.label}
         </span>
       )}
@@ -209,9 +134,7 @@ function LeadCard({
         )}
       </div>
 
-      {origem && (
-        <div className="text-[11px] text-muted-foreground">via {origem.label}</div>
-      )}
+      {origem && <div className="text-[11px] text-muted-foreground">via {origem.label}</div>}
     </div>
   );
 }
@@ -219,47 +142,70 @@ function LeadCard({
 // ── KanbanColumn ──────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  stage,
+  etapa,
   leads,
   comerciaisMap,
   onLeadClick,
   onDeleteLead,
+  onEditEtapa,
+  onDeleteEtapa,
+  onMoveEtapa,
+  canMoveLeft,
+  canMoveRight,
 }: {
-  stage: typeof PIPELINE_STAGES[number];
+  etapa: FunilEtapa;
   leads: ConsorcioLead[];
   comerciaisMap: Map<string, string>;
   onLeadClick: (lead: ConsorcioLead) => void;
   onDeleteLead: (id: string) => void;
+  onEditEtapa: (etapa: FunilEtapa) => void;
+  onDeleteEtapa: (etapa: FunilEtapa) => void;
+  onMoveEtapa: (etapa: FunilEtapa, direction: -1 | 1) => void;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
-  const { Icon } = stage;
+  const { setNodeRef, isOver } = useDroppable({ id: etapa.id });
+  const cores = ETAPA_CORES[etapa.cor] || ETAPA_CORES.slate;
   const totalValor = leads.reduce((acc, l) => acc + (l.valor_credito ?? 0), 0);
 
   return (
-    <div
-      className={cn(
-        "flex flex-col w-[268px] shrink-0 rounded-xl border-2 transition-all duration-150",
-        stage.colClass,
-        isOver && "ring-2 ring-primary/60 ring-offset-2 scale-[1.01]"
-      )}
-    >
-      <div className={cn("flex items-center gap-2 px-3 py-2 rounded-t-lg", stage.headClass)}>
-        <Icon className="h-4 w-4 shrink-0" />
-        <span className="text-sm font-semibold flex-1 truncate">{stage.label}</span>
-        <Badge variant="secondary" className="text-xs shrink-0 bg-white/60 dark:bg-black/30">
-          {leads.length}
-        </Badge>
-      </div>
-
-      {totalValor > 0 && (
-        <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-current/10">
-          {formatCurrency(totalValor)} em carteira
+    <div className="flex flex-col w-[280px] min-w-[280px] max-w-[280px] shrink-0 h-full">
+      <div className="flex items-center justify-between gap-1 mb-3 group shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${cores.dot}`} />
+          <h3 className="text-sm font-semibold leading-tight break-words min-w-0">{etapa.nome}</h3>
+          <span className="text-xs bg-secondary text-muted-foreground rounded-full px-2 py-0.5 shrink-0">
+            {leads.length}
+          </span>
+          {totalValor > 0 && (
+            <span className="text-[10px] text-muted-foreground font-medium shrink-0">
+              {totalValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+            </span>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveLeft} onClick={() => onMoveEtapa(etapa, -1)} title="Mover para a esquerda">
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveRight} onClick={() => onMoveEtapa(etapa, 1)} title="Mover para a direita">
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditEtapa(etapa)} title="Editar coluna">
+            <Pencil className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onDeleteEtapa(etapa)} title="Excluir coluna">
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
 
       <div
         ref={setNodeRef}
-        className="flex-1 p-2 space-y-2 overflow-y-auto min-h-[80px]"
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto space-y-2 rounded-lg p-2 transition-colors",
+          "min-h-[140px]",
+          isOver ? "bg-primary/5 ring-2 ring-primary/20" : "bg-muted/30"
+        )}
         style={{ maxHeight: "calc(100svh - 22rem)" }}
       >
         {leads.map((lead) => (
@@ -272,8 +218,8 @@ function KanbanColumn({
           />
         ))}
         {leads.length === 0 && (
-          <div className="h-16 flex items-center justify-center text-xs text-muted-foreground/40 select-none">
-            Arraste leads aqui
+          <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">
+            Nenhum lead
           </div>
         )}
       </div>
@@ -288,16 +234,24 @@ function LeadFormDialog({
   onClose,
   onSaved,
   comerciais,
+  etapas,
+  defaultEtapaId,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   comerciais: Array<{ id: string; nome: string }>;
+  etapas: FunilEtapa[];
+  defaultEtapaId?: string;
 }) {
   const qc = useQueryClient();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
-  const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
+  const [form, setForm] = useState<LeadConsorcioForm>({ ...EMPTY_LEAD_FORM });
+
+  useEffect(() => {
+    if (open) setForm({ ...EMPTY_LEAD_FORM, etapa_id: defaultEtapaId ?? "" });
+  }, [open, defaultEtapaId]);
 
   function set(field: keyof LeadConsorcioForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -314,7 +268,6 @@ function LeadFormDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcios-leads"] });
       toast.success("Lead cadastrado");
-      setForm(EMPTY_LEAD_FORM);
       onSaved();
       onClose();
     },
@@ -332,61 +285,36 @@ function LeadFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
               <Label>Nome *</Label>
-              <Input
-                value={form.nome}
-                onChange={(e) => set("nome", e.target.value)}
-                placeholder="Nome do interessado"
-              />
+              <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Nome do interessado" />
             </div>
 
             <div className="space-y-1">
               <Label>Telefone</Label>
-              <Input
-                value={form.telefone}
-                onChange={(e) => set("telefone", e.target.value)}
-                placeholder="(99) 99999-9999"
-              />
+              <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
             </div>
 
             <div className="space-y-1">
               <Label>E-mail</Label>
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => set("email", e.target.value)}
-                placeholder="email@exemplo.com"
-              />
+              <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="email@exemplo.com" />
             </div>
 
             <div className="space-y-1">
               <Label>CPF / CNPJ</Label>
-              <Input
-                value={form.cpf_cnpj}
-                onChange={(e) => set("cpf_cnpj", e.target.value)}
-                placeholder="000.000.000-00"
-              />
+              <Input value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} placeholder="000.000.000-00" />
             </div>
 
             <div className="space-y-1">
               <Label>Cidade</Label>
-              <Input
-                value={form.cidade}
-                onChange={(e) => set("cidade", e.target.value)}
-                placeholder="Ex.: Maringá"
-              />
+              <Input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} placeholder="Ex.: Maringá" />
             </div>
 
             <div className="space-y-1">
               <Label>Segmento *</Label>
               <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {SEGMENTOS.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.emoji} {s.label}
-                    </SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -395,14 +323,10 @@ function LeadFormDialog({
             <div className="space-y-1">
               <Label>Origem</Label>
               <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {ORIGENS.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.label}
-                    </SelectItem>
+                    <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -411,47 +335,27 @@ function LeadFormDialog({
             {form.origem === "indicacao" && (
               <div className="col-span-2 space-y-1">
                 <Label>Indicado por</Label>
-                <Input
-                  value={form.indicado_por}
-                  onChange={(e) => set("indicado_por", e.target.value)}
-                  placeholder="Nome de quem indicou"
-                />
+                <Input value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} placeholder="Nome de quem indicou" />
               </div>
             )}
 
             <div className="space-y-1">
               <Label>Valor de crédito (R$)</Label>
-              <Input
-                value={form.valor_credito}
-                onChange={(e) => set("valor_credito", e.target.value)}
-                placeholder="Ex.: 150000"
-                type="number"
-                min={0}
-              />
+              <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="Ex.: 150000" type="number" min={0} />
             </div>
 
             <div className="space-y-1">
               <Label>Prazo (meses)</Label>
-              <Input
-                value={form.prazo}
-                onChange={(e) => set("prazo", e.target.value)}
-                placeholder="Ex.: 180"
-                type="number"
-                min={1}
-              />
+              <Input value={form.prazo} onChange={(e) => set("prazo", e.target.value)} placeholder="Ex.: 180" type="number" min={1} />
             </div>
 
             <div className="space-y-1">
               <Label>Etapa inicial</Label>
-              <Select value={form.etapa} onValueChange={(v) => set("etapa", v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ETAPA_LIST.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.label}
-                    </SelectItem>
+                  {etapas.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -459,19 +363,12 @@ function LeadFormDialog({
 
             <div className="space-y-1">
               <Label>Responsável</Label>
-              <Select
-                value={form.responsavel_id}
-                onValueChange={(v) => set("responsavel_id", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sem responsável" />
-                </SelectTrigger>
+              <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
+                <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem responsável</SelectItem>
                   {comerciais.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nome}
-                    </SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -479,20 +376,13 @@ function LeadFormDialog({
 
             <div className="col-span-2 space-y-1">
               <Label>Observações</Label>
-              <Textarea
-                value={form.observacoes}
-                onChange={(e) => set("observacoes", e.target.value)}
-                rows={3}
-                placeholder="Informações adicionais sobre o lead..."
-              />
+              <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} placeholder="Informações adicionais sobre o lead..." />
             </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
             {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Cadastrar Lead
@@ -508,21 +398,23 @@ function LeadFormDialog({
 function LeadDetailSheet({
   lead,
   comerciais,
+  etapas,
   onClose,
   onUpdated,
 }: {
   lead: ConsorcioLead | null;
   comerciais: Array<{ id: string; nome: string }>;
+  etapas: FunilEtapa[];
   onClose: () => void;
   onUpdated: () => void;
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
   const [dirty, setDirty] = useState(false);
-  const [novaInteracao, setNovaInteracao] = useState<{
-    tipo: InteracaoTipo;
-    descricao: string;
-  }>({ tipo: "nota", descricao: "" });
+  const [novaInteracao, setNovaInteracao] = useState<{ tipo: InteracaoTipo; descricao: string }>({
+    tipo: "nota",
+    descricao: "",
+  });
 
   useEffect(() => {
     if (lead) {
@@ -536,7 +428,7 @@ function LeadDetailSheet({
         prazo: lead.prazo?.toString() ?? "",
         origem: lead.origem ?? "",
         indicado_por: lead.indicado_por ?? "",
-        etapa: lead.etapa,
+        etapa_id: lead.etapa_id ?? "",
         responsavel_id: lead.responsavel_id ?? "",
         observacoes: lead.observacoes ?? "",
         cidade: lead.cidade ?? "",
@@ -617,10 +509,7 @@ function LeadDetailSheet({
 
   return (
     <Sheet open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-full max-w-[480px] flex flex-col p-0 gap-0"
-      >
+      <SheetContent side="right" className="w-full max-w-[480px] flex flex-col p-0 gap-0">
         <SheetHeader className="p-5 border-b shrink-0">
           <SheetTitle className="truncate">{lead?.nome ?? ""}</SheetTitle>
           {lead && (
@@ -628,12 +517,7 @@ function LeadDetailSheet({
               {(() => {
                 const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
                 return seg ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full",
-                      seg.className
-                    )}
-                  >
+                  <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full", seg.className)}>
                     {seg.emoji} {seg.label}
                   </span>
                 ) : null;
@@ -644,12 +528,7 @@ function LeadDetailSheet({
                 </span>
               )}
               {lead.telefone && (
-                <a
-                  href={whatsappHref(lead.telefone)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
-                >
+                <a href={whatsappHref(lead.telefone)} target="_blank" rel="noreferrer" className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1">
                   <MessageCircle className="h-3 w-3" />
                   {lead.telefone}
                 </a>
@@ -664,18 +543,12 @@ function LeadDetailSheet({
             <TabsTrigger value="historico">
               Histórico
               {interacoes.length > 0 && (
-                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
-                  {interacoes.length}
-                </Badge>
+                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">{interacoes.length}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Aba Dados ── */}
-          <TabsContent
-            value="dados"
-            className="flex-1 overflow-y-auto p-5 space-y-3 mt-0"
-          >
+          <TabsContent value="dados" className="flex-1 overflow-y-auto p-5 space-y-3 mt-0">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs">Nome</Label>
@@ -684,49 +557,31 @@ function LeadDetailSheet({
 
               <div className="space-y-1">
                 <Label className="text-xs">Telefone</Label>
-                <Input
-                  value={form.telefone}
-                  onChange={(e) => set("telefone", e.target.value)}
-                  placeholder="(99) 99999-9999"
-                />
+                <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">E-mail</Label>
-                <Input
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                  type="email"
-                />
+                <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">CPF / CNPJ</Label>
-                <Input
-                  value={form.cpf_cnpj}
-                  onChange={(e) => set("cpf_cnpj", e.target.value)}
-                />
+                <Input value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">Cidade</Label>
-                <Input
-                  value={form.cidade}
-                  onChange={(e) => set("cidade", e.target.value)}
-                />
+                <Input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">Segmento</Label>
                 <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SEGMENTOS.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.emoji} {s.label}
-                      </SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -735,14 +590,10 @@ function LeadDetailSheet({
               <div className="space-y-1">
                 <Label className="text-xs">Origem</Label>
                 <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     {ORIGENS.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.label}
-                      </SelectItem>
+                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -751,44 +602,27 @@ function LeadDetailSheet({
               {form.origem === "indicacao" && (
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs">Indicado por</Label>
-                  <Input
-                    value={form.indicado_por}
-                    onChange={(e) => set("indicado_por", e.target.value)}
-                  />
+                  <Input value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} />
                 </div>
               )}
 
               <div className="space-y-1">
                 <Label className="text-xs">Valor crédito (R$)</Label>
-                <Input
-                  value={form.valor_credito}
-                  onChange={(e) => set("valor_credito", e.target.value)}
-                  type="number"
-                  min={0}
-                />
+                <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} type="number" min={0} />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">Prazo (meses)</Label>
-                <Input
-                  value={form.prazo}
-                  onChange={(e) => set("prazo", e.target.value)}
-                  type="number"
-                  min={1}
-                />
+                <Input value={form.prazo} onChange={(e) => set("prazo", e.target.value)} type="number" min={1} />
               </div>
 
               <div className="space-y-1">
                 <Label className="text-xs">Etapa</Label>
-                <Select value={form.etapa} onValueChange={(v) => set("etapa", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ETAPA_LIST.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.label}
-                      </SelectItem>
+                    {etapas.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -796,19 +630,12 @@ function LeadDetailSheet({
 
               <div className="space-y-1">
                 <Label className="text-xs">Responsável</Label>
-                <Select
-                  value={form.responsavel_id}
-                  onValueChange={(v) => set("responsavel_id", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sem responsável" />
-                  </SelectTrigger>
+                <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
+                  <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
                     {comerciais.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nome}
-                      </SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -816,11 +643,7 @@ function LeadDetailSheet({
 
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs">Observações</Label>
-                <Textarea
-                  value={form.observacoes}
-                  onChange={(e) => set("observacoes", e.target.value)}
-                  rows={3}
-                />
+                <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} />
               </div>
             </div>
 
@@ -828,52 +651,30 @@ function LeadDetailSheet({
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => {
-                  if (confirm(`Excluir o lead "${lead?.nome}"?`))
-                    deleteMutation.mutate();
-                }}
+                onClick={() => { if (confirm(`Excluir o lead "${lead?.nome}"?`)) deleteMutation.mutate(); }}
                 disabled={deleteMutation.isPending}
               >
-                {deleteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-2" />
-                )}
+                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
                 Excluir
               </Button>
-              <Button
-                onClick={() => updateMutation.mutate()}
-                disabled={!dirty || updateMutation.isPending}
-              >
-                {updateMutation.isPending && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
+              <Button onClick={() => updateMutation.mutate()} disabled={!dirty || updateMutation.isPending}>
+                {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Salvar
               </Button>
             </div>
           </TabsContent>
 
-          {/* ── Aba Histórico ── */}
-          <TabsContent
-            value="historico"
-            className="flex-1 flex flex-col overflow-hidden p-5 gap-4 mt-0"
-          >
+          <TabsContent value="historico" className="flex-1 flex flex-col overflow-hidden p-5 gap-4 mt-0">
             <div className="space-y-2 shrink-0">
               <div className="flex gap-2">
                 <Select
                   value={novaInteracao.tipo}
-                  onValueChange={(v) =>
-                    setNovaInteracao((p) => ({ ...p, tipo: v as InteracaoTipo }))
-                  }
+                  onValueChange={(v) => setNovaInteracao((p) => ({ ...p, tipo: v as InteracaoTipo }))}
                 >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {INTERACAO_TIPOS.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.label}
-                      </SelectItem>
+                      <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -881,23 +682,15 @@ function LeadDetailSheet({
                   size="sm"
                   className="shrink-0"
                   onClick={() => addInteracaoMutation.mutate()}
-                  disabled={
-                    !novaInteracao.descricao.trim() || addInteracaoMutation.isPending
-                  }
+                  disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}
                 >
-                  {addInteracaoMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Registrar"
-                  )}
+                  {addInteracaoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
                 </Button>
               </div>
               <Textarea
                 placeholder="Descreva a interação..."
                 value={novaInteracao.descricao}
-                onChange={(e) =>
-                  setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))
-                }
+                onChange={(e) => setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))}
                 rows={2}
               />
             </div>
@@ -906,9 +699,7 @@ function LeadDetailSheet({
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {interacoes.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Nenhuma interação registrada ainda.
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhuma interação registrada ainda.</p>
               )}
               {interacoes.map((i) => (
                 <div key={i.id} className="space-y-0.5 text-sm">
@@ -916,9 +707,7 @@ function LeadDetailSheet({
                     <span className="font-medium text-foreground">
                       {INTERACAO_TIPOS.find((t) => t.id === i.tipo)?.label ?? i.tipo}
                     </span>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {fmtDate(i.created_at)}
-                    </span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">{fmtDate(i.created_at)}</span>
                   </div>
                   <p className="text-muted-foreground leading-snug">{i.descricao}</p>
                 </div>
@@ -943,25 +732,54 @@ const Pipeline = () => {
   const qc = useQueryClient();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
-  const [filters, setFilters] = useState<Filters>({
-    search: "",
-    segmento: "todos",
-    responsavel_id: "todos",
-  });
+
+  const [filters, setFilters] = useState<Filters>({ search: "", segmento: "todos", responsavel_id: "todos" });
   const debouncedSearch = useDebounce(filters.search, 300);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<ConsorcioLead | null>(null);
   const [activeLead, setActiveLead] = useState<ConsorcioLead | null>(null);
+  const [etapaDialogOpen, setEtapaDialogOpen] = useState(false);
+  const [editEtapa, setEditEtapa] = useState<FunilEtapa | null>(null);
 
-  const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: 8 },
-  });
-  const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: { delay: 200, tolerance: 5 },
-  });
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
+  const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
 
-  const { data: leads = [], isLoading } = useQuery<ConsorcioLead[]>({
+  // ── Queries ──
+
+  const { data: quadros = [], isLoading: quadrosLoading } = useQuery({
+    queryKey: ["funil-quadros-consorcios", empresaId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_quadros")
+        .select("*")
+        .eq("empresa_id", empresaId!)
+        .is("deleted_at", null)
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; nome: string; ordem: number }>;
+    },
+    enabled: !!empresaId,
+  });
+
+  const quadroId = quadros[0]?.id ?? null;
+
+  const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
+    queryKey: ["funil-etapas-consorcios", quadroId],
+    queryFn: async () => {
+      if (!quadroId) return [];
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("*")
+        .eq("quadro_id", quadroId)
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data || []) as FunilEtapa[];
+    },
+    enabled: !!quadroId,
+  });
+
+  const { data: leads = [], isLoading: leadsLoading } = useQuery<ConsorcioLead[]>({
     queryKey: ["consorcios-leads", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -992,10 +810,8 @@ const Pipeline = () => {
     enabled: !!empresaId,
   });
 
-  const comerciaisMap = useMemo(
-    () => new Map(comerciais.map((c) => [c.id, c.nome])),
-    [comerciais]
-  );
+  const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
+  const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -1008,30 +824,25 @@ const Pipeline = () => {
       if (filters.segmento !== "todos" && l.segmento !== filters.segmento) return false;
       if (filters.responsavel_id !== "todos") {
         if (filters.responsavel_id === "sem" && l.responsavel_id) return false;
-        if (
-          filters.responsavel_id !== "sem" &&
-          l.responsavel_id !== filters.responsavel_id
-        )
-          return false;
+        if (filters.responsavel_id !== "sem" && l.responsavel_id !== filters.responsavel_id) return false;
       }
       return true;
     });
   }, [leads, debouncedSearch, filters]);
 
-  const getByEtapa = (etapa: EtapaConsorcio) =>
-    filteredLeads.filter((l) => l.etapa === etapa);
+  const getByEtapa = (etapaId: string) => filteredLeads.filter((l) => l.etapa_id === etapaId);
+
+  // ── Mutations ──
 
   const moveLeadMutation = useMutation({
-    mutationFn: async ({ id, etapa }: { id: string; etapa: EtapaConsorcio }) => {
+    mutationFn: async ({ id, etapaId }: { id: string; etapaId: string }) => {
       const { error } = await (supabase as any)
         .from("consorcios_leads")
-        .update({ etapa, updated_at: new Date().toISOString() })
+        .update({ etapa_id: etapaId, updated_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["consorcios-leads"] });
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); },
     onError: (err: any) => toast.error("Erro ao mover lead: " + err.message),
   });
 
@@ -1050,6 +861,103 @@ const Pipeline = () => {
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  const insertEtapaMutation = useMutation({
+    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
+      const ordem = etapas.length;
+      const { error } = await (supabase as any).from("funil_etapas").insert({
+        ...data, quadro_id: quadroId, ordem, empresa_id: empresaId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
+      toast.success("Coluna criada");
+    },
+    onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
+  });
+
+  const updateEtapaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string } }) => {
+      const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
+      toast.success("Coluna atualizada");
+    },
+    onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
+  });
+
+  const deleteEtapaMutation = useMutation({
+    mutationFn: async (etapa: FunilEtapa) => {
+      const emUso = leads.filter((l) => l.etapa_id === etapa.id).length;
+      if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
+      const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
+      toast.success("Coluna excluída");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const reorderEtapasMutation = useMutation({
+    mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
+      const results = await Promise.all(
+        updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id))
+      );
+      const error = results.find((r) => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] }); },
+    onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
+  });
+
+  const createQuadroMutation = useMutation({
+    mutationFn: async () => {
+      const { data: quadro, error } = await (supabase as any)
+        .from("funil_quadros")
+        .insert({ nome: "Pipeline Principal", ordem: 0, empresa_id: empresaId })
+        .select("id")
+        .single();
+      if (error) throw error;
+      await Promise.all(
+        ETAPAS_PADRAO.map((e, i) =>
+          (supabase as any).from("funil_etapas").insert({
+            ...e, quadro_id: quadro.id, ordem: i, empresa_id: empresaId, observacoes: null,
+          })
+        )
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-quadros-consorcios", empresaId] });
+      toast.success("Pipeline configurado");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  // ── Handlers ──
+
+  const handleMoveEtapa = (etapa: FunilEtapa, direction: -1 | 1) => {
+    const ordenadas = [...etapasOrdenadas];
+    const idx = ordenadas.findIndex((e) => e.id === etapa.id);
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= ordenadas.length) return;
+    [ordenadas[idx], ordenadas[targetIdx]] = [ordenadas[targetIdx], ordenadas[idx]];
+    reorderEtapasMutation.mutate(ordenadas.map((e, i) => ({ id: e.id, ordem: i })));
+  };
+
+  const handleSaveEtapa = async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
+    if (editEtapa) await updateEtapaMutation.mutateAsync({ id: editEtapa.id, data });
+    else await insertEtapaMutation.mutateAsync(data);
+  };
+
+  const handleDeleteEtapa = (etapa: FunilEtapa) => {
+    if (etapasOrdenadas.length <= 1) { toast.error("O pipeline precisa de ao menos uma coluna."); return; }
+    if (confirm(`Excluir a coluna "${etapa.nome}"?`)) deleteEtapaMutation.mutate(etapa);
+  };
+
   function onDragStart(event: DragStartEvent) {
     const lead = leads.find((l) => l.id === event.active.id);
     setActiveLead(lead ?? null);
@@ -1061,33 +969,57 @@ const Pipeline = () => {
     if (!over) return;
     const lead = leads.find((l) => l.id === active.id);
     if (!lead) return;
-    const newEtapa = over.id as EtapaConsorcio;
-    if (lead.etapa === newEtapa) return;
-    moveLeadMutation.mutate({ id: lead.id, etapa: newEtapa });
+    const newEtapaId = over.id as string;
+    if (lead.etapa_id === newEtapaId) return;
+    moveLeadMutation.mutate({ id: lead.id, etapaId: newEtapaId });
   }
 
   const totalLeads = leads.length;
-  const totalValor = leads
-    .filter((l) => l.etapa === "contrato_fechado")
-    .reduce((acc, l) => acc + (l.valor_credito ?? 0), 0);
+  const closedEtapaIds = useMemo(() => new Set(etapas.filter((e) => e.tipo === "ganho").map((e) => e.id)), [etapas]);
+  const totalValor = useMemo(
+    () => leads.filter((l) => l.etapa_id && closedEtapaIds.has(l.etapa_id)).reduce((acc, l) => acc + (l.valor_credito ?? 0), 0),
+    [leads, closedEtapaIds]
+  );
+
+  const loading = quadrosLoading || leadsLoading;
+
+  if (!loading && quadros.length === 0) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Pipeline — Consórcio" description="Configure o pipeline de vendas" />
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <p className="text-muted-foreground">Nenhum pipeline configurado ainda.</p>
+          <Button onClick={() => createQuadroMutation.mutate()} disabled={createQuadroMutation.isPending}>
+            {createQuadroMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Configurar Pipeline
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
+      <FunilEtapaDialog
+        open={etapaDialogOpen}
+        onClose={() => { setEtapaDialogOpen(false); setEditEtapa(null); }}
+        onSave={handleSaveEtapa}
+        initialData={editEtapa}
+      />
       <LeadFormDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSaved={() => {}}
         comerciais={comerciais}
+        etapas={etapasOrdenadas}
+        defaultEtapaId={etapasOrdenadas[0]?.id}
       />
       <LeadDetailSheet
         lead={selectedLead}
         comerciais={comerciais}
+        etapas={etapasOrdenadas}
         onClose={() => setSelectedLead(null)}
-        onUpdated={() => {
-          if (selectedLead) {
-            qc.invalidateQueries({ queryKey: ["consorcios-leads"] });
-          }
-        }}
+        onUpdated={() => { if (selectedLead) qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); }}
       />
 
       <div className="space-y-4">
@@ -1119,46 +1051,30 @@ const Pipeline = () => {
             />
           </div>
 
-          <Select
-            value={filters.segmento}
-            onValueChange={(v) =>
-              setFilters((p) => ({ ...p, segmento: v as Segmento | "todos" }))
-            }
-          >
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Segmento" />
-            </SelectTrigger>
+          <Select value={filters.segmento} onValueChange={(v) => setFilters((p) => ({ ...p, segmento: v as Segmento | "todos" }))}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Segmento" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos segmentos</SelectItem>
               {SEGMENTOS.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.emoji} {s.label}
-                </SelectItem>
+                <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select
-            value={filters.responsavel_id}
-            onValueChange={(v) => setFilters((p) => ({ ...p, responsavel_id: v }))}
-          >
-            <SelectTrigger className="w-[170px]">
-              <SelectValue placeholder="Responsável" />
-            </SelectTrigger>
+          <Select value={filters.responsavel_id} onValueChange={(v) => setFilters((p) => ({ ...p, responsavel_id: v }))}>
+            <SelectTrigger className="w-[170px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos responsáveis</SelectItem>
               <SelectItem value="sem">Sem responsável</SelectItem>
               {comerciais.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nome}
-                </SelectItem>
+                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Kanban board */}
-        {isLoading ? (
+        {/* Board */}
+        {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -1170,19 +1086,38 @@ const Pipeline = () => {
             onDragEnd={onDragEnd}
           >
             <div className="overflow-x-auto pb-4">
-              <div className="flex gap-3 w-max min-w-full">
-                {PIPELINE_STAGES.map((stage) => (
+              <div
+                className="flex gap-6 w-max min-w-full"
+                style={{ minHeight: "calc(100svh - 22rem)" }}
+              >
+                {etapasOrdenadas.map((etapa, idx) => (
                   <KanbanColumn
-                    key={stage.id}
-                    stage={stage}
-                    leads={getByEtapa(stage.id)}
+                    key={etapa.id}
+                    etapa={etapa}
+                    leads={getByEtapa(etapa.id)}
                     comerciaisMap={comerciaisMap}
                     onLeadClick={(lead) => setSelectedLead(lead)}
                     onDeleteLead={(id) => {
                       if (confirm("Excluir este lead?")) deleteLeadMutation.mutate(id);
                     }}
+                    onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
+                    onDeleteEtapa={handleDeleteEtapa}
+                    onMoveEtapa={handleMoveEtapa}
+                    canMoveLeft={idx > 0}
+                    canMoveRight={idx < etapasOrdenadas.length - 1}
                   />
                 ))}
+
+                <div className="flex flex-col w-[200px] shrink-0 pt-1">
+                  <Button
+                    variant="ghost"
+                    className="w-full h-9 border border-dashed text-muted-foreground hover:text-foreground"
+                    onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova coluna
+                  </Button>
+                </div>
               </div>
             </div>
 

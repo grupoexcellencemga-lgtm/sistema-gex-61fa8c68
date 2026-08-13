@@ -48,13 +48,14 @@ const ETAPA_COLORS: Record<EtapaConsorcio, string> = {
   perdido: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
 
-function EtapaBadge({ etapa }: { etapa: EtapaConsorcio }) {
+function EtapaBadge({ etapa }: { etapa: EtapaConsorcio | null }) {
+  if (!etapa) return <span className="text-[11px] text-muted-foreground">—</span>;
   const label = ETAPA_LIST.find((e) => e.id === etapa)?.label ?? etapa;
   return (
     <span
       className={cn(
         "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
-        ETAPA_COLORS[etapa]
+        ETAPA_COLORS[etapa] ?? "bg-slate-100 text-slate-700"
       )}
     >
       {label}

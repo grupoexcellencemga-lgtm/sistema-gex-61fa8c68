@@ -59,17 +59,9 @@ function ChartCard({
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={data} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-            />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-            <Tooltip
-              formatter={(v: number) => [isCurrency ? fmtBRL(v) : v, title]}
-              contentStyle={{ fontSize: 12 }}
-            />
+            <Tooltip formatter={(v: number) => [isCurrency ? fmtBRL(v) : v, title]} contentStyle={{ fontSize: 12 }} />
             <Bar dataKey="value" fill="#7C6AE8" radius={[3, 3, 0, 0]}>
               <LabelList
                 dataKey="value"
@@ -83,7 +75,6 @@ function ChartCard({
         {footer && (
           <div className="mt-3 pt-3 border-t">
             <p className="text-sm font-semibold">{footer}</p>
-            <p className="text-xs text-muted-foreground">{title.toLowerCase().replace("por produção", "").trim()}s agrupados por mês</p>
           </div>
         )}
       </CardContent>
@@ -126,13 +117,48 @@ const ConsorcioDashboard = () => {
   const empresaId = empresa?.id;
   const months = useMemo(() => getLast6Months(), []);
 
+  // Query etapas so we can use etapa_id for metrics
+  const { data: etapas = [] } = useQuery({
+    queryKey: ["funil-etapas-dashboard-consorcios", empresaId],
+    queryFn: async () => {
+      const { data: quadros } = await (supabase as any)
+        .from("funil_quadros")
+        .select("id")
+        .eq("empresa_id", empresaId!)
+        .is("deleted_at", null)
+        .limit(1);
+      if (!quadros?.length) return [];
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("id, nome, tipo, cor, ordem")
+        .eq("quadro_id", quadros[0].id);
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; nome: string; tipo: string; cor: string; ordem: number }>;
+    },
+    enabled: !!empresaId,
+  });
+
+  // etapa_id → {tipo, nome, ordem}
+  const etapaMap = useMemo(
+    () => new Map(etapas.map((e) => [e.id, e])),
+    [etapas]
+  );
+
+  const ganhoIds = useMemo(() => new Set(etapas.filter((e) => e.tipo === "ganho").map((e) => e.id)), [etapas]);
+  const perdidoIds = useMemo(() => new Set(etapas.filter((e) => e.tipo === "perdido").map((e) => e.id)), [etapas]);
+
+  // IDs das etapas que contêm "reunião" ou "proposta" no nome (case-insensitive)
+  const reuniaoIds = useMemo(() => new Set(etapas.filter((e) => /reuni/i.test(e.nome)).map((e) => e.id)), [etapas]);
+  const propostaIds = useMemo(() => new Set(etapas.filter((e) => /proposta/i.test(e.nome)).map((e) => e.id)), [etapas]);
+
   const { data: leads = [] } = useQuery({
     queryKey: ["consorcios-dashboard-leads", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("consorcios_leads")
-        .select("id, etapa, valor_credito, created_at")
-        .eq("empresa_id", empresaId!);
+        .select("id, etapa, etapa_id, valor_credito, created_at")
+        .eq("empresa_id", empresaId!)
+        .is("deleted_at", null);
       if (error) throw error;
       return data as any[];
     },
@@ -155,21 +181,39 @@ const ConsorcioDashboard = () => {
     enabled: leadIds.length > 0,
   });
 
+  // Helper: get the effective tipo for a lead (via etapa_id if available, fall back to etapa enum)
+  const getTipo = (l: any): string | undefined => {
+    if (l.etapa_id) return etapaMap.get(l.etapa_id)?.tipo;
+    return undefined;
+  };
+
   // ── metrics ──
-  const negociosAtivos = leads.filter((l: any) => !["perdido", "contrato_fechado"].includes(l.etapa)).length;
-  const emAprovacao    = leads.filter((l: any) => l.etapa === "proposta_enviada").reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
-  const emConclusao    = leads.filter((l: any) => l.etapa === "reuniao_agendada").reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
-  const totalVendido   = leads.filter((l: any) => l.etapa === "contrato_fechado").reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
+  const negociosAtivos = leads.filter((l: any) => {
+    if (l.etapa_id) return !ganhoIds.has(l.etapa_id) && !perdidoIds.has(l.etapa_id);
+    return !["perdido", "contrato_fechado"].includes(l.etapa);
+  }).length;
+
+  const emAprovacao = leads
+    .filter((l: any) => l.etapa_id ? propostaIds.has(l.etapa_id) : l.etapa === "proposta_enviada")
+    .reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
+
+  const emConclusao = leads
+    .filter((l: any) => l.etapa_id ? reuniaoIds.has(l.etapa_id) : l.etapa === "reuniao_agendada")
+    .reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
+
+  const totalVendido = leads
+    .filter((l: any) => l.etapa_id ? ganhoIds.has(l.etapa_id) : l.etapa === "contrato_fechado")
+    .reduce((s: number, l: any) => s + (l.valor_credito ?? 0), 0);
 
   // ── chart data ──
   const byMonth = (filterFn: (l: any) => boolean) =>
-    months.map(m => ({
+    months.map((m) => ({
       label: m.label,
       value: leads.filter((l: any) => filterFn(l) && monthKey(l.created_at) === m.key).length,
     }));
 
   const sumByMonth = (filterFn: (l: any) => boolean) =>
-    months.map(m => ({
+    months.map((m) => ({
       label: m.label,
       value: leads
         .filter((l: any) => filterFn(l) && monthKey(l.created_at) === m.key)
@@ -177,21 +221,25 @@ const ConsorcioDashboard = () => {
     }));
 
   const interacoesByMonth = (tipo: string) =>
-    months.map(m => ({
+    months.map((m) => ({
       label: m.label,
       value: interacoes.filter((i: any) => i.tipo === tipo && monthKey(i.created_at) === m.key).length,
     }));
 
   const oportunidades = byMonth(() => true);
-  const agendamentos  = byMonth((l) => l.etapa === "reuniao_agendada");
+  const agendamentos  = byMonth((l) => l.etapa_id ? reuniaoIds.has(l.etapa_id) : l.etapa === "reuniao_agendada");
   const reunioes      = interacoesByMonth("reuniao");
-  const propostas     = byMonth((l) => ["proposta_enviada", "contrato_fechado"].includes(l.etapa));
-  const aprovacoes    = byMonth((l) => l.etapa === "contrato_fechado");
-  const vendas        = sumByMonth((l) => l.etapa === "contrato_fechado");
+  const propostas     = byMonth((l) =>
+    l.etapa_id
+      ? propostaIds.has(l.etapa_id) || ganhoIds.has(l.etapa_id)
+      : ["proposta_enviada", "contrato_fechado"].includes(l.etapa)
+  );
+  const aprovacoes    = byMonth((l) => l.etapa_id ? ganhoIds.has(l.etapa_id) : l.etapa === "contrato_fechado");
+  const vendas        = sumByMonth((l) => l.etapa_id ? ganhoIds.has(l.etapa_id) : l.etapa === "contrato_fechado");
 
-  const totalReunioes    = reunioes.reduce((s, d) => s + d.value, 0);
-  const totalPropostas   = propostas.reduce((s, d) => s + d.value, 0);
-  const totalAprovacoes  = aprovacoes.reduce((s, d) => s + d.value, 0);
+  const totalReunioes   = reunioes.reduce((s, d) => s + d.value, 0);
+  const totalPropostas  = propostas.reduce((s, d) => s + d.value, 0);
+  const totalAprovacoes = aprovacoes.reduce((s, d) => s + d.value, 0);
   const totalVendasChart = vendas.reduce((s, d) => s + d.value, 0);
 
   return (
@@ -200,10 +248,10 @@ const ConsorcioDashboard = () => {
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Negócios Ativos"      value={String(negociosAtivos)}  icon={Briefcase}   variant="purple" />
-        <MetricCard title="Em Aprovação"          value={fmtBRL(emAprovacao)}     icon={BarChart3}   variant="gold"   />
+        <MetricCard title="Negócios Ativos"      value={String(negociosAtivos)}  icon={Briefcase}    variant="purple" />
+        <MetricCard title="Em Aprovação"          value={fmtBRL(emAprovacao)}     icon={BarChart3}    variant="gold"   />
         <MetricCard title="Vendas Em Conclusão"   value={fmtBRL(emConclusao)}     icon={ShoppingCart} variant="purple" />
-        <MetricCard title="Total Vendido"         value={fmtBRL(totalVendido)}    icon={DollarSign}  variant="gold"   />
+        <MetricCard title="Total Vendido"         value={fmtBRL(totalVendido)}    icon={DollarSign}   variant="gold"   />
       </div>
 
       {/* Charts row 1 */}
