@@ -10,21 +10,24 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Plus, MessageCircle, Loader2, Trash2, Search, LayoutList,
   ChevronLeft, ChevronRight, Pencil, Kanban,
   PanelLeftClose, PanelLeftOpen, Edit2, Check, X,
+  Phone, MoreHorizontal, Tag, Calendar, MessageSquare,
+  Share2, FileText, Send, Tag as TagIcon,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Link } from "react-router-dom";
@@ -51,13 +54,38 @@ const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"]
 
 type Quadro = { id: string; nome: string; ordem: number };
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const SEG_ICON_BG: Record<string, string> = {
+  imoveis: "bg-blue-600",
+  veiculos: "bg-orange-500",
+  servicos: "bg-purple-600",
+};
+
+function fmtK(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1).replace(".0", "")}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return v.toLocaleString("pt-BR");
+}
+
+function daysAgo(dateStr: string): number {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+}
+
+function daysBadgeClass(d: number): string {
+  if (d <= 3) return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+  if (d <= 7) return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+  return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+}
+
 // ── LeadCard ──────────────────────────────────────────────────────────────────
 
 function LeadCard({
-  lead, comerciaisMap, onClick, onDelete, isOverlay = false,
+  lead, comerciaisMap, etapaNome, onClick, onDelete, isOverlay = false,
 }: {
   lead: ConsorcioLead;
   comerciaisMap: Map<string, string>;
+  etapaNome?: string;
   onClick: () => void;
   onDelete: () => void;
   isOverlay?: boolean;
@@ -66,9 +94,13 @@ function LeadCard({
     id: lead.id,
     disabled: isOverlay,
   });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+
+  const style = transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined;
   const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
-  const origem = ORIGENS.find((o) => o.id === lead.origem);
+  const d = daysAgo(lead.created_at);
+  const valorK = lead.valor_credito ? fmtK(lead.valor_credito) : null;
+  const titulo = [lead.nome, seg?.label, valorK].filter(Boolean).join(" - ");
+  const responsavel = lead.responsavel_id ? comerciaisMap.get(lead.responsavel_id) : null;
 
   return (
     <div
@@ -76,59 +108,110 @@ function LeadCard({
       style={isOverlay ? undefined : style}
       {...(isOverlay ? {} : { ...attributes, ...listeners })}
       className={cn(
-        "bg-card border rounded-lg p-3 space-y-2 group",
-        "cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all",
+        "bg-card border rounded-xl shadow-sm overflow-hidden",
+        "cursor-grab active:cursor-grabbing hover:shadow-md transition-all",
         isDragging && !isOverlay && "opacity-40",
-        isOverlay && "shadow-xl rotate-1 cursor-grabbing"
+        isOverlay && "shadow-2xl rotate-1 cursor-grabbing"
       )}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium leading-tight line-clamp-2 flex-1">{lead.nome}</span>
-        <button
+      {/* Top row */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <div className="flex items-center gap-2">
+          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-[18px]", SEG_ICON_BG[lead.segmento] ?? "bg-slate-600")}>
+            {seg?.emoji}
+          </div>
+          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", daysBadgeClass(d))}>
+            {d}d
+          </span>
+        </div>
+        <div
+          className="flex items-center gap-1.5"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Trash2 className="h-3 w-3" />
-        </button>
+          {lead.telefone && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Phone className="h-3 w-3" />
+              {lead.telefone}
+            </span>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors">
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuItem onClick={onClick}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                <Trash2 className="h-3.5 w-3.5 mr-2" />Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {seg && (
-        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full", seg.className)}>
-          {seg.emoji} {seg.label}
-        </span>
-      )}
+      {/* Title */}
+      <div className="px-3 pb-2">
+        <div className="font-semibold text-sm leading-tight line-clamp-2">{titulo}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">Cliente: {lead.nome}</div>
+      </div>
 
-      {lead.valor_credito && (
-        <div className="text-xs font-semibold text-foreground/80">
-          {formatCurrency(lead.valor_credito)}
-          {lead.prazo && <span className="font-normal text-muted-foreground"> · {lead.prazo} meses</span>}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        {lead.telefone ? (
-          <a
-            href={whatsappHref(lead.telefone)}
-            target="_blank"
-            rel="noreferrer"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-[11px] text-green-600 hover:text-green-700 transition-colors"
-          >
-            <MessageCircle className="h-3 w-3 shrink-0" />
-            <span className="truncate">{lead.telefone}</span>
-          </a>
-        ) : <span />}
-        {lead.responsavel_id && (
-          <span className="text-[11px] text-muted-foreground truncate shrink-0">
-            {comerciaisMap.get(lead.responsavel_id) ?? "—"}
+      {/* Value */}
+      <div className="px-3 pb-2 flex items-center justify-between min-h-[24px]">
+        <TagIcon className="h-3.5 w-3.5 text-muted-foreground/25" />
+        {valorK && (
+          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+            R$ {valorK}
           </span>
         )}
       </div>
 
-      {origem && <div className="text-[11px] text-muted-foreground">via {origem.label}</div>}
+      {/* Action row */}
+      <div
+        className="border-t flex items-center justify-between px-2 py-1.5 bg-muted/20"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-0.5">
+          <button
+            title="Ligar"
+            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-500 transition-colors"
+            onClick={() => lead.telefone && window.open(`tel:${lead.telefone}`)}
+          >
+            <Phone className="h-3.5 w-3.5" />
+          </button>
+          <button
+            title="WhatsApp"
+            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-green-50 dark:hover:bg-green-950/40 text-green-600 transition-colors"
+            onClick={() => lead.telefone && window.open(whatsappHref(lead.telefone), "_blank")}
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </button>
+          <button
+            title="Histórico"
+            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+            onClick={onClick}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+          </button>
+          <button
+            title="Comentários"
+            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+            onClick={onClick}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {responsavel && (
+          <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+            {responsavel.split(" ")[0]}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -172,16 +255,16 @@ function KanbanColumn({
           )}
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveLeft} onClick={() => onMoveEtapa(etapa, -1)} title="Mover para a esquerda">
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveLeft} onClick={() => onMoveEtapa(etapa, -1)}>
             <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveRight} onClick={() => onMoveEtapa(etapa, 1)} title="Mover para a direita">
+          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveRight} onClick={() => onMoveEtapa(etapa, 1)}>
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditEtapa(etapa)} title="Editar coluna">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditEtapa(etapa)}>
             <Pencil className="h-3 w-3" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onDeleteEtapa(etapa)} title="Excluir coluna">
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onDeleteEtapa(etapa)}>
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -190,7 +273,7 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex-1 min-h-0 overflow-y-auto space-y-2 rounded-lg p-2 transition-colors min-h-[140px]",
+          "flex-1 min-h-0 overflow-y-auto space-y-2.5 rounded-lg p-2 transition-colors min-h-[140px]",
           isOver ? "bg-primary/5 ring-2 ring-primary/20" : "bg-muted/30"
         )}
         style={{ maxHeight: "calc(100svh - 24rem)" }}
@@ -200,6 +283,7 @@ function KanbanColumn({
             key={lead.id}
             lead={lead}
             comerciaisMap={comerciaisMap}
+            etapaNome={etapa.nome}
             onClick={() => onLeadClick(lead)}
             onDelete={() => onDeleteLead(lead.id)}
           />
@@ -214,7 +298,7 @@ function KanbanColumn({
   );
 }
 
-// ── LeadFormDialog ────────────────────────────────────────────────────────────
+// ── LeadFormDialog (criar novo lead) ─────────────────────────────────────────
 
 function LeadFormDialog({
   open, onClose, onSaved, comerciais, etapas, defaultEtapaId,
@@ -259,11 +343,8 @@ function LeadFormDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg max-h-[90svh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Novo Lead — Consórcio</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
+        <div className="font-semibold text-lg mb-4">Novo Lead — Consórcio</div>
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
               <Label>Nome *</Label>
@@ -311,7 +392,7 @@ function LeadFormDialog({
             )}
             <div className="space-y-1">
               <Label>Valor de crédito (R$)</Label>
-              <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="Ex.: 150000" type="number" min={0} />
+              <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="Ex.: 250000" type="number" min={0} />
             </div>
             <div className="space-y-1">
               <Label>Prazo (meses)</Label>
@@ -342,22 +423,21 @@ function LeadFormDialog({
             </div>
           </div>
         </div>
-
-        <DialogFooter>
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
             {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Cadastrar Lead
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-// ── LeadDetailSheet ───────────────────────────────────────────────────────────
+// ── LeadDetailDialog ──────────────────────────────────────────────────────────
 
-function LeadDetailSheet({
+function LeadDetailDialog({
   lead, comerciais, etapas, onClose, onUpdated,
 }: {
   lead: ConsorcioLead | null;
@@ -370,6 +450,7 @@ function LeadDetailSheet({
   const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
   const [dirty, setDirty] = useState(false);
   const [novaInteracao, setNovaInteracao] = useState<{ tipo: InteracaoTipo; descricao: string }>({ tipo: "nota", descricao: "" });
+  const [activeTab, setActiveTab] = useState("comentarios");
 
   useEffect(() => {
     if (lead) {
@@ -389,6 +470,7 @@ function LeadDetailSheet({
         cidade: lead.cidade ?? "",
       });
       setDirty(false);
+      setActiveTab("comentarios");
     }
   }, [lead?.id]);
 
@@ -456,191 +538,361 @@ function LeadDetailSheet({
     onSuccess: () => {
       refetchInteracoes();
       setNovaInteracao({ tipo: "nota", descricao: "" });
-      toast.success("Interação registrada");
+      toast.success("Comentário registrado");
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
+  if (!lead) return null;
+
+  const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
+  const etapaAtual = etapas.find((e) => e.id === lead.etapa_id);
+  const responsavelNome = lead.responsavel_id ? (comerciais.find((c) => c.id === lead.responsavel_id)?.nome ?? "—") : "—";
+  const origemLabel = ORIGENS.find((o) => o.id === lead.origem)?.label;
+  const valorK = lead.valor_credito ? fmtK(lead.valor_credito) : null;
+
   return (
-    <Sheet open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full max-w-[480px] flex flex-col p-0 gap-0">
-        <SheetHeader className="p-5 border-b shrink-0">
-          <SheetTitle className="truncate">{lead?.nome ?? ""}</SheetTitle>
-          {lead && (
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {(() => {
-                const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
-                return seg ? (
+    <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[900px] h-[85svh] p-0 gap-0 overflow-hidden flex flex-col">
+        {/* ── Blue header ── */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shrink-0">
+          <div className="flex items-start gap-4 px-5 py-4">
+            {/* Segmento icon */}
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0 mt-0.5">
+              {seg?.emoji ?? "📋"}
+            </div>
+
+            {/* Name + meta */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold leading-tight truncate">
+                  {[lead.nome, seg?.label, valorK].filter(Boolean).join(" - ")}
+                </h2>
+                {etapaAtual && (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 shrink-0">
+                    {etapaAtual.nome.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-sm text-blue-100 flex-wrap">
+                <span>Cliente: {lead.nome}</span>
+                {lead.telefone && (
+                  <a href={`tel:${lead.telefone}`} className="flex items-center gap-1 hover:text-white transition-colors">
+                    <Phone className="h-3.5 w-3.5" />{lead.telefone}
+                  </a>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs text-blue-200 flex-wrap">
+                <span>Criado: {fmtDate(lead.created_at)}</span>
+                <span>Atualizado: {fmtDate(lead.updated_at)}</span>
+              </div>
+            </div>
+
+            {/* Value + close */}
+            <div className="text-right shrink-0 flex flex-col items-end gap-1">
+              {lead.valor_credito && (
+                <div className="text-2xl font-bold leading-none">
+                  R$ {lead.valor_credito.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+              {lead.prazo && (
+                <div className="text-xs text-blue-200">{lead.prazo} meses</div>
+              )}
+            </div>
+
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              className="shrink-0 h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors mt-0.5"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Left sidebar */}
+          <div className="w-[220px] shrink-0 border-r flex flex-col p-4 gap-2 overflow-y-auto bg-muted/20">
+            <button
+              onClick={() => setActiveTab("dados")}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-muted transition-colors text-left w-full"
+            >
+              <Pencil className="h-4 w-4 text-muted-foreground" />Editar
+            </button>
+            <a
+              href={lead.telefone ? `tel:${lead.telefone}` : undefined}
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full",
+                lead.telefone
+                  ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50"
+                  : "opacity-40 cursor-not-allowed text-muted-foreground"
+              )}
+            >
+              <Phone className="h-4 w-4" />Ligar
+            </a>
+            <a
+              href={lead.telefone ? whatsappHref(lead.telefone) : undefined}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full",
+                lead.telefone
+                  ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50"
+                  : "opacity-40 cursor-not-allowed text-muted-foreground"
+              )}
+            >
+              <MessageCircle className="h-4 w-4" />WhatsApp
+            </a>
+            <button
+              onClick={() => {
+                const txt = [lead.nome, lead.telefone, lead.email, seg?.label, valorK ? `R$${valorK}` : ""].filter(Boolean).join(" | ");
+                navigator.clipboard.writeText(txt).then(() => toast.success("Copiado!"));
+              }}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-50 dark:hover:bg-orange-950/30 text-orange-600 dark:text-orange-400 transition-colors text-left w-full"
+            >
+              <Share2 className="h-4 w-4" />Compartilhar
+            </button>
+            <button
+              onClick={() => toast.info("Funcionalidade em breve")}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-purple-50 dark:hover:bg-purple-950/30 text-purple-600 dark:text-purple-400 transition-colors text-left w-full"
+            >
+              <FileText className="h-4 w-4" />Gerar Proposta
+            </button>
+
+            {/* Divider + info */}
+            <div className="border-t my-1" />
+
+            <div className="space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Responsável</span>
+                <span className="text-foreground font-medium text-right truncate max-w-[110px]">{responsavelNome}</span>
+              </div>
+              {origemLabel && (
+                <div className="flex items-center justify-between">
+                  <span>Origem</span>
+                  <span className="text-foreground font-medium">{origemLabel}</span>
+                </div>
+              )}
+              {lead.cidade && (
+                <div className="flex items-center justify-between">
+                  <span>Cidade</span>
+                  <span className="text-foreground font-medium">{lead.cidade}</span>
+                </div>
+              )}
+              {lead.prazo && (
+                <div className="flex items-center justify-between">
+                  <span>Prazo</span>
+                  <span className="text-foreground font-medium">{lead.prazo} meses</span>
+                </div>
+              )}
+            </div>
+
+            {/* TAGS */}
+            <div className="border-t my-1" />
+            <div>
+              <div className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wide">TAGS</div>
+              <div className="flex flex-wrap gap-1.5">
+                {seg && (
                   <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full", seg.className)}>
                     {seg.emoji} {seg.label}
                   </span>
-                ) : null;
-              })()}
-              {lead.valor_credito && (
-                <span className="text-xs font-semibold text-muted-foreground">{formatCurrency(lead.valor_credito)}</span>
-              )}
-              {lead.telefone && (
-                <a href={whatsappHref(lead.telefone)} target="_blank" rel="noreferrer" className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1">
-                  <MessageCircle className="h-3 w-3" />{lead.telefone}
-                </a>
-              )}
-            </div>
-          )}
-        </SheetHeader>
-
-        <Tabs defaultValue="dados" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="mx-5 mt-4 shrink-0 w-auto self-start">
-            <TabsTrigger value="dados">Dados</TabsTrigger>
-            <TabsTrigger value="historico">
-              Histórico
-              {interacoes.length > 0 && (
-                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">{interacoes.length}</Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dados" className="flex-1 overflow-y-auto p-5 space-y-3 mt-0">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Nome</Label>
-                <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Telefone</Label>
-                <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">E-mail</Label>
-                <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">CPF / CNPJ</Label>
-                <Input value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Cidade</Label>
-                <Input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Segmento</Label>
-                <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Origem</Label>
-                <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {ORIGENS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {form.origem === "indicacao" && (
-                <div className="col-span-2 space-y-1">
-                  <Label className="text-xs">Indicado por</Label>
-                  <Input value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} />
-                </div>
-              )}
-              <div className="space-y-1">
-                <Label className="text-xs">Valor crédito (R$)</Label>
-                <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} type="number" min={0} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Prazo (meses)</Label>
-                <Input value={form.prazo} onChange={(e) => set("prazo", e.target.value)} type="number" min={1} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Etapa</Label>
-                <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {etapas.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Responsável</Label>
-                <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
-                  <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem responsável</SelectItem>
-                    {comerciais.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Observações</Label>
-                <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} />
+                )}
+                {origemLabel && (
+                  <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                    {origemLabel}
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t">
-              <Button
-                variant="destructive" size="sm"
-                onClick={() => { if (confirm(`Excluir o lead "${lead?.nome}"?`)) deleteMutation.mutate(); }}
+            {/* Delete */}
+            <div className="border-t mt-auto pt-3">
+              <button
+                onClick={() => { if (confirm(`Excluir "${lead.nome}"?`)) deleteMutation.mutate(); }}
                 disabled={deleteMutation.isPending}
+                className="flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors w-full"
               >
-                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                Excluir
-              </Button>
-              <Button onClick={() => updateMutation.mutate()} disabled={!dirty || updateMutation.isPending}>
-                {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Salvar
-              </Button>
+                {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Excluir lead
+              </button>
             </div>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="historico" className="flex-1 flex flex-col overflow-hidden p-5 gap-4 mt-0">
-            <div className="space-y-2 shrink-0">
-              <div className="flex gap-2">
-                <Select
-                  value={novaInteracao.tipo}
-                  onValueChange={(v) => setNovaInteracao((p) => ({ ...p, tipo: v as InteracaoTipo }))}
-                >
-                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {INTERACAO_TIPOS.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="shrink-0" onClick={() => addInteracaoMutation.mutate()}
-                  disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}>
-                  {addInteracaoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
-                </Button>
+          {/* Right area */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-5 pt-4 shrink-0 border-b">
+                <TabsList>
+                  <TabsTrigger value="comentarios">
+                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                    Comentários
+                    {interacoes.length > 0 && (
+                      <span className="ml-1.5 text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 font-medium">
+                        {interacoes.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="dados">
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Dados
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <Textarea
-                placeholder="Descreva a interação..."
-                value={novaInteracao.descricao}
-                onChange={(e) => setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))}
-                rows={2}
-              />
-            </div>
 
-            <Separator />
-
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {interacoes.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">Nenhuma interação registrada ainda.</p>
-              )}
-              {interacoes.map((i) => (
-                <div key={i.id} className="space-y-0.5 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">
-                      {INTERACAO_TIPOS.find((t) => t.id === i.tipo)?.label ?? i.tipo}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground shrink-0">{fmtDate(i.created_at)}</span>
+              {/* Comentários */}
+              <TabsContent value="comentarios" className="flex-1 flex flex-col overflow-hidden m-0 p-0">
+                {/* Add comment */}
+                <div className="px-5 py-4 border-b shrink-0 space-y-2">
+                  <div className="flex gap-2">
+                    <Select
+                      value={novaInteracao.tipo}
+                      onValueChange={(v) => setNovaInteracao((p) => ({ ...p, tipo: v as InteracaoTipo }))}
+                    >
+                      <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {INTERACAO_TIPOS.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      className="flex-1 min-h-0 h-9 resize-none py-2 text-sm"
+                      placeholder="Adicionar comentário..."
+                      value={novaInteracao.descricao}
+                      onChange={(e) => setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && novaInteracao.descricao.trim()) {
+                          e.preventDefault();
+                          addInteracaoMutation.mutate();
+                        }
+                      }}
+                      rows={1}
+                    />
+                    <Button
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}
+                      onClick={() => addInteracaoMutation.mutate()}
+                    >
+                      {addInteracaoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
                   </div>
-                  <p className="text-muted-foreground leading-snug">{i.descricao}</p>
                 </div>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </SheetContent>
-    </Sheet>
+
+                {/* Comment list */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  {interacoes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-10">Nenhum comentário ainda.</p>
+                  ) : (
+                    interacoes.map((i) => (
+                      <div key={i.id} className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-sm font-semibold text-primary">
+                          {i.tipo === "ligacao" ? "📞" : i.tipo === "whatsapp" ? "💬" : i.tipo === "email" ? "✉️" : i.tipo === "reuniao" ? "📅" : i.tipo === "visita" ? "🚶" : "📝"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className="text-sm font-medium text-foreground">
+                              {INTERACAO_TIPOS.find((t) => t.id === i.tipo)?.label ?? i.tipo}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground shrink-0">{fmtDate(i.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{i.descricao}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Dados / Edit form */}
+              <TabsContent value="dados" className="flex-1 overflow-y-auto m-0 px-5 py-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Nome</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.nome} onChange={(e) => set("nome", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Telefone</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">E-mail</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">CPF / CNPJ</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cidade</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.cidade} onChange={(e) => set("cidade", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Segmento</Label>
+                    <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Origem</Label>
+                    <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        {ORIGENS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.origem === "indicacao" && (
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs">Indicado por</Label>
+                      <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Valor crédito (R$)</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" type="number" min={0} value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Prazo (meses)</Label>
+                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" type="number" min={1} value={form.prazo} onChange={(e) => set("prazo", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Etapa</Label>
+                    <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {etapas.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Responsável</Label>
+                    <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
+                      <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem responsável</SelectItem>
+                        {comerciais.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Observações</Label>
+                    <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-4">
+                  <Button onClick={() => updateMutation.mutate()} disabled={!dirty || updateMutation.isPending}>
+                    {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Salvar alterações
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -739,17 +991,12 @@ const Pipeline = () => {
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
 
-  // Leads do quadro selecionado
   const currentEtapaIds = useMemo(() => new Set(etapas.map((e) => e.id)), [etapas]);
   const quadroLeads = useMemo(() => leads.filter((l) => l.etapa_id && currentEtapaIds.has(l.etapa_id)), [leads, currentEtapaIds]);
 
   const filteredLeads = useMemo(() => {
     return quadroLeads.filter((l) => {
-      if (
-        debouncedSearch &&
-        !l.nome.toLowerCase().includes(debouncedSearch.toLowerCase()) &&
-        !l.telefone?.includes(debouncedSearch)
-      ) return false;
+      if (debouncedSearch && !l.nome.toLowerCase().includes(debouncedSearch.toLowerCase()) && !l.telefone?.includes(debouncedSearch)) return false;
       if (filters.segmento !== "todos" && l.segmento !== filters.segmento) return false;
       if (filters.responsavel_id !== "todos") {
         if (filters.responsavel_id === "sem" && l.responsavel_id) return false;
@@ -765,10 +1012,9 @@ const Pipeline = () => {
 
   const createQuadroMutation = useMutation({
     mutationFn: async (nome: string) => {
-      const ordem = quadros.length;
       const { data: quadro, error } = await (supabase as any)
         .from("funil_quadros")
-        .insert({ nome: nome.trim(), ordem, empresa_id: empresaId })
+        .insert({ nome: nome.trim(), ordem: quadros.length, empresa_id: empresaId })
         .select("id").single();
       if (error) throw error;
       await Promise.all(
@@ -802,17 +1048,11 @@ const Pipeline = () => {
 
   const deleteQuadroMutation = useMutation({
     mutationFn: async (quadro: Quadro) => {
-      const { data: quadroEtapas } = await (supabase as any)
-        .from("funil_etapas").select("id").eq("quadro_id", quadro.id);
+      const { data: quadroEtapas } = await (supabase as any).from("funil_etapas").select("id").eq("quadro_id", quadro.id);
       const etapaIds = (quadroEtapas || []).map((e: any) => e.id as string);
-      const etapaSet = new Set(etapaIds);
-
-      const emUso = leads.filter((l) => l.etapa_id && etapaSet.has(l.etapa_id)).length;
+      const emUso = leads.filter((l) => l.etapa_id && etapaIds.includes(l.etapa_id)).length;
       if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) deste quadro antes de excluí-lo.`);
-
-      if (etapaIds.length > 0) {
-        await (supabase as any).from("funil_etapas").delete().in("id", etapaIds);
-      }
+      if (etapaIds.length > 0) await (supabase as any).from("funil_etapas").delete().in("id", etapaIds);
       const { error } = await (supabase as any).from("funil_quadros").delete().eq("id", quadro.id);
       if (error) throw error;
     },
@@ -828,14 +1068,11 @@ const Pipeline = () => {
 
   const insertEtapaMutation = useMutation({
     mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
-      const ordem = etapas.length;
-      const { error } = await (supabase as any).from("funil_etapas").insert({
-        ...data, quadro_id: selectedQuadroId, ordem, empresa_id: empresaId,
-      });
+      const { error } = await (supabase as any).from("funil_etapas").insert({ ...data, quadro_id: selectedQuadroId, ordem: etapas.length, empresa_id: empresaId });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); toast.success("Coluna criada"); },
-    onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
+    onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
   const updateEtapaMutation = useMutation({
@@ -844,7 +1081,7 @@ const Pipeline = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); toast.success("Coluna atualizada"); },
-    onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
+    onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
   const deleteEtapaMutation = useMutation({
@@ -860,9 +1097,7 @@ const Pipeline = () => {
 
   const reorderEtapasMutation = useMutation({
     mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
-      const results = await Promise.all(
-        updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id))
-      );
+      const results = await Promise.all(updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id)));
       const error = results.find((r) => r.error)?.error;
       if (error) throw error;
     },
@@ -874,10 +1109,7 @@ const Pipeline = () => {
 
   const moveLeadMutation = useMutation({
     mutationFn: async ({ id, etapaId }: { id: string; etapaId: string }) => {
-      const { error } = await (supabase as any)
-        .from("consorcios_leads")
-        .update({ etapa_id: etapaId, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const { error } = await (supabase as any).from("consorcios_leads").update({ etapa_id: etapaId, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); },
@@ -886,10 +1118,7 @@ const Pipeline = () => {
 
   const deleteLeadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
-        .from("consorcios_leads")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
+      const { error } = await (supabase as any).from("consorcios_leads").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); toast.success("Lead excluído"); },
@@ -918,8 +1147,7 @@ const Pipeline = () => {
   };
 
   function onDragStart(event: DragStartEvent) {
-    const lead = leads.find((l) => l.id === event.active.id);
-    setActiveLead(lead ?? null);
+    setActiveLead(leads.find((l) => l.id === event.active.id) ?? null);
   }
 
   function onDragEnd(event: DragEndEvent) {
@@ -927,10 +1155,8 @@ const Pipeline = () => {
     setActiveLead(null);
     if (!over) return;
     const lead = leads.find((l) => l.id === active.id);
-    if (!lead) return;
-    const newEtapaId = over.id as string;
-    if (lead.etapa_id === newEtapaId) return;
-    moveLeadMutation.mutate({ id: lead.id, etapaId: newEtapaId });
+    if (!lead || lead.etapa_id === over.id) return;
+    moveLeadMutation.mutate({ id: lead.id, etapaId: over.id as string });
   }
 
   const closedEtapaIds = useMemo(() => new Set(etapas.filter((e) => e.tipo === "ganho").map((e) => e.id)), [etapas]);
@@ -938,8 +1164,6 @@ const Pipeline = () => {
     () => quadroLeads.filter((l) => l.etapa_id && closedEtapaIds.has(l.etapa_id)).reduce((acc, l) => acc + (l.valor_credito ?? 0), 0),
     [quadroLeads, closedEtapaIds]
   );
-
-  const loading = quadrosLoading || leadsLoading;
 
   return (
     <>
@@ -957,12 +1181,12 @@ const Pipeline = () => {
         etapas={etapasOrdenadas}
         defaultEtapaId={etapasOrdenadas[0]?.id}
       />
-      <LeadDetailSheet
+      <LeadDetailDialog
         lead={selectedLead}
         comerciais={comerciais}
         etapas={etapasOrdenadas}
         onClose={() => setSelectedLead(null)}
-        onUpdated={() => { if (selectedLead) qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); }}
+        onUpdated={() => { qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); }}
       />
 
       <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
@@ -976,31 +1200,24 @@ const Pipeline = () => {
                 <p className="text-xs text-muted-foreground">Pipelines do consórcio</p>
               </div>
             </div>
-
             <div className="p-3 border-b">
               <form
                 onSubmit={(e) => { e.preventDefault(); if (newQuadroName.trim()) createQuadroMutation.mutate(newQuadroName); }}
                 className="flex gap-2"
               >
-                <Input
-                  value={newQuadroName}
-                  onChange={(e) => setNewQuadroName(e.target.value)}
-                  placeholder="Nome do quadro..."
-                  className="h-9 text-sm"
-                />
+                <Input value={newQuadroName} onChange={(e) => setNewQuadroName(e.target.value)} placeholder="Nome do quadro..." className="h-9 text-sm" />
                 <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
                   {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
               </form>
             </div>
-
             <div className="flex-1 overflow-auto p-2 space-y-1">
               {quadrosLoading ? (
                 <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
               ) : quadros.length === 0 ? (
                 <div className="text-center p-6 space-y-2">
                   <Kanban className="h-8 w-8 mx-auto text-muted-foreground/30" />
-                  <p className="text-xs text-muted-foreground">Crie o primeiro quadro do pipeline.</p>
+                  <p className="text-xs text-muted-foreground">Crie o primeiro quadro.</p>
                 </div>
               ) : (
                 quadros.map((quadro) => (
@@ -1008,41 +1225,26 @@ const Pipeline = () => {
                     key={quadro.id}
                     className={cn(
                       "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
-                      selectedQuadroId === quadro.id
-                        ? "bg-primary/15 text-primary font-medium"
-                        : "hover:bg-muted text-foreground"
+                      selectedQuadroId === quadro.id ? "bg-primary/15 text-primary font-medium" : "hover:bg-muted text-foreground"
                     )}
                   >
                     {editingQuadroId === quadro.id ? (
                       <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
-                        }}
+                        onSubmit={(e) => { e.preventDefault(); if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName }); }}
                         className="flex items-center gap-1 flex-1"
                       >
                         <Input value={editingQuadroName} onChange={(e) => setEditingQuadroName(e.target.value)} className="h-7 text-xs" autoFocus />
-                        <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
+                        <Button type="submit" size="icon" variant="ghost" className="h-7 w-7"><Check className="h-3.5 w-3.5" /></Button>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}><X className="h-3.5 w-3.5" /></Button>
                       </form>
                     ) : (
                       <>
-                        <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
-                          {quadro.nome}
-                        </span>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                          onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }} title="Renomear">
+                        <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>{quadro.nome}</span>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }} title="Renomear">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                          onClick={() => {
-                            if (confirm(`Excluir o quadro "${quadro.nome}"? As colunas vazias serão removidas.`))
-                              deleteQuadroMutation.mutate(quadro);
-                          }} title="Excluir">
+                          onClick={() => { if (confirm(`Excluir "${quadro.nome}"?`)) deleteQuadroMutation.mutate(quadro); }} title="Excluir">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </>
@@ -1061,7 +1263,7 @@ const Pipeline = () => {
               title={selectedQuadro?.nome ?? "Pipeline — Consórcio"}
               description={
                 selectedQuadroId
-                  ? `${quadroLeads.length} lead${quadroLeads.length !== 1 ? "s" : ""} ativos${totalValor > 0 ? ` · ${formatCurrency(totalValor)} em contratos fechados` : ""}`
+                  ? `${quadroLeads.length} lead${quadroLeads.length !== 1 ? "s" : ""}${totalValor > 0 ? ` · ${formatCurrency(totalValor)} em contratos fechados` : ""}`
                   : "Selecione ou crie um quadro"
               }
             >
@@ -1070,9 +1272,7 @@ const Pipeline = () => {
                 {sidebarVisible ? "Ocultar" : "Quadros"}
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <Link to="/consorcios/leads">
-                  <LayoutList className="h-4 w-4 mr-2" />Lista
-                </Link>
+                <Link to="/consorcios/leads"><LayoutList className="h-4 w-4 mr-2" />Lista</Link>
               </Button>
               {selectedQuadroId && (
                 <Button onClick={() => setDialogOpen(true)}>
@@ -1088,16 +1288,10 @@ const Pipeline = () => {
               </div>
             ) : (
               <>
-                {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      className="pl-9 w-56"
-                      placeholder="Buscar lead..."
-                      value={filters.search}
-                      onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-                    />
+                    <Input className="pl-9 w-56" placeholder="Buscar lead..." value={filters.search} onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))} />
                   </div>
                   <Select value={filters.segmento} onValueChange={(v) => setFilters((p) => ({ ...p, segmento: v as Segmento | "todos" }))}>
                     <SelectTrigger className="w-[150px]"><SelectValue placeholder="Segmento" /></SelectTrigger>
@@ -1116,8 +1310,7 @@ const Pipeline = () => {
                   </Select>
                 </div>
 
-                {/* Board */}
-                {loading || etapasLoading ? (
+                {leadsLoading || etapasLoading ? (
                   <div className="flex items-center justify-center py-16">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
