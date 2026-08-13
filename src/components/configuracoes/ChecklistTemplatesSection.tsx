@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { AREA_LABELS, type AreaEvento } from "@/lib/checklistEvento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 // Âncoras disponíveis na UI. Em eventos (data única) todas se comportam
 // igual; em turmas com várias sessões cada uma resolve uma data diferente.
@@ -42,6 +43,8 @@ const novoItem = (): ItemDraft => ({
 });
 
 export function ChecklistTemplatesSection() {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,16 +55,18 @@ export function ChecklistTemplatesSection() {
   const [removidos, setRemovidos] = useState<string[]>([]);
 
   const { data: templates = [], isLoading } = useQuery({
-    queryKey: ["checklist-templates"],
+    queryKey: ["checklist-templates", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("checklist_templates")
         .select("*, checklist_template_items(id, deleted_at)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: tiposExistentes = [] } = useQuery({
@@ -114,7 +119,7 @@ export function ChecklistTemplatesSection() {
         if (error) throw error;
       } else {
         const { data, error } = await sb.from("checklist_templates").insert({
-          nome, tipo_evento: tipoEvento.toLowerCase().trim(), ativo,
+          nome, tipo_evento: tipoEvento.toLowerCase().trim(), ativo, empresa_id: empresaId,
         }).select("id").single();
         if (error) throw error;
         templateId = data.id;

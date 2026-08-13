@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export interface TaxaCalc {
   taxaNome: string;
@@ -24,6 +25,9 @@ export function useEntradaTaxas(
   impostoManual: number,
   repassarTaxa: boolean
 ): TaxaCalc {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
+
   const { data: taxas = [] } = useQuery({
     queryKey: ["taxas_sistema"],
     queryFn: async () => {
@@ -39,11 +43,12 @@ export function useEntradaTaxas(
   });
 
   const { data: formasPagamento = [] } = useQuery({
-    queryKey: ["formas_pagamento"],
+    queryKey: ["formas_pagamento", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("formas_pagamento")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("ordem", { ascending: true })
@@ -52,6 +57,7 @@ export function useEntradaTaxas(
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
     staleTime: 0,
   });
 

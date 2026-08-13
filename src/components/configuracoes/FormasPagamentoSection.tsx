@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Check, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 type FormaPagamento = {
   id: string;
@@ -64,6 +65,8 @@ const normalizarCodigo = (texto: string) =>
     .replace(/^_+|_+$/g, "");
 
 export function FormasPagamentoSection() {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -78,11 +81,12 @@ export function FormasPagamentoSection() {
   const [ordem, setOrdem] = useState("");
 
   const { data: formas = [], isLoading } = useQuery({
-    queryKey: ["formas_pagamento_admin"],
+    queryKey: ["formas_pagamento_admin", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("formas_pagamento")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("ordem", { ascending: true })
         .order("nome", { ascending: true });
@@ -90,6 +94,7 @@ export function FormasPagamentoSection() {
       if (error) throw error;
       return (data || []) as FormaPagamento[];
     },
+    enabled: !!empresaId,
   });
 
   const resetForm = () => {
@@ -169,6 +174,7 @@ export function FormasPagamentoSection() {
       } else {
         const { error } = await supabase.from("formas_pagamento").insert({
           ...payload,
+          empresa_id: empresaId,
           created_at: new Date().toISOString(),
         });
 

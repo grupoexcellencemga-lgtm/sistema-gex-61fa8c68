@@ -88,6 +88,7 @@ const Inicio = () => {
         (supabase as any)
           .from("google_agenda_eventos")
           .select("id, titulo, hora")
+          .eq("empresa_id", empresaId!)
           .eq("data", hoje),
       ]);
       const itens = [

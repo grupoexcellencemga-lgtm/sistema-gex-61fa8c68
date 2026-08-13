@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export type FormaPagamento = {
   id: string;
@@ -13,12 +14,16 @@ export type FormaPagamento = {
 };
 
 export function useFormasPagamento() {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
+
   return useQuery({
-    queryKey: ["formas_pagamento"],
+    queryKey: ["formas_pagamento", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("formas_pagamento")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("ordem", { ascending: true })
@@ -28,6 +33,7 @@ export function useFormasPagamento() {
 
       return (data || []) as FormaPagamento[];
     },
+    enabled: !!empresaId,
   });
 }
 

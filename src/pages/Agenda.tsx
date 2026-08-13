@@ -88,16 +88,18 @@ const Agenda = () => {
   });
 
   const { data: googleEventos = [] } = useQuery({
-    queryKey: ["agenda-google", inicio, fim],
+    queryKey: ["agenda-google", inicio, fim, empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("google_agenda_eventos")
         .select("id, titulo, data, hora, cor")
+        .eq("empresa_id", empresaId!)
         .gte("data", inicio)
         .lte("data", fim);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const hoje = hojeISO();

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Separator } from "@/components/ui/separator";
 import { Loader2, Mail, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const categoriaColors: Record<string, string> = {
   boas_vindas: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
@@ -34,6 +35,8 @@ interface EmailTemplate {
 }
 
 export function EmailTemplatesSection() {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [editTemplate, setEditTemplate] = useState<EmailTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null);
@@ -41,15 +44,17 @@ export function EmailTemplatesSection() {
   const [editCorpo, setEditCorpo] = useState("");
 
   const { data: templates, isLoading } = useQuery({
-    queryKey: ["email_templates"],
+    queryKey: ["email_templates", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("email_templates")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .order("categoria", { ascending: true });
       if (error) throw error;
       return (data || []) as EmailTemplate[];
     },
+    enabled: !!empresaId,
   });
 
   const updateTemplate = useMutation({
