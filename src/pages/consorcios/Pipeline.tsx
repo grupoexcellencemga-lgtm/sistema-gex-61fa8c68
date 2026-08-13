@@ -724,55 +724,55 @@ function LeadDetailDialog({
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
               <div className="px-5 pt-4 shrink-0 border-b">
                 <TabsList>
-                  <TabsTrigger value="comentarios">
-                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                  <TabsTrigger value="comentarios" className="gap-1.5">
                     Comentários
                     {interacoes.length > 0 && (
-                      <span className="ml-1.5 text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 font-medium">
+                      <span className="text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-semibold">
                         {interacoes.length}
                       </span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="dados">
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Dados
-                  </TabsTrigger>
+                  <TabsTrigger value="dados">Dados</TabsTrigger>
                 </TabsList>
               </div>
 
               {/* Comentários */}
               <TabsContent value="comentarios" className="flex-1 flex flex-col overflow-hidden m-0 p-0">
                 {/* Add comment */}
-                <div className="px-5 py-4 border-b shrink-0 space-y-2">
-                  <div className="flex gap-2">
+                <div className="px-5 pt-4 pb-3 border-b shrink-0 space-y-2">
+                  <Textarea
+                    placeholder="Adicionar comentário... (Enter para enviar)"
+                    value={novaInteracao.descricao}
+                    onChange={(e) => setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && novaInteracao.descricao.trim()) {
+                        e.preventDefault();
+                        addInteracaoMutation.mutate();
+                      }
+                    }}
+                    rows={3}
+                    className="resize-none text-sm"
+                  />
+                  <div className="flex items-center justify-between">
                     <Select
                       value={novaInteracao.tipo}
                       onValueChange={(v) => setNovaInteracao((p) => ({ ...p, tipo: v as InteracaoTipo }))}
                     >
-                      <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {INTERACAO_TIPOS.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Textarea
-                      className="flex-1 min-h-0 h-9 resize-none py-2 text-sm"
-                      placeholder="Adicionar comentário..."
-                      value={novaInteracao.descricao}
-                      onChange={(e) => setNovaInteracao((p) => ({ ...p, descricao: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && novaInteracao.descricao.trim()) {
-                          e.preventDefault();
-                          addInteracaoMutation.mutate();
-                        }
-                      }}
-                      rows={1}
-                    />
                     <Button
-                      size="icon"
-                      className="h-9 w-9 shrink-0"
+                      size="sm"
+                      className="gap-1.5"
                       disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}
                       onClick={() => addInteracaoMutation.mutate()}
                     >
-                      {addInteracaoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {addInteracaoMutation.isPending
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Send className="h-3.5 w-3.5" />}
+                      Enviar
                     </Button>
                   </div>
                 </div>
