@@ -493,10 +493,11 @@ function LeadDetailDialog({
   });
 
   const updateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (data?: LeadConsorcioForm) => {
+      const payload = data ?? form;
       const { error } = await (supabase as any)
         .from("consorcios_leads")
-        .update({ ...formToPayload(form), updated_at: new Date().toISOString() })
+        .update({ ...formToPayload(payload), updated_at: new Date().toISOString() })
         .eq("id", lead!.id);
       if (error) throw error;
     },
@@ -700,26 +701,42 @@ function LeadDetailDialog({
 
             {/* TAGS */}
             <div className="border-t my-1" />
-            <div>
-              <div className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wide">TAGS</div>
-              <div className="flex flex-wrap gap-1.5">
-                {seg && (
-                  <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full", seg.className)}>
-                    {seg.emoji} {seg.label}
-                  </span>
-                )}
-                {origemLabel && (
-                  <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                    {origemLabel}
-                  </span>
-                )}
-              </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-foreground uppercase tracking-wide">Segmento</div>
+              <Select
+                value={form.segmento}
+                onValueChange={(v) => {
+                  const updated = { ...form, segmento: v as Segmento };
+                  setForm(updated);
+                  updateMutation.mutate(updated);
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="text-xs font-semibold text-foreground uppercase tracking-wide">Origem</div>
+              <Select
+                value={form.origem || "none"}
+                onValueChange={(v) => {
+                  const updated = { ...form, origem: v === "none" ? "" : v };
+                  setForm(updated);
+                  updateMutation.mutate(updated);
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sem origem" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem origem</SelectItem>
+                  {ORIGENS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Delete */}
             <div className="border-t mt-auto pt-3">
               <button
-                onClick={() => { if (confirm(`Excluir "${lead.nome}"?`)) deleteMutation.mutate(); }}
+                onClick={() => deleteMutation.mutate()}
                 disabled={deleteMutation.isPending}
                 className="flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors w-full"
               >
@@ -747,7 +764,8 @@ function LeadDetailDialog({
               </div>
 
               {/* Comentários */}
-              <TabsContent value="comentarios" className="flex-1 flex flex-col overflow-hidden m-0 p-0">
+              <TabsContent value="comentarios" className="flex-1 m-0 p-0 overflow-hidden">
+                <div className="flex flex-col h-full overflow-hidden">
                 {/* Add comment */}
                 <div className="px-5 pt-4 pb-3 border-b shrink-0 space-y-2">
                   <Textarea
@@ -819,6 +837,7 @@ function LeadDetailDialog({
                       </div>
                     ))
                   )}
+                </div>
                 </div>
               </TabsContent>
 
@@ -1345,7 +1364,7 @@ const Pipeline = () => {
                             leads={getByEtapa(etapa.id)}
                             comerciaisMap={comerciaisMap}
                             onLeadClick={(lead) => setSelectedLead(lead)}
-                            onDeleteLead={(id) => { if (confirm("Excluir este lead?")) deleteLeadMutation.mutate(id); }}
+                            onDeleteLead={(id) => deleteLeadMutation.mutate(id)}
                             onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
                             onDeleteEtapa={handleDeleteEtapa}
                             onMoveEtapa={handleMoveEtapa}
