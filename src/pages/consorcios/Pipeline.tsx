@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Plus, MessageCircle, Loader2, Trash2, Search, LayoutList,
-  ChevronLeft, ChevronRight, Pencil,
+  ChevronLeft, ChevronRight, Pencil, Kanban,
+  PanelLeftClose, PanelLeftOpen, Edit2, Check, X,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Link } from "react-router-dom";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/consorcios";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 
-// ── Default etapas when creating a new pipeline ────────────────────────────────
+// ── Default etapas ao criar novo quadro ───────────────────────────────────────
 
 const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"] }> = [
   { nome: "Novo Lead", cor: "slate", tipo: "em_andamento" },
@@ -48,14 +49,12 @@ const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"]
   { nome: "Perdido", cor: "red", tipo: "perdido" },
 ];
 
+type Quadro = { id: string; nome: string; ordem: number };
+
 // ── LeadCard ──────────────────────────────────────────────────────────────────
 
 function LeadCard({
-  lead,
-  comerciaisMap,
-  onClick,
-  onDelete,
-  isOverlay = false,
+  lead, comerciaisMap, onClick, onDelete, isOverlay = false,
 }: {
   lead: ConsorcioLead;
   comerciaisMap: Map<string, string>;
@@ -67,10 +66,7 @@ function LeadCard({
     id: lead.id,
     disabled: isOverlay,
   });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
-
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   const seg = SEGMENTOS.find((s) => s.id === lead.segmento);
   const origem = ORIGENS.find((o) => o.id === lead.origem);
 
@@ -124,9 +120,7 @@ function LeadCard({
             <MessageCircle className="h-3 w-3 shrink-0" />
             <span className="truncate">{lead.telefone}</span>
           </a>
-        ) : (
-          <span />
-        )}
+        ) : <span />}
         {lead.responsavel_id && (
           <span className="text-[11px] text-muted-foreground truncate shrink-0">
             {comerciaisMap.get(lead.responsavel_id) ?? "—"}
@@ -142,16 +136,10 @@ function LeadCard({
 // ── KanbanColumn ──────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  etapa,
-  leads,
-  comerciaisMap,
-  onLeadClick,
-  onDeleteLead,
-  onEditEtapa,
-  onDeleteEtapa,
-  onMoveEtapa,
-  canMoveLeft,
-  canMoveRight,
+  etapa, leads, comerciaisMap,
+  onLeadClick, onDeleteLead,
+  onEditEtapa, onDeleteEtapa, onMoveEtapa,
+  canMoveLeft, canMoveRight,
 }: {
   etapa: FunilEtapa;
   leads: ConsorcioLead[];
@@ -202,11 +190,10 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex-1 min-h-0 overflow-y-auto space-y-2 rounded-lg p-2 transition-colors",
-          "min-h-[140px]",
+          "flex-1 min-h-0 overflow-y-auto space-y-2 rounded-lg p-2 transition-colors min-h-[140px]",
           isOver ? "bg-primary/5 ring-2 ring-primary/20" : "bg-muted/30"
         )}
-        style={{ maxHeight: "calc(100svh - 22rem)" }}
+        style={{ maxHeight: "calc(100svh - 24rem)" }}
       >
         {leads.map((lead) => (
           <LeadCard
@@ -230,12 +217,7 @@ function KanbanColumn({
 // ── LeadFormDialog ────────────────────────────────────────────────────────────
 
 function LeadFormDialog({
-  open,
-  onClose,
-  onSaved,
-  comerciais,
-  etapas,
-  defaultEtapaId,
+  open, onClose, onSaved, comerciais, etapas, defaultEtapaId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -287,96 +269,76 @@ function LeadFormDialog({
               <Label>Nome *</Label>
               <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Nome do interessado" />
             </div>
-
             <div className="space-y-1">
               <Label>Telefone</Label>
               <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
             </div>
-
             <div className="space-y-1">
               <Label>E-mail</Label>
               <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="email@exemplo.com" />
             </div>
-
             <div className="space-y-1">
               <Label>CPF / CNPJ</Label>
               <Input value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} placeholder="000.000.000-00" />
             </div>
-
             <div className="space-y-1">
               <Label>Cidade</Label>
               <Input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} placeholder="Ex.: Maringá" />
             </div>
-
             <div className="space-y-1">
               <Label>Segmento *</Label>
               <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {SEGMENTOS.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
-                  ))}
+                  {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1">
               <Label>Origem</Label>
               <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
-                  {ORIGENS.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
-                  ))}
+                  {ORIGENS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             {form.origem === "indicacao" && (
               <div className="col-span-2 space-y-1">
                 <Label>Indicado por</Label>
                 <Input value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} placeholder="Nome de quem indicou" />
               </div>
             )}
-
             <div className="space-y-1">
               <Label>Valor de crédito (R$)</Label>
               <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="Ex.: 150000" type="number" min={0} />
             </div>
-
             <div className="space-y-1">
               <Label>Prazo (meses)</Label>
               <Input value={form.prazo} onChange={(e) => set("prazo", e.target.value)} placeholder="Ex.: 180" type="number" min={1} />
             </div>
-
             <div className="space-y-1">
               <Label>Etapa inicial</Label>
               <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {etapas.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                  ))}
+                  {etapas.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1">
               <Label>Responsável</Label>
               <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
                 <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem responsável</SelectItem>
-                  {comerciais.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                  ))}
+                  {comerciais.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="col-span-2 space-y-1">
               <Label>Observações</Label>
-              <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} placeholder="Informações adicionais sobre o lead..." />
+              <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} placeholder="Informações adicionais..." />
             </div>
           </div>
         </div>
@@ -396,11 +358,7 @@ function LeadFormDialog({
 // ── LeadDetailSheet ───────────────────────────────────────────────────────────
 
 function LeadDetailSheet({
-  lead,
-  comerciais,
-  etapas,
-  onClose,
-  onUpdated,
+  lead, comerciais, etapas, onClose, onUpdated,
 }: {
   lead: ConsorcioLead | null;
   comerciais: Array<{ id: string; nome: string }>;
@@ -411,10 +369,7 @@ function LeadDetailSheet({
   const qc = useQueryClient();
   const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
   const [dirty, setDirty] = useState(false);
-  const [novaInteracao, setNovaInteracao] = useState<{ tipo: InteracaoTipo; descricao: string }>({
-    tipo: "nota",
-    descricao: "",
-  });
+  const [novaInteracao, setNovaInteracao] = useState<{ tipo: InteracaoTipo; descricao: string }>({ tipo: "nota", descricao: "" });
 
   useEffect(() => {
     if (lead) {
@@ -446,8 +401,7 @@ function LeadDetailSheet({
     queryKey: ["consorcios-interacoes", lead?.id],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("consorcios_interacoes")
-        .select("*")
+        .from("consorcios_interacoes").select("*")
         .eq("lead_id", lead!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -523,14 +477,11 @@ function LeadDetailSheet({
                 ) : null;
               })()}
               {lead.valor_credito && (
-                <span className="text-xs font-semibold text-muted-foreground">
-                  {formatCurrency(lead.valor_credito)}
-                </span>
+                <span className="text-xs font-semibold text-muted-foreground">{formatCurrency(lead.valor_credito)}</span>
               )}
               {lead.telefone && (
                 <a href={whatsappHref(lead.telefone)} target="_blank" rel="noreferrer" className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1">
-                  <MessageCircle className="h-3 w-3" />
-                  {lead.telefone}
+                  <MessageCircle className="h-3 w-3" />{lead.telefone}
                 </a>
               )}
             </div>
@@ -554,93 +505,73 @@ function LeadDetailSheet({
                 <Label className="text-xs">Nome</Label>
                 <Input value={form.nome} onChange={(e) => set("nome", e.target.value)} />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Telefone</Label>
                 <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(99) 99999-9999" />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">E-mail</Label>
                 <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">CPF / CNPJ</Label>
                 <Input value={form.cpf_cnpj} onChange={(e) => set("cpf_cnpj", e.target.value)} />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Cidade</Label>
                 <Input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Segmento</Label>
                 <Select value={form.segmento} onValueChange={(v) => set("segmento", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {SEGMENTOS.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
-                    ))}
+                    {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Origem</Label>
                 <Select value={form.origem} onValueChange={(v) => set("origem", v)}>
                   <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
-                    {ORIGENS.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
-                    ))}
+                    {ORIGENS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               {form.origem === "indicacao" && (
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs">Indicado por</Label>
                   <Input value={form.indicado_por} onChange={(e) => set("indicado_por", e.target.value)} />
                 </div>
               )}
-
               <div className="space-y-1">
                 <Label className="text-xs">Valor crédito (R$)</Label>
                 <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} type="number" min={0} />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Prazo (meses)</Label>
                 <Input value={form.prazo} onChange={(e) => set("prazo", e.target.value)} type="number" min={1} />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Etapa</Label>
                 <Select value={form.etapa_id} onValueChange={(v) => set("etapa_id", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {etapas.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                    ))}
+                    {etapas.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs">Responsável</Label>
                 <Select value={form.responsavel_id} onValueChange={(v) => set("responsavel_id", v)}>
                   <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
-                    {comerciais.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                    ))}
+                    {comerciais.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs">Observações</Label>
                 <Textarea value={form.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={3} />
@@ -649,8 +580,7 @@ function LeadDetailSheet({
 
             <div className="flex items-center justify-between pt-2 border-t">
               <Button
-                variant="destructive"
-                size="sm"
+                variant="destructive" size="sm"
                 onClick={() => { if (confirm(`Excluir o lead "${lead?.nome}"?`)) deleteMutation.mutate(); }}
                 disabled={deleteMutation.isPending}
               >
@@ -673,17 +603,11 @@ function LeadDetailSheet({
                 >
                   <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {INTERACAO_TIPOS.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-                    ))}
+                    {INTERACAO_TIPOS.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => addInteracaoMutation.mutate()}
-                  disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}
-                >
+                <Button size="sm" className="shrink-0" onClick={() => addInteracaoMutation.mutate()}
+                  disabled={!novaInteracao.descricao.trim() || addInteracaoMutation.isPending}>
                   {addInteracaoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
                 </Button>
               </div>
@@ -735,6 +659,11 @@ const Pipeline = () => {
 
   const [filters, setFilters] = useState<Filters>({ search: "", segmento: "todos", responsavel_id: "todos" });
   const debouncedSearch = useDebounce(filters.search, 300);
+  const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [newQuadroName, setNewQuadroName] = useState("");
+  const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
+  const [editingQuadroName, setEditingQuadroName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<ConsorcioLead | null>(null);
   const [activeLead, setActiveLead] = useState<ConsorcioLead | null>(null);
@@ -747,44 +676,45 @@ const Pipeline = () => {
 
   // ── Queries ──
 
-  const { data: quadros = [], isLoading: quadrosLoading } = useQuery({
+  const { data: quadros = [], isLoading: quadrosLoading } = useQuery<Quadro[]>({
     queryKey: ["funil-quadros-consorcios", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("funil_quadros")
-        .select("*")
+        .from("funil_quadros").select("*")
         .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("ordem", { ascending: true });
       if (error) throw error;
-      return (data || []) as Array<{ id: string; nome: string; ordem: number }>;
+      return (data || []) as Quadro[];
     },
     enabled: !!empresaId,
   });
 
-  const quadroId = quadros[0]?.id ?? null;
+  useEffect(() => {
+    if (!selectedQuadroId && quadros.length > 0) setSelectedQuadroId(quadros[0].id);
+  }, [quadros, selectedQuadroId]);
+
+  const selectedQuadro = useMemo(() => quadros.find((q) => q.id === selectedQuadroId) ?? null, [quadros, selectedQuadroId]);
 
   const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
-    queryKey: ["funil-etapas-consorcios", quadroId],
+    queryKey: ["funil-etapas-consorcios", selectedQuadroId],
     queryFn: async () => {
-      if (!quadroId) return [];
+      if (!selectedQuadroId) return [];
       const { data, error } = await (supabase as any)
-        .from("funil_etapas")
-        .select("*")
-        .eq("quadro_id", quadroId)
+        .from("funil_etapas").select("*")
+        .eq("quadro_id", selectedQuadroId)
         .order("ordem", { ascending: true });
       if (error) throw error;
       return (data || []) as FunilEtapa[];
     },
-    enabled: !!quadroId,
+    enabled: !!selectedQuadroId,
   });
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<ConsorcioLead[]>({
     queryKey: ["consorcios-leads", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("consorcios_leads")
-        .select("*")
+        .from("consorcios_leads").select("*")
         .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -798,12 +728,8 @@ const Pipeline = () => {
     queryKey: ["comerciais-consorcios", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("comerciais")
-        .select("id, nome")
-        .eq("empresa_id", empresaId!)
-        .eq("ativo", true)
-        .is("deleted_at", null)
-        .order("nome");
+        .from("comerciais").select("id, nome")
+        .eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data ?? [];
     },
@@ -813,14 +739,17 @@ const Pipeline = () => {
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
 
+  // Leads do quadro selecionado
+  const currentEtapaIds = useMemo(() => new Set(etapas.map((e) => e.id)), [etapas]);
+  const quadroLeads = useMemo(() => leads.filter((l) => l.etapa_id && currentEtapaIds.has(l.etapa_id)), [leads, currentEtapaIds]);
+
   const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
+    return quadroLeads.filter((l) => {
       if (
         debouncedSearch &&
         !l.nome.toLowerCase().includes(debouncedSearch.toLowerCase()) &&
         !l.telefone?.includes(debouncedSearch)
-      )
-        return false;
+      ) return false;
       if (filters.segmento !== "todos" && l.segmento !== filters.segmento) return false;
       if (filters.responsavel_id !== "todos") {
         if (filters.responsavel_id === "sem" && l.responsavel_id) return false;
@@ -828,11 +757,120 @@ const Pipeline = () => {
       }
       return true;
     });
-  }, [leads, debouncedSearch, filters]);
+  }, [quadroLeads, debouncedSearch, filters]);
 
   const getByEtapa = (etapaId: string) => filteredLeads.filter((l) => l.etapa_id === etapaId);
 
-  // ── Mutations ──
+  // ── Mutations: quadros ──
+
+  const createQuadroMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      const ordem = quadros.length;
+      const { data: quadro, error } = await (supabase as any)
+        .from("funil_quadros")
+        .insert({ nome: nome.trim(), ordem, empresa_id: empresaId })
+        .select("id").single();
+      if (error) throw error;
+      await Promise.all(
+        ETAPAS_PADRAO.map((e, i) =>
+          (supabase as any).from("funil_etapas").insert({ ...e, quadro_id: quadro.id, ordem: i, empresa_id: empresaId, observacoes: null })
+        )
+      );
+      return quadro.id as string;
+    },
+    onSuccess: (id) => {
+      qc.invalidateQueries({ queryKey: ["funil-quadros-consorcios", empresaId] });
+      setNewQuadroName("");
+      setSelectedQuadroId(id);
+      toast.success("Quadro criado");
+    },
+    onError: (err: any) => toast.error("Erro ao criar quadro: " + err.message),
+  });
+
+  const renameQuadroMutation = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await (supabase as any).from("funil_quadros").update({ nome: nome.trim() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-quadros-consorcios", empresaId] });
+      setEditingQuadroId(null);
+      toast.success("Quadro renomeado");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const deleteQuadroMutation = useMutation({
+    mutationFn: async (quadro: Quadro) => {
+      const { data: quadroEtapas } = await (supabase as any)
+        .from("funil_etapas").select("id").eq("quadro_id", quadro.id);
+      const etapaIds = (quadroEtapas || []).map((e: any) => e.id as string);
+      const etapaSet = new Set(etapaIds);
+
+      const emUso = leads.filter((l) => l.etapa_id && etapaSet.has(l.etapa_id)).length;
+      if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) deste quadro antes de excluí-lo.`);
+
+      if (etapaIds.length > 0) {
+        await (supabase as any).from("funil_etapas").delete().in("id", etapaIds);
+      }
+      const { error } = await (supabase as any).from("funil_quadros").delete().eq("id", quadro.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["funil-quadros-consorcios", empresaId] });
+      setSelectedQuadroId(null);
+      toast.success("Quadro excluído");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  // ── Mutations: etapas ──
+
+  const insertEtapaMutation = useMutation({
+    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
+      const ordem = etapas.length;
+      const { error } = await (supabase as any).from("funil_etapas").insert({
+        ...data, quadro_id: selectedQuadroId, ordem, empresa_id: empresaId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); toast.success("Coluna criada"); },
+    onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
+  });
+
+  const updateEtapaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string } }) => {
+      const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); toast.success("Coluna atualizada"); },
+    onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
+  });
+
+  const deleteEtapaMutation = useMutation({
+    mutationFn: async (etapa: FunilEtapa) => {
+      const emUso = leads.filter((l) => l.etapa_id === etapa.id).length;
+      if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
+      const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); toast.success("Coluna excluída"); },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const reorderEtapasMutation = useMutation({
+    mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
+      const results = await Promise.all(
+        updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id))
+      );
+      const error = results.find((r) => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", selectedQuadroId] }); },
+    onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
+  });
+
+  // ── Mutations: leads ──
 
   const moveLeadMutation = useMutation({
     mutationFn: async ({ id, etapaId }: { id: string; etapaId: string }) => {
@@ -854,86 +892,7 @@ const Pipeline = () => {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["consorcios-leads"] });
-      toast.success("Lead excluído");
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const insertEtapaMutation = useMutation({
-    mutationFn: async (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => {
-      const ordem = etapas.length;
-      const { error } = await (supabase as any).from("funil_etapas").insert({
-        ...data, quadro_id: quadroId, ordem, empresa_id: empresaId,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
-      toast.success("Coluna criada");
-    },
-    onError: (err: any) => toast.error("Erro ao criar coluna: " + err.message),
-  });
-
-  const updateEtapaMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string } }) => {
-      const { error } = await (supabase as any).from("funil_etapas").update(data).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
-      toast.success("Coluna atualizada");
-    },
-    onError: (err: any) => toast.error("Erro ao atualizar coluna: " + err.message),
-  });
-
-  const deleteEtapaMutation = useMutation({
-    mutationFn: async (etapa: FunilEtapa) => {
-      const emUso = leads.filter((l) => l.etapa_id === etapa.id).length;
-      if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
-      const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] });
-      toast.success("Coluna excluída");
-    },
-    onError: (err: any) => toast.error("Erro: " + err.message),
-  });
-
-  const reorderEtapasMutation = useMutation({
-    mutationFn: async (updates: Array<{ id: string; ordem: number }>) => {
-      const results = await Promise.all(
-        updates.map((u) => (supabase as any).from("funil_etapas").update({ ordem: u.ordem }).eq("id", u.id))
-      );
-      const error = results.find((r) => r.error)?.error;
-      if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["funil-etapas-consorcios", quadroId] }); },
-    onError: (err: any) => toast.error("Erro ao mover coluna: " + err.message),
-  });
-
-  const createQuadroMutation = useMutation({
-    mutationFn: async () => {
-      const { data: quadro, error } = await (supabase as any)
-        .from("funil_quadros")
-        .insert({ nome: "Pipeline Principal", ordem: 0, empresa_id: empresaId })
-        .select("id")
-        .single();
-      if (error) throw error;
-      await Promise.all(
-        ETAPAS_PADRAO.map((e, i) =>
-          (supabase as any).from("funil_etapas").insert({
-            ...e, quadro_id: quadro.id, ordem: i, empresa_id: empresaId, observacoes: null,
-          })
-        )
-      );
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["funil-quadros-consorcios", empresaId] });
-      toast.success("Pipeline configurado");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); toast.success("Lead excluído"); },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
@@ -974,29 +933,13 @@ const Pipeline = () => {
     moveLeadMutation.mutate({ id: lead.id, etapaId: newEtapaId });
   }
 
-  const totalLeads = leads.length;
   const closedEtapaIds = useMemo(() => new Set(etapas.filter((e) => e.tipo === "ganho").map((e) => e.id)), [etapas]);
   const totalValor = useMemo(
-    () => leads.filter((l) => l.etapa_id && closedEtapaIds.has(l.etapa_id)).reduce((acc, l) => acc + (l.valor_credito ?? 0), 0),
-    [leads, closedEtapaIds]
+    () => quadroLeads.filter((l) => l.etapa_id && closedEtapaIds.has(l.etapa_id)).reduce((acc, l) => acc + (l.valor_credito ?? 0), 0),
+    [quadroLeads, closedEtapaIds]
   );
 
   const loading = quadrosLoading || leadsLoading;
-
-  if (!loading && quadros.length === 0) {
-    return (
-      <div className="space-y-4">
-        <PageHeader title="Pipeline — Consórcio" description="Configure o pipeline de vendas" />
-        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-          <p className="text-muted-foreground">Nenhum pipeline configurado ainda.</p>
-          <Button onClick={() => createQuadroMutation.mutate()} disabled={createQuadroMutation.isPending}>
-            {createQuadroMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Configurar Pipeline
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -1022,118 +965,210 @@ const Pipeline = () => {
         onUpdated={() => { if (selectedLead) qc.invalidateQueries({ queryKey: ["consorcios-leads"] }); }}
       />
 
-      <div className="space-y-4">
-        <PageHeader
-          title="Pipeline — Consórcio"
-          description={`${totalLeads} lead${totalLeads !== 1 ? "s" : ""} ativos${totalValor > 0 ? ` · ${formatCurrency(totalValor)} em contratos fechados` : ""}`}
-        >
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/consorcios/leads">
-              <LayoutList className="h-4 w-4 mr-2" />
-              Lista
-            </Link>
-          </Button>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Lead
-          </Button>
-        </PageHeader>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-9 w-56"
-              placeholder="Buscar lead..."
-              value={filters.search}
-              onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-            />
-          </div>
-
-          <Select value={filters.segmento} onValueChange={(v) => setFilters((p) => ({ ...p, segmento: v as Segmento | "todos" }))}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Segmento" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos segmentos</SelectItem>
-              {SEGMENTOS.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={filters.responsavel_id} onValueChange={(v) => setFilters((p) => ({ ...p, responsavel_id: v }))}>
-            <SelectTrigger className="w-[170px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos responsáveis</SelectItem>
-              <SelectItem value="sem">Sem responsável</SelectItem>
-              {comerciais.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Board */}
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-          >
-            <div className="overflow-x-auto pb-4">
-              <div
-                className="flex gap-6 w-max min-w-full"
-                style={{ minHeight: "calc(100svh - 22rem)" }}
-              >
-                {etapasOrdenadas.map((etapa, idx) => (
-                  <KanbanColumn
-                    key={etapa.id}
-                    etapa={etapa}
-                    leads={getByEtapa(etapa.id)}
-                    comerciaisMap={comerciaisMap}
-                    onLeadClick={(lead) => setSelectedLead(lead)}
-                    onDeleteLead={(id) => {
-                      if (confirm("Excluir este lead?")) deleteLeadMutation.mutate(id);
-                    }}
-                    onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
-                    onDeleteEtapa={handleDeleteEtapa}
-                    onMoveEtapa={handleMoveEtapa}
-                    canMoveLeft={idx > 0}
-                    canMoveRight={idx < etapasOrdenadas.length - 1}
-                  />
-                ))}
-
-                <div className="flex flex-col w-[200px] shrink-0 pt-1">
-                  <Button
-                    variant="ghost"
-                    className="w-full h-9 border border-dashed text-muted-foreground hover:text-foreground"
-                    onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nova coluna
-                  </Button>
-                </div>
+      <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
+        {/* Sidebar — lista de quadros */}
+        {sidebarVisible && (
+          <aside className="w-[220px] shrink-0 border-r bg-card flex flex-col">
+            <div className="p-4 border-b flex items-center gap-2">
+              <Kanban className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="text-sm font-semibold leading-tight">Quadros</h2>
+                <p className="text-xs text-muted-foreground">Pipelines do consórcio</p>
               </div>
             </div>
 
-            <DragOverlay dropAnimation={null}>
-              {activeLead && (
-                <LeadCard
-                  lead={activeLead}
-                  comerciaisMap={comerciaisMap}
-                  onClick={() => {}}
-                  onDelete={() => {}}
-                  isOverlay
+            <div className="p-3 border-b">
+              <form
+                onSubmit={(e) => { e.preventDefault(); if (newQuadroName.trim()) createQuadroMutation.mutate(newQuadroName); }}
+                className="flex gap-2"
+              >
+                <Input
+                  value={newQuadroName}
+                  onChange={(e) => setNewQuadroName(e.target.value)}
+                  placeholder="Nome do quadro..."
+                  className="h-9 text-sm"
                 />
+                <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
+                  {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </form>
+            </div>
+
+            <div className="flex-1 overflow-auto p-2 space-y-1">
+              {quadrosLoading ? (
+                <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
+              ) : quadros.length === 0 ? (
+                <div className="text-center p-6 space-y-2">
+                  <Kanban className="h-8 w-8 mx-auto text-muted-foreground/30" />
+                  <p className="text-xs text-muted-foreground">Crie o primeiro quadro do pipeline.</p>
+                </div>
+              ) : (
+                quadros.map((quadro) => (
+                  <div
+                    key={quadro.id}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
+                      selectedQuadroId === quadro.id
+                        ? "bg-primary/15 text-primary font-medium"
+                        : "hover:bg-muted text-foreground"
+                    )}
+                  >
+                    {editingQuadroId === quadro.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
+                        }}
+                        className="flex items-center gap-1 flex-1"
+                      >
+                        <Input value={editingQuadroName} onChange={(e) => setEditingQuadroName(e.target.value)} className="h-7 text-xs" autoFocus />
+                        <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
+                          {quadro.nome}
+                        </span>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                          onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }} title="Renomear">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                          onClick={() => {
+                            if (confirm(`Excluir o quadro "${quadro.nome}"? As colunas vazias serão removidas.`))
+                              deleteQuadroMutation.mutate(quadro);
+                          }} title="Excluir">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))
               )}
-            </DragOverlay>
-          </DndContext>
+            </div>
+          </aside>
         )}
+
+        {/* Área principal */}
+        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
+          <div className="p-6 space-y-4 min-h-full">
+            <PageHeader
+              title={selectedQuadro?.nome ?? "Pipeline — Consórcio"}
+              description={
+                selectedQuadroId
+                  ? `${quadroLeads.length} lead${quadroLeads.length !== 1 ? "s" : ""} ativos${totalValor > 0 ? ` · ${formatCurrency(totalValor)} em contratos fechados` : ""}`
+                  : "Selecione ou crie um quadro"
+              }
+            >
+              <Button variant="outline" size="sm" onClick={() => setSidebarVisible((v) => !v)} className="gap-1">
+                {sidebarVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                {sidebarVisible ? "Ocultar" : "Quadros"}
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/consorcios/leads">
+                  <LayoutList className="h-4 w-4 mr-2" />Lista
+                </Link>
+              </Button>
+              {selectedQuadroId && (
+                <Button onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />Novo Lead
+                </Button>
+              )}
+            </PageHeader>
+
+            {!selectedQuadroId ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                <Kanban className="h-12 w-12 text-muted-foreground/30" />
+                <p className="text-muted-foreground text-sm">Selecione um quadro no painel lateral ou crie um novo.</p>
+              </div>
+            ) : (
+              <>
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-9 w-56"
+                      placeholder="Buscar lead..."
+                      value={filters.search}
+                      onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                    />
+                  </div>
+                  <Select value={filters.segmento} onValueChange={(v) => setFilters((p) => ({ ...p, segmento: v as Segmento | "todos" }))}>
+                    <SelectTrigger className="w-[150px]"><SelectValue placeholder="Segmento" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos segmentos</SelectItem>
+                      {SEGMENTOS.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filters.responsavel_id} onValueChange={(v) => setFilters((p) => ({ ...p, responsavel_id: v }))}>
+                    <SelectTrigger className="w-[170px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos responsáveis</SelectItem>
+                      <SelectItem value="sem">Sem responsável</SelectItem>
+                      {comerciais.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Board */}
+                {loading || etapasLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                    <div className="overflow-x-auto pb-4">
+                      <div className="flex gap-6 w-max min-w-full" style={{ minHeight: "calc(100svh - 28rem)" }}>
+                        {etapasOrdenadas.map((etapa, idx) => (
+                          <KanbanColumn
+                            key={etapa.id}
+                            etapa={etapa}
+                            leads={getByEtapa(etapa.id)}
+                            comerciaisMap={comerciaisMap}
+                            onLeadClick={(lead) => setSelectedLead(lead)}
+                            onDeleteLead={(id) => { if (confirm("Excluir este lead?")) deleteLeadMutation.mutate(id); }}
+                            onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
+                            onDeleteEtapa={handleDeleteEtapa}
+                            onMoveEtapa={handleMoveEtapa}
+                            canMoveLeft={idx > 0}
+                            canMoveRight={idx < etapasOrdenadas.length - 1}
+                          />
+                        ))}
+                        <div className="flex flex-col w-[200px] shrink-0 pt-1">
+                          <Button
+                            variant="ghost"
+                            className="w-full h-9 border border-dashed text-muted-foreground hover:text-foreground"
+                            onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />Nova coluna
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <DragOverlay dropAnimation={null}>
+                      {activeLead && (
+                        <LeadCard
+                          lead={activeLead}
+                          comerciaisMap={comerciaisMap}
+                          onClick={() => {}}
+                          onDelete={() => {}}
+                          isOverlay
+                        />
+                      )}
+                    </DragOverlay>
+                  </DndContext>
+                )}
+              </>
+            )}
+          </div>
+        </main>
       </div>
     </>
   );
