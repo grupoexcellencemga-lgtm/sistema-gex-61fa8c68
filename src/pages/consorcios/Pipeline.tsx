@@ -805,8 +805,9 @@ function LeadDetailDialog({
                             <div className="flex items-center gap-1.5 shrink-0">
                               <span className="text-[11px] text-muted-foreground">{fmtDate(i.created_at)}</span>
                               <button
-                                onClick={() => { if (confirm("Excluir este comentário?")) deleteInteracaoMutation.mutate(i.id); }}
-                                className="opacity-40 group-hover/comment:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                onClick={() => deleteInteracaoMutation.mutate(i.id)}
+                                disabled={deleteInteracaoMutation.isPending}
+                                className="opacity-40 group-hover/comment:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-20"
                                 title="Excluir comentário"
                               >
                                 <Trash2 className="h-3 w-3" />
