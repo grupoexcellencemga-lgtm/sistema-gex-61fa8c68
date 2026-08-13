@@ -50,6 +50,7 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { isInMonth } from "@/components/MonthFilter";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { abrirComprovante } from "@/lib/comprovantes";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
   pago: "default",
@@ -58,6 +59,8 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
 
 export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pagarDialogOpen, setPagarDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -99,57 +102,65 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: profissionais = [] } = useQuery({
-    queryKey: ["profissionais"],
+    queryKey: ["profissionais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profissionais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais"],
+    queryKey: ["comerciais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: categorias = [] } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: formasPagamento = [], isLoading: loadingFormasPagamento } =
@@ -215,6 +226,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
         forma_pagamento: data.forma_pagamento || null,
         fornecedor: reembolso.pessoa_nome,
         observacoes: `Reembolso pago a ${reembolso.pessoa_nome}`,
+        empresa_id: empresaId,
       });
       if (despErr) throw despErr;
 

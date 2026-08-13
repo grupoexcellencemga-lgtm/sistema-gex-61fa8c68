@@ -109,6 +109,7 @@ export interface AplicarChecklistResult {
 export async function aplicarChecklistNoEvento(
   evento: { id: string; nome: string; tipo: string | null; data: string | null },
   responsavelId: string,
+  empresaId?: string,
 ): Promise<AplicarChecklistResult> {
   if (!evento.tipo) return { aplicado: false, motivo: "sem_tipo" };
   if (!evento.data) return { aplicado: false, motivo: "sem_data" };
@@ -176,6 +177,7 @@ export async function aplicarChecklistNoEvento(
       fase_evento: item.fase,
       area: item.area || "operacao",
       checklist_item_id: item.id,
+      ...(empresaId ? { empresa_id: empresaId } : {}),
     };
   });
 
@@ -194,6 +196,7 @@ async function gerarTarefasDoTemplate(
   evento: { id: string; nome: string; data: string },
   templateId: string,
   responsavelId: string,
+  empresaId?: string,
 ) {
   const { data: itens, error } = await supabase
     .from("checklist_template_items")
@@ -225,6 +228,7 @@ async function gerarTarefasDoTemplate(
       fase_evento: item.fase,
       area: item.area || "operacao",
       checklist_item_id: item.id,
+      ...(empresaId ? { empresa_id: empresaId } : {}),
     };
   });
 }
@@ -235,6 +239,7 @@ export async function definirChecklistDoEvento(
   evento: { id: string; nome: string; data: string | null },
   templateId: string,
   responsavelId: string,
+  empresaId?: string,
 ): Promise<{ tarefasCriadas: number; templateNome: string }> {
   if (!evento.data)
     throw new Error("Defina a data do evento antes de aplicar o checklist.");
@@ -250,6 +255,7 @@ export async function definirChecklistDoEvento(
     { id: evento.id, nome: evento.nome, data: evento.data },
     templateId,
     responsavelId,
+    empresaId,
   );
 
   // Troca limpa: apaga as tarefas do checklist anterior deste evento.
@@ -312,6 +318,7 @@ async function gerarTarefasDaTurma(
   turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
   templateId: string,
   responsavelId: string,
+  empresaId?: string,
 ): Promise<{ rows: any[]; itensSemSessao: number }> {
   const [{ data: itens, error: itensErr }, { data: encontrosRaw, error: encErr }] = await Promise.all([
     supabase.from("checklist_template_items").select("*").eq("template_id", templateId).is("deleted_at", null),
@@ -353,6 +360,7 @@ async function gerarTarefasDaTurma(
       fase_evento: item.fase,
       area: item.area || "operacao",
       checklist_item_id: item.id,
+      ...(empresaId ? { empresa_id: empresaId } : {}),
     };
   };
 
@@ -387,6 +395,7 @@ export async function definirChecklistDaTurma(
   turma: { id: string; nome: string; data_inicio: string | null; data_fim: string | null },
   templateId: string,
   responsavelId: string,
+  empresaId?: string,
 ): Promise<{ tarefasCriadas: number; templateNome: string; itensSemSessao: number }> {
   if (!turma.data_inicio)
     throw new Error("Defina a data de início da turma antes de aplicar o checklist.");
@@ -398,7 +407,7 @@ export async function definirChecklistDaTurma(
     .single();
   if (tplErr) throw tplErr;
 
-  const { rows, itensSemSessao } = await gerarTarefasDaTurma(turma, templateId, responsavelId);
+  const { rows, itensSemSessao } = await gerarTarefasDaTurma(turma, templateId, responsavelId, empresaId);
 
   const { error: delErr } = await supabase
     .from("tarefas")
@@ -469,6 +478,7 @@ export async function recalcularPrazosDoEvento(eventoId: string): Promise<{ atua
 // junto, via ON DELETE CASCADE em tarefas.encontro_id).
 export async function recalcularPrazosDaTurma(
   turmaId: string,
+  empresaId?: string,
 ): Promise<{ atualizadas: number; criadas: number }> {
   const { data: turma, error: turmaErr } = await supabase
     .from("turmas")
@@ -575,6 +585,7 @@ export async function recalcularPrazosDaTurma(
         fase_evento: item.fase,
         area: item.area || "operacao",
         checklist_item_id: item.id,
+        ...(empresaId ? { empresa_id: empresaId } : {}),
       });
     }
   }

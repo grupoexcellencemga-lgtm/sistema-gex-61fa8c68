@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Users, CalendarDays, Percent, DollarSign, Receipt, TrendingUp, Loader2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const getValorPago = (p: any) => {
   const pago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
@@ -19,26 +20,31 @@ const FREQ_COLORS = {
 };
 
 export function TurmaMetricasTab({ turma }: { turma: any }) {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: matriculas = [], isLoading: l1 } = useQuery({
-    queryKey: ["turma-met-matriculas", turma.id],
+    queryKey: ["turma-met-matriculas", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("id, aluno_id, produto_id")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: encontros = [], isLoading: l2 } = useQuery({
-    queryKey: ["turma-met-encontros", turma.id],
+    queryKey: ["turma-met-encontros", turma.id, empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("encontros").select("id").eq("turma_id", turma.id);
+      const { data, error } = await supabase.from("encontros").select("id").eq("turma_id", turma.id).eq("empresa_id", empresaId!);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: presencas = [], isLoading: l3 } = useQuery({
@@ -64,12 +70,13 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
   );
 
   const { data: pagamentos = [], isLoading: l4 } = useQuery({
-    queryKey: ["turma-met-pagamentos", turma.id, matriculaIds.join(",")],
-    enabled: matriculaIds.length > 0,
+    queryKey: ["turma-met-pagamentos", turma.id, matriculaIds.join(","), empresaId],
+    enabled: matriculaIds.length > 0 && !!empresaId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
         .select("matricula_id, valor, valor_pago")
+        .eq("empresa_id", empresaId!)
         .eq("status", "pago")
         .is("deleted_at", null)
         .in("matricula_id", matriculaIds as string[]);
@@ -79,17 +86,19 @@ export function TurmaMetricasTab({ turma }: { turma: any }) {
   });
 
   const { data: despesas = [], isLoading: l5 } = useQuery({
-    queryKey: ["turma-met-despesas", turma.id],
+    queryKey: ["turma-met-despesas", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select("id, descricao, valor, data")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: true });
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const m = useMemo(() => {

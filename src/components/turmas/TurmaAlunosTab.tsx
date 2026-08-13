@@ -15,6 +15,7 @@ import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { emptyMatriculaForm } from "@/components/alunos/alunosUtils";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { logActivity } from "@/components/ActivityTimeline";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const normalizar = (v?: string | null) =>
   (v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -29,6 +30,8 @@ const whatsappLink = (phone?: string | null) => {
 export function TurmaAlunosTab({ turma }: { turma: any }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [busca, setBusca] = useState("");
 
   // Step 1: busca aluno
@@ -49,6 +52,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
           nome: novoAlunoForm.nome.trim(),
           email: novoAlunoForm.email.trim() || null,
           telefone: novoAlunoForm.telefone.trim() || null,
+          empresa_id: empresaId,
         })
         .select("id, nome, email, telefone")
         .single();
@@ -86,12 +90,13 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
 
   // ── Alunos na turma ──
   const { data: alunos = [], isLoading } = useQuery({
-    queryKey: ["alunos-turma-tab", turma.id],
+    queryKey: ["alunos-turma-tab", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("aluno_id, alunos(id, nome, email, telefone)")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       const mapa = new Map<string, any>();
@@ -107,62 +112,66 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
 
   // ── Alunos disponíveis (só carrega ao abrir o dialog de busca) ──
   const { data: todosAlunos = [] } = useQuery({
-    queryKey: ["alunos-lista-basica"],
+    queryKey: ["alunos-lista-basica", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("alunos")
         .select("id, nome, email, telefone")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
-    enabled: buscaDialogOpen,
+    enabled: buscaDialogOpen && !!empresaId,
   });
 
   // ── Dados para o MatriculaFormDialog (só carrega ao abrir step 2) ──
   const { data: produtos = [] } = useQuery({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
         .select("id, nome, valor")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
-    enabled: matriculaDialogOpen || buscaDialogOpen,
+    enabled: (matriculaDialogOpen || buscaDialogOpen) && !!empresaId,
   });
 
   const { data: contasBancarias = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("id, nome, banco")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
       if (error) throw error;
       return data;
     },
-    enabled: matriculaDialogOpen,
+    enabled: matriculaDialogOpen && !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais"],
+    queryKey: ["comerciais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
-    enabled: matriculaDialogOpen,
+    enabled: matriculaDialogOpen && !!empresaId,
   });
 
   // ── Filtro da lista de busca ──
@@ -265,6 +274,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
           valor_total: valorTotal,
           desconto,
           valor_final: valorFinal,
+          empresa_id: empresaId,
         })
         .select("id")
         .single();
@@ -338,6 +348,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
           data_vencimento: d.toISOString().split("T")[0],
           status: "pendente",
           conta_bancaria_id: matriculaForm.conta_bancaria_id || null,
+          empresa_id: empresaId,
         };
       });
 

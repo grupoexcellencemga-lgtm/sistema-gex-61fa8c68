@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +64,8 @@ function origemDaTarefa(t: any): { key: string; label: string } {
 const Tarefas = () => {
   const { user } = useAuth();
   const { isAdmin } = usePermissions();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarefa, setEditTarefa] = useState<any>(null);
@@ -82,16 +85,18 @@ const Tarefas = () => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
   const { data: tarefas = [], isLoading, refetch } = useQuery({
-    queryKey: ["tarefas"],
+    queryKey: ["tarefas", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
         .select("*, turmas(nome, data_fim, produtos(nome)), eventos(nome, data), tarefa_itens(id, titulo, concluido, ordem)")
+        .eq("empresa_id", empresaId!)
         .neq("status", "cancelada")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: profiles = [] } = useQuery({

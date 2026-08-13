@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const getValorPago = (p: any) => {
   const pago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
@@ -40,17 +41,21 @@ function SituacaoBadge({ s }: { s: SituacaoAluno }) {
 
 export function TurmaFinanceiroTab({ turma }: { turma: any }) {
   const navigate = useNavigate();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: matriculas = [], isLoading: loadingMat } = useQuery({
-    queryKey: ["turma-fin-matriculas", turma.id],
+    queryKey: ["turma-fin-matriculas", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("id, aluno_id, produto_id, valor_final, alunos(nome)")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const matriculaIds = useMemo(
@@ -60,12 +65,13 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
 
   // Busca TODOS os pagamentos da turma (pago + pendente + vencido) pelo matricula_id
   const { data: pagamentos = [], isLoading: loadingPag } = useQuery({
-    queryKey: ["turma-fin-pagamentos", turma.id, matriculaIds.join(",")],
-    enabled: matriculaIds.length > 0,
+    queryKey: ["turma-fin-pagamentos", turma.id, matriculaIds.join(","), empresaId],
+    enabled: matriculaIds.length > 0 && !!empresaId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .in("matricula_id", matriculaIds as string[]);
       if (error) throw error;
@@ -74,16 +80,18 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
   });
 
   const { data: despesas = [], isLoading: loadingDesp } = useQuery({
-    queryKey: ["turma-fin-despesas", turma.id],
+    queryKey: ["turma-fin-despesas", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select("*, contas_bancarias(nome)")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const dados = useMemo(() => {

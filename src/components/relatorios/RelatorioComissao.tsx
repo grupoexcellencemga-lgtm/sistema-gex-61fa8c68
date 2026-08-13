@@ -16,6 +16,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import autoTable from "jspdf-autotable";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const statusOptions = ["pendente", "pago", "cancelado"];
 
@@ -37,38 +38,44 @@ export function RelatorioComissao() {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [viewMode, setViewMode] = useState("vendedor");
   const { data: formasPagamento = [] } = useFormasPagamento();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   // Fetch reference data
   const { data: comerciais } = useQuery({
-    queryKey: ["comerciais-comissao"],
+    queryKey: ["comerciais-comissao", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome");
+      const { data } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: produtos } = useQuery({
-    queryKey: ["produtos-comissao"],
+    queryKey: ["produtos-comissao", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("produtos").select("id, nome").is("deleted_at", null).order("nome");
+      const { data } = await supabase.from("produtos").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: turmasAll } = useQuery({
-    queryKey: ["turmas-comissao"],
+    queryKey: ["turmas-comissao", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("turmas").select("id, nome, produto_id").is("deleted_at", null).order("nome");
+      const { data } = await supabase.from("turmas").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: eventosAll } = useQuery({
-    queryKey: ["eventos-comissao"],
+    queryKey: ["eventos-comissao", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("eventos").select("id, nome, produto_id").is("deleted_at", null).order("nome");
+      const { data } = await supabase.from("eventos").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: taxas } = useQuery({
@@ -103,16 +110,18 @@ export function RelatorioComissao() {
 
   // Also fetch pagamentos linked to comissoes for tax info
   const { data: pagamentos } = useQuery({
-    queryKey: ["pagamentos-comissao", dataInicio, dataFim],
+    queryKey: ["pagamentos-comissao", dataInicio, dataFim, empresaId],
     queryFn: async () => {
       const { data } = await supabase
         .from("pagamentos")
         .select("matricula_id, taxa_cartao, forma_pagamento, valor, valor_pago, parcelas_cartao")
+        .eq("empresa_id", empresaId!)
         .gte("data_pagamento", dataInicio)
         .lte("data_pagamento", dataFim)
         .is("deleted_at", null);
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   // Cascade filters

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { NOMES_MES } from "@/components/agenda/agendaUtils";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { EventoFormDialog, EventoForm, emptyForm } from "@/components/eventos/EventoFormDialog";
@@ -18,6 +19,8 @@ const Eventos = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const eventoIdFromUrl = searchParams.get("evento");
 
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
   const { filterByResponsavel } = useDataFilter();
@@ -39,11 +42,12 @@ const Eventos = () => {
 
   // Queries
   const { data: eventosRaw = [], isLoading } = useQuery({
-    queryKey: ["eventos"],
+    queryKey: ["eventos", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("eventos")
         .select("*, eventos_responsaveis(profissional_id, profissionais(id, nome))")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: true });
       if (error) throw error;
@@ -56,6 +60,7 @@ const Eventos = () => {
         };
       });
     },
+    enabled: !!empresaId,
   });
 
   const eventos = filterByResponsavel(eventosRaw);
@@ -128,21 +133,23 @@ const Eventos = () => {
   });
 
   const { data: produtosEvento = [] } = useQuery({
-    queryKey: ["produtos_evento"],
+    queryKey: ["produtos_evento", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("produtos").select("id, nome, tipo").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("produtos").select("id, nome, tipo").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: turmasEvento = [] } = useQuery({
-    queryKey: ["turmas_evento"],
+    queryKey: ["turmas_evento", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("turmas").select("id, nome, produto_id").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("turmas").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: modelosChecklist = [] } = useQuery({
@@ -167,6 +174,7 @@ const Eventos = () => {
   const insertMutation = useMutation({
     mutationFn: async (data: EventoForm) => {
       const { data: criado, error } = await supabase.from("eventos").insert({
+        empresa_id: empresaId,
         nome: data.nome, data: data.data || null, local: data.local || null,
         tipo: data.tipo ? data.tipo.toLowerCase() : null,
         responsavel: null,

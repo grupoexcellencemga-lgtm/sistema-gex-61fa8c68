@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Plus, Loader2, Check, X, AlertTriangle, CheckCheck, MessageCircle, Trophy, Trash2, Pencil, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { recalcularPrazosDaTurma } from "@/lib/checklistEvento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 // Formatos reais de turma. Só "semanal" pede o número de sessões; os demais
 // já sabem quantas são (dias seguidos a partir da data de início).
@@ -163,6 +164,8 @@ function EncontroDataEditavel({ data, onSave }: { data: string | null; onSave: (
 
 export function TurmaPresencaTab({ turma }: Props) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [addEncontroOpen, setAddEncontroOpen] = useState(false);
   const [newEncontro, setNewEncontro] = useState({ data: "", descricao: "" });
   const [obsDialog, setObsDialog] = useState<{ presencaId: string; obs: string } | null>(null);
@@ -176,26 +179,29 @@ export function TurmaPresencaTab({ turma }: Props) {
 
   // Fetch encontros
   const { data: encontros = [], isLoading: loadingEncontros } = useQuery({
-    queryKey: ["encontros", turma.id],
+    queryKey: ["encontros", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("encontros")
         .select("*")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .order("sessao_numero");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Fetch alunos matriculados nesta turma
   const { data: alunosMatriculados = [] } = useQuery({
-    queryKey: ["alunos-turma", turma.id],
+    queryKey: ["alunos-turma", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("aluno_id, alunos(id, nome, telefone)")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
 
       if (error) throw error;
@@ -213,6 +219,7 @@ export function TurmaPresencaTab({ turma }: Props) {
         String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR")
       );
     },
+    enabled: !!empresaId,
   });
 
   // Fetch presencas
@@ -232,7 +239,7 @@ export function TurmaPresencaTab({ turma }: Props) {
   // de sessão (nova, editada ou removida) — silencioso, sem travar a ação.
   const recalcularChecklistDaTurma = async () => {
     try {
-      const r = await recalcularPrazosDaTurma(turma.id);
+      const r = await recalcularPrazosDaTurma(turma.id, empresaId);
       queryClient.invalidateQueries({ queryKey: ["tarefas-turma", turma.id] });
       if (r.atualizadas || r.criadas) {
         toast.info(`Checklist: ${r.atualizadas} prazo(s) reajustado(s), ${r.criadas} tarefa(s) nova(s).`);
@@ -249,6 +256,7 @@ export function TurmaPresencaTab({ turma }: Props) {
         sessao_numero: nextNum,
         data: newEncontro.data || null,
         descricao: newEncontro.descricao || null,
+        empresa_id: empresaId,
       });
       if (error) throw error;
     },
@@ -274,6 +282,7 @@ export function TurmaPresencaTab({ turma }: Props) {
         turma_id: turma.id,
         sessao_numero: n.sessao_numero,
         data: n.data,
+        empresa_id: empresaId,
       }));
       const { error } = await supabase.from("encontros").insert(rows);
       if (error) throw error;

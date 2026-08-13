@@ -21,9 +21,12 @@ import { toast } from "@/hooks/use-toast";
 import { PaginationControls, paginate } from "@/components/Pagination";
 import { statusVariant, formatDate, formatCurrency } from "./financeiroUtils";
 import { useFormasPagamento, getFormaPagamentoLabel, isFormaCredito } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const getValorOriginalEntrada = (pagamento: any) => Number(pagamento?.valor || 0);
 
@@ -67,39 +70,44 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const [editingAvulsa, setEditingAvulsa] = useState<any>(null);
 
   const { data: pagamentos = [], isLoading } = useQuery({
-    queryKey: ["pagamentos"],
+    queryKey: ["pagamentos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
         .select("*, alunos(nome), produtos(nome), contas_bancarias(nome), matriculas(turma_id, turmas(nome))")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: receitasAvulsas = [], isLoading: isLoadingAvulsas } = useQuery({
-    queryKey: ["receitas_avulsas"],
+    queryKey: ["receitas_avulsas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("receitas_avulsas")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -107,20 +115,23 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: categoriasReceita = [] } = useQuery({
-    queryKey: ["categorias_despesas_receita"],
+    queryKey: ["categorias_despesas_receita", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("tipo", "receita")
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Participantes de eventos (pagos)
@@ -140,17 +151,19 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
 
   // Processos individuais + lançamentos
   const { data: processosIndividuais = [] } = useQuery({
-    queryKey: ["processos_individuais_entradas"],
+    queryKey: ["processos_individuais_entradas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("id, cliente_nome, responsavel, percentual_empresa, percentual_profissional, valor_total, status, conta_bancaria_id, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({
@@ -169,17 +182,19 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
 
   // Processos empresariais + lançamentos
   const { data: processosEmpresariais = [] } = useQuery({
-    queryKey: ["processos_empresariais_entradas"],
+    queryKey: ["processos_empresariais_entradas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_empresariais")
         .select("id, empresa_nome, responsavel, percentual_empresa, percentual_profissional, valor_total, status, conta_bancaria_id, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcessoEmpresarial = [] } = useQuery({
@@ -218,7 +233,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
       } else {
         const { error } = await supabase
           .from("receitas_avulsas")
-          .insert(payload);
+          .insert({ ...payload, empresa_id: empresaId });
 
         if (error) throw error;
       }

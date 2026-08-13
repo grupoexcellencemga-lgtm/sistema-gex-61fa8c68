@@ -61,6 +61,7 @@ const FORMA_LABELS: Record<string, string> = {
 };
 
 import { formatCurrency } from "@/lib/formatters";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
   if (percent < 0.05) return null;
@@ -76,19 +77,22 @@ const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
 };
 
 export function EventoMetricsDialog({ open, onOpenChange, participantes, evento, conversao }: Props) {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const total = participantes.length;
   const isComunidade = evento?.comunidade;
   const isPago = evento?.pago;
 
   // Fetch despesas do evento
   const { data: despesas = [] } = useQuery({
-    queryKey: ["despesas_evento_metrics", evento?.id],
-    enabled: !!evento?.id && open,
+    queryKey: ["despesas_evento_metrics", evento?.id, empresaId],
+    enabled: !!evento?.id && open && !!empresaId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select("*")
         .eq("evento_id", evento.id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data;

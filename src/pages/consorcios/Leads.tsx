@@ -22,6 +22,7 @@ import {
   LayoutGrid,
   ArrowUpDown,
 } from "lucide-react";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Link } from "react-router-dom";
 import {
@@ -66,6 +67,8 @@ function EtapaBadge({ etapa }: { etapa: EtapaConsorcio }) {
 type SortField = "created_at" | "nome" | "valor_credito";
 
 const Leads = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -76,30 +79,34 @@ const Leads = () => {
   const [sortAsc, setSortAsc] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery<ConsorcioLead[]>({
-    queryKey: ["consorcios-leads"],
+    queryKey: ["consorcios-leads", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("consorcios_leads")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as ConsorcioLead[];
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery<Array<{ id: string; nome: string }>>({
-    queryKey: ["comerciais-consorcios"],
+    queryKey: ["comerciais-consorcios", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data ?? [];
     },
+    enabled: !!empresaId,
   });
 
   const comerciaisMap = useMemo(

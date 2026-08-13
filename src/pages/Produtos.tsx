@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +37,8 @@ const tipoBadge: Record<string, "default" | "secondary" | "outline"> = {
 import { formatCurrency } from "@/lib/formatters";
 
 const Produtos = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -43,17 +46,19 @@ const Produtos = () => {
   const [form, setForm] = useState<ProdutoForm>(emptyForm);
 
   const { data: produtos = [], isLoading } = useQuery({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("produtos").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("produtos").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const insertMutation = useMutation({
     mutationFn: async (data: ProdutoForm) => {
       const { error } = await supabase.from("produtos").insert({
+        empresa_id: empresaId,
         nome: data.nome,
         tipo: data.tipo.toLowerCase(),
         responsavel: data.responsavel || null,

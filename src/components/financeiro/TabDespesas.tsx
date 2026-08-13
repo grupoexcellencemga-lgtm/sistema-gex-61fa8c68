@@ -57,9 +57,12 @@ import {
   useFormasPagamento,
   getFormaPagamentoLabel,
 } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const { data: formasPagamento = [], isLoading: formasPagamentoLoading } =
     useFormasPagamento();
@@ -108,27 +111,30 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
   const [uploadingNota, setUploadingNota] = useState(false);
 
   const { data: despesas = [], isLoading } = useQuery({
-    queryKey: ["despesas"],
+    queryKey: ["despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select(
           "*, categorias_despesas(nome), contas_bancarias(nome), turmas(nome), produtos(nome)",
         )
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: categorias = [] } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome", { ascending: true });
@@ -136,14 +142,16 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [], isFetching: contasFetching } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -152,20 +160,23 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       return data;
     },
     staleTime: 0,
+    enabled: !!empresaId,
   });
 
   const { data: turmas = [] } = useQuery({
-    queryKey: ["turmas"],
+    queryKey: ["turmas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("turmas")
         .select("id, nome, produto_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const turmasFiltradas = formProdutoId
@@ -173,17 +184,19 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
     : [];
 
   const { data: produtos = [] } = useQuery({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const saveDespesa = useMutation({
@@ -215,7 +228,7 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
       } else {
         const { error } = await (supabase as any)
           .from("despesas")
-          .insert(payload);
+          .insert({ ...payload, empresa_id: empresaId });
         if (error) throw error;
       }
     },

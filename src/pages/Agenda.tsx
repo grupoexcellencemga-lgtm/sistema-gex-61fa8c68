@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -16,6 +17,8 @@ import {
 
 const Agenda = () => {
   const navigate = useNavigate();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [ref, setRef] = useState(() => {
     const h = new Date(Date.now() - 3 * 3_600_000);
     return new Date(h.getFullYear(), h.getMonth(), 1);
@@ -36,11 +39,12 @@ const Agenda = () => {
     .slice(0, 10);
 
   const { data: eventos = [], isLoading: l1 } = useQuery({
-    queryKey: ["agenda-eventos", inicio, fim],
+    queryKey: ["agenda-eventos", inicio, fim, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("eventos")
         .select("id, nome, data")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .not("data", "is", null)
         .gte("data", inicio)
@@ -48,34 +52,39 @@ const Agenda = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: encontros = [], isLoading: l2 } = useQuery({
-    queryKey: ["agenda-encontros", inicio, fim],
+    queryKey: ["agenda-encontros", inicio, fim, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("encontros")
         .select("id, turma_id, data, sessao_numero, turmas(nome)")
+        .eq("empresa_id", empresaId!)
         .not("data", "is", null)
         .gte("data", inicio)
         .lte("data", fim);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: tarefas = [], isLoading: l3 } = useQuery({
-    queryKey: ["agenda-tarefas", inicio, fim],
+    queryKey: ["agenda-tarefas", inicio, fim, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tarefas")
         .select("id, titulo, data_vencimento, status, evento_id")
+        .eq("empresa_id", empresaId!)
         .not("data_vencimento", "is", null)
         .gte("data_vencimento", inicio)
         .lte("data_vencimento", fim);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: googleEventos = [] } = useQuery({

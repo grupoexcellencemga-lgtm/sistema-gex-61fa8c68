@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Users, TrendingUp, Percent, CreditCard, Target, CheckSquare, Phone } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,8 @@ interface Props {
 
 export function DashboardComercial({ mes, ano }: Props) {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const startStr = new Date(ano, mes, 1).toISOString().split("T")[0];
   const endStr = new Date(ano, mes + 1, 0).toISOString().split("T")[0];
 
@@ -33,12 +36,13 @@ export function DashboardComercial({ mes, ano }: Props) {
   });
 
   const { data: etapas = [] } = useQuery<FunilEtapa[]>({
-    queryKey: ["funil-etapas"],
+    queryKey: ["funil-etapas", empresaId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("funil_etapas").select("*").order("ordem", { ascending: true });
+      const { data, error } = await (supabase as any).from("funil_etapas").select("*").eq("empresa_id", empresaId!).order("ordem", { ascending: true });
       if (error) throw error;
       return (data || []) as FunilEtapa[];
     },
+    enabled: !!empresaId,
   });
 
   const etapasMap = new Map(etapas.map((e) => [e.id, e]));
@@ -47,27 +51,29 @@ export function DashboardComercial({ mes, ano }: Props) {
   const etapasFunil = [...etapas].filter((e) => e.tipo !== "perdido").sort((a, b) => a.ordem - b.ordem);
 
   const { data: leadsAtivos = 0, isLoading: loadingLeads } = useQuery({
-    queryKey: ["dash-comercial-leads", comercialId, idsEmAndamento.join(",")],
+    queryKey: ["dash-comercial-leads", comercialId, idsEmAndamento.join(","), empresaId],
     queryFn: async () => {
       if (!comercialId || idsEmAndamento.length === 0) return 0;
       const { count } = await supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .eq("responsavel_id", comercialId)
         .is("deleted_at", null)
         .in("etapa_id", idsEmAndamento);
       return count || 0;
     },
-    enabled: !!comercialId && idsEmAndamento.length > 0,
+    enabled: !!comercialId && idsEmAndamento.length > 0 && !!empresaId,
   });
 
   const { data: conversoesMes = 0 } = useQuery({
-    queryKey: ["dash-comercial-conversoes", comercialId, mes, ano, idsGanho.join(",")],
+    queryKey: ["dash-comercial-conversoes", comercialId, mes, ano, idsGanho.join(","), empresaId],
     queryFn: async () => {
       if (!comercialId || idsGanho.length === 0) return 0;
       const { count } = await supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .eq("responsavel_id", comercialId)
         .in("etapa_id", idsGanho)
         .is("deleted_at", null)
@@ -75,7 +81,7 @@ export function DashboardComercial({ mes, ano }: Props) {
         .lte("updated_at", endStr + "T23:59:59");
       return count || 0;
     },
-    enabled: !!comercialId && idsGanho.length > 0,
+    enabled: !!comercialId && idsGanho.length > 0 && !!empresaId,
   });
 
   const taxaConversao = leadsAtivos + conversoesMes > 0
@@ -99,7 +105,7 @@ export function DashboardComercial({ mes, ano }: Props) {
   });
 
   const { data: funilData = [] } = useQuery({
-    queryKey: ["dash-comercial-funil", comercialId, etapasFunil.map((e) => e.id).join(",")],
+    queryKey: ["dash-comercial-funil", comercialId, etapasFunil.map((e) => e.id).join(","), empresaId],
     queryFn: async () => {
       if (!comercialId || etapasFunil.length === 0) return [];
       const results = [];
@@ -107,6 +113,7 @@ export function DashboardComercial({ mes, ano }: Props) {
         const { count } = await supabase
           .from("leads")
           .select("id", { count: "exact", head: true })
+          .eq("empresa_id", empresaId!)
           .eq("responsavel_id", comercialId)
           .eq("etapa_id", etapa.id)
           .is("deleted_at", null);
@@ -114,33 +121,35 @@ export function DashboardComercial({ mes, ano }: Props) {
       }
       return results;
     },
-    enabled: !!comercialId && etapasFunil.length > 0,
+    enabled: !!comercialId && etapasFunil.length > 0 && !!empresaId,
   });
 
   const { data: metas = [] } = useQuery({
-    queryKey: ["dash-comercial-metas", comercialId],
+    queryKey: ["dash-comercial-metas", comercialId, empresaId],
     queryFn: async () => {
       if (!comercialId) return [];
       const hoje = new Date().toISOString().split("T")[0];
       const { data } = await supabase
         .from("metas")
         .select("id, titulo, tipo, valor_meta, valor_atual")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("responsavel_id", comercialId)
         .lte("periodo_inicio", hoje)
         .gte("periodo_fim", hoje);
       return data || [];
     },
-    enabled: !!comercialId,
+    enabled: !!comercialId && !!empresaId,
   });
 
   const { data: followUps = [] } = useQuery({
-    queryKey: ["dash-comercial-followups", comercialId, idsEmAndamento.join(",")],
+    queryKey: ["dash-comercial-followups", comercialId, idsEmAndamento.join(","), empresaId],
     queryFn: async () => {
       if (!comercialId || idsEmAndamento.length === 0) return [];
       const { data } = await (supabase as any)
         .from("leads")
         .select("id, nome, telefone, etapa_id, updated_at")
+        .eq("empresa_id", empresaId!)
         .eq("responsavel_id", comercialId)
         .is("deleted_at", null)
         .in("etapa_id", idsEmAndamento)
@@ -148,23 +157,24 @@ export function DashboardComercial({ mes, ano }: Props) {
         .limit(5);
       return data || [];
     },
-    enabled: !!comercialId && idsEmAndamento.length > 0,
+    enabled: !!comercialId && idsEmAndamento.length > 0 && !!empresaId,
   });
 
   const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
-    queryKey: ["minhas-tarefas-dashboard", user?.id],
+    queryKey: ["minhas-tarefas-dashboard", user?.id, empresaId],
     queryFn: async () => {
       if (!user) return [];
       const { data } = await supabase
         .from("tarefas")
         .select("id, titulo, prioridade, data_vencimento, status")
+        .eq("empresa_id", empresaId!)
         .eq("responsavel_id", user.id)
         .in("status", ["pendente", "em_andamento"])
         .order("data_vencimento", { ascending: true, nullsFirst: false })
         .limit(5);
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && !!empresaId,
   });
 
   if (loadingLeads && !comercialId) {

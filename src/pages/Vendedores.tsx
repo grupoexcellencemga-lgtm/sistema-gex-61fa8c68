@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Loader2, Award, Phone, Mail } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { maskCPF, maskPhone } from "@/lib/utils";
 
 const TIPOS_VINCULO = ["mei", "clt", "autonomo", "convidado"] as const;
@@ -44,6 +45,8 @@ const emptyForm: VendedorForm = {
 };
 
 const Vendedores = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -52,12 +55,13 @@ const Vendedores = () => {
   const set = (key: keyof VendedorForm, val: any) => setForm(f => ({ ...f, [key]: val }));
 
   const { data: comerciais = [], isLoading } = useQuery({
-    queryKey: ["comerciais"],
+    queryKey: ["comerciais", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("comerciais").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("comerciais").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comissoes = [] } = useQuery({
@@ -91,7 +95,7 @@ const Vendedores = () => {
         const { error } = await supabase.from("comerciais").update(payload).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("comerciais").insert(payload);
+        const { error } = await supabase.from("comerciais").insert({ ...payload, empresa_id: empresaId });
         if (error) throw error;
       }
     },

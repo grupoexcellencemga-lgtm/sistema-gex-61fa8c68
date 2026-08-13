@@ -23,9 +23,12 @@ import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const [expandedProf, setExpandedProf] = useState<string | null>(null);
   const [expandedCliente, setExpandedCliente] = useState<string | null>(null);
@@ -43,11 +46,12 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
   const { data: formasPagamento = [] } = useFormasPagamento();
 
   const { data: profissionais = [], isLoading } = useQuery({
-    queryKey: ["profissionais-financeiro"],
+    queryKey: ["profissionais-financeiro", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profissionais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
@@ -55,20 +59,23 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: processos = [] } = useQuery({
-    queryKey: ["processos-financeiro-prof"],
+    queryKey: ["processos-financeiro-prof", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({
@@ -100,11 +107,12 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
   });
 
   const { data: contas = [] } = useQuery({
-    queryKey: ["contas_bancarias_prof"],
+    queryKey: ["contas_bancarias_prof", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -112,6 +120,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const formatCurrencyInput = (v: string): string => {
@@ -219,6 +228,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
         observacoes: pgForm.obs.trim() || null,
         recorrente: false,
         categoria_id: categoriaId,
+        empresa_id: empresaId,
       });
 
       if (despError) throw despError;

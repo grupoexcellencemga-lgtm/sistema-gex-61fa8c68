@@ -21,6 +21,7 @@ import { ParticipantesHeader } from "./participantes/ParticipantesHeader";
 import { ParticipantesTable } from "./participantes/ParticipantesTable";
 import { AddParticipanteDialog } from "./participantes/AddParticipanteDialog";
 import { ParticipanteDetailDialog } from "./participantes/ParticipanteDetailDialog";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 interface Props {
   evento: any;
@@ -49,6 +50,8 @@ export function ParticipantesSection({
   turmas,
 }: Props) {
   const { data: formasPagamento = [] } = useFormasPagamento();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "participantes";
@@ -93,42 +96,47 @@ export function ParticipantesSection({
   });
 
   const { data: contasBancarias = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: alunosCadastrados = [] } = useQuery({
-    queryKey: ["alunos-evento"],
+    queryKey: ["alunos-evento", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("alunos")
         .select("id, nome, email, telefone")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Alunos já matriculados na turma vinculada ao evento — usado para esconder o
   // botão "Matricular na turma" de quem já entrou e para a métrica de matriculados.
   const { data: matriculadosTurma = [] } = useQuery({
-    queryKey: ["matriculas-turma-evento", evento.turma_id],
-    enabled: !!evento.turma_id,
+    queryKey: ["matriculas-turma-evento", evento.turma_id, empresaId],
+    enabled: !!evento.turma_id && !!empresaId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("aluno_id, valor_final")
         .eq("turma_id", evento.turma_id)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data;

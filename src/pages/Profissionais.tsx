@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Loader2, Pencil, Trash2, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { validateCPF, maskCPF, formatPhone, maskPhone } from "@/lib/utils";
 import { ProfissionalFormDialog, emptyForm, type ProfissionalForm } from "@/components/profissionais/ProfissionalFormDialog";
@@ -17,6 +18,8 @@ import { ProfissionalFormDialog, emptyForm, type ProfissionalForm } from "@/comp
 const TIPO_LABELS: Record<string, string> = { mei: "MEI", clt: "CLT", autonomo: "Autônomo", convidado: "Convidado" };
 
 const Profissionais = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const { isAdmin } = usePermissions();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -29,16 +32,18 @@ const Profissionais = () => {
   const resetForm = () => { setForm(emptyForm); setEditing(null); setCpfError(""); };
 
   const { data: profissionais = [], isLoading } = useQuery({
-    queryKey: ["profissionais"],
+    queryKey: ["profissionais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profissionais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const saveMutation = useMutation({
@@ -94,6 +99,7 @@ const Profissionais = () => {
     setCpfError("");
 
     saveMutation.mutate({
+      empresa_id: empresaId,
       nome: form.nome.trim(),
       email: form.email.trim() || null,
       telefone: form.telefone.replace(/\D/g, "") || null,

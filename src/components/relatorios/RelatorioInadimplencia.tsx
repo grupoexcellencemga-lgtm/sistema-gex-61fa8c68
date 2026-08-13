@@ -16,6 +16,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { WhatsAppDialog } from "@/components/WhatsAppDialog";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export function RelatorioInadimplencia() {
   const [dataInicio, setDataInicio] = useState(() => {
@@ -38,25 +39,29 @@ export function RelatorioInadimplencia() {
   const [waName, setWaName] = useState("");
 
   const hojeStr = new Date().toISOString().split("T")[0];
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const { data: comerciais } = useQuery({
-    queryKey: ["comerciais-inad"],
+    queryKey: ["comerciais-inad", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("comerciais").select("id, nome").order("nome");
+      const { data } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: produtos } = useQuery({
-    queryKey: ["produtos-inad"],
+    queryKey: ["produtos-inad", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("produtos").select("id, nome").order("nome");
+      const { data } = await supabase.from("produtos").select("id, nome").eq("empresa_id", empresaId!).order("nome");
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentos, isLoading } = useQuery({
-    queryKey: ["relatorio-inadimplencia", dataInicio, dataFim],
+    queryKey: ["relatorio-inadimplencia", dataInicio, dataFim, empresaId],
     queryFn: async () => {
       // Vencimento <= Limit (max yesterday or dataFim)
       const limitDate = dataFim > hojeStr ? hojeStr : dataFim;
@@ -74,6 +79,7 @@ export function RelatorioInadimplencia() {
           produtos (id, nome),
           matriculas (comercial_id, comerciais (id, nome))
         `)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .in("status", ["pendente", "atrasado"])
         .lt("data_vencimento", hojeStr)
@@ -83,6 +89,7 @@ export function RelatorioInadimplencia() {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   // Calculate days of delay and classify ranges

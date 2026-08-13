@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,8 @@ const emptyForm: MetaForm = {
 };
 
 const Metas = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -54,30 +57,33 @@ const Metas = () => {
   const set = (key: keyof MetaForm, val: string) => setForm(f => ({ ...f, [key]: val }));
 
   const { data: metas = [], isLoading } = useQuery({
-    queryKey: ["metas"],
+    queryKey: ["metas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("metas").select("*").is("deleted_at", null).order("periodo_fim", { ascending: false });
+      const { data, error } = await supabase.from("metas").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("periodo_fim", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais-metas"],
+    queryKey: ["comerciais-metas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: profissionais = [] } = useQuery({
-    queryKey: ["profissionais-metas"],
+    queryKey: ["profissionais-metas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profissionais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("profissionais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const hoje = new Date().toISOString().split("T")[0];
@@ -106,7 +112,7 @@ const Metas = () => {
         const { error } = await supabase.from("metas").update(payload).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("metas").insert(payload);
+        const { error } = await supabase.from("metas").insert({ ...payload, empresa_id: empresaId });
         if (error) throw error;
       }
     },

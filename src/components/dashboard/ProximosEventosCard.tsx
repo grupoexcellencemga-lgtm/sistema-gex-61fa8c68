@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/formatters";
 import { CalendarClock, ChevronRight } from "lucide-react";
@@ -30,9 +31,11 @@ interface ItemProximo {
 
 export function ProximosEventosCard() {
   const navigate = useNavigate();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const { data: itens = [] } = useQuery<ItemProximo[]>({
-    queryKey: ["proximos-eventos-card"],
+    queryKey: ["proximos-eventos-card", empresaId],
     queryFn: async () => {
       const hoje = hojeBrasilISO();
       const limite = (() => {
@@ -44,12 +47,14 @@ export function ProximosEventosCard() {
         supabase
           .from("eventos")
           .select("id, nome, tipo, data")
+          .eq("empresa_id", empresaId!)
           .is("deleted_at", null)
           .gte("data", hoje)
           .lte("data", limite),
         (supabase as any)
           .from("turmas")
           .select("id, nome, data_inicio, produtos(nome), encontros(data)")
+          .eq("empresa_id", empresaId!)
           .is("deleted_at", null),
       ]);
 
@@ -121,6 +126,7 @@ export function ProximosEventosCard() {
       return result.sort((a, b) => a.dias - b.dias).slice(0, 6);
     },
     staleTime: 5 * 60_000,
+    enabled: !!empresaId,
   });
 
   if (itens.length === 0) return null;

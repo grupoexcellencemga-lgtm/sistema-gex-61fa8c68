@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,8 @@ function saudacao(): string {
 const Inicio = () => {
   const navigate = useNavigate();
   const { canAccess } = usePermissions();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const hoje = hojeBrasilISO();
 
   const dataExtenso = new Date(hoje + "T12:00:00").toLocaleDateString("pt-BR", {
@@ -53,13 +56,14 @@ const Inicio = () => {
   });
 
   const { data: tarefas = [] } = useQuery({
-    queryKey: ["inicio-tarefas", hoje],
+    queryKey: ["inicio-tarefas", hoje, empresaId],
     queryFn: async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return [];
       const { data, error } = await (supabase as any)
         .from("tarefas")
         .select("id, titulo, data_vencimento")
+        .eq("empresa_id", empresaId!)
         .eq("responsavel_id", auth.user.id)
         .in("status", ["pendente", "em_andamento"])
         .or(`data_vencimento.lte.${hoje},data_vencimento.is.null`)
@@ -68,16 +72,18 @@ const Inicio = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: agenda = [] } = useQuery({
-    queryKey: ["inicio-agenda", hoje],
+    queryKey: ["inicio-agenda", hoje, empresaId],
     queryFn: async () => {
       const [{ data: eventos }, { data: encontros }, { data: googleEventos }] = await Promise.all([
-        supabase.from("eventos").select("id, nome").eq("data", hoje).is("deleted_at", null),
+        supabase.from("eventos").select("id, nome").eq("empresa_id", empresaId!).eq("data", hoje).is("deleted_at", null),
         (supabase as any)
           .from("encontros")
           .select("id, sessao_numero, turma_id, turmas(nome, produtos(nome))")
+          .eq("empresa_id", empresaId!)
           .eq("data", hoje),
         (supabase as any)
           .from("google_agenda_eventos")
@@ -106,6 +112,7 @@ const Inicio = () => {
       ];
       return itens;
     },
+    enabled: !!empresaId,
   });
 
   const queryClient = useQueryClient();
@@ -155,7 +162,7 @@ const Inicio = () => {
   const temAcessoFinanceiro = canAccess("financeiro");
 
   const { data: atencao } = useQuery({
-    queryKey: ["inicio-atencao", hoje, temAcessoFinanceiro],
+    queryKey: ["inicio-atencao", hoje, temAcessoFinanceiro, empresaId],
     queryFn: async () => {
       const mmdd = hoje.slice(5); // "MM-DD"
       const [vencidosRes, { data: alunosNasc }] = await Promise.all([
@@ -163,6 +170,7 @@ const Inicio = () => {
           ? (supabase as any)
               .from("pagamentos")
               .select("valor")
+              .eq("empresa_id", empresaId!)
               .eq("status", "pendente")
               .lt("data_vencimento", hoje)
               .is("deleted_at", null)
@@ -170,6 +178,7 @@ const Inicio = () => {
         supabase
           .from("alunos")
           .select("nome, data_nascimento")
+          .eq("empresa_id", empresaId!)
           .is("deleted_at", null)
           .not("data_nascimento", "is", null),
       ]);
@@ -183,6 +192,7 @@ const Inicio = () => {
         aniversariantes,
       };
     },
+    enabled: !!empresaId,
   });
 
   const atrasadas = tarefas.filter((t: any) => t.data_vencimento && t.data_vencimento < hoje).length;

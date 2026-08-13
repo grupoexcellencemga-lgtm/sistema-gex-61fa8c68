@@ -66,6 +66,7 @@ import autoTable from "jspdf-autotable";
 
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const statusBadgeClass: Record<string, string> = {
   pago:     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0",
@@ -133,6 +134,8 @@ const getUrgencia = (dataVencimento: string | null, status: string) => {
 
 export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const hoje = new Date().toISOString().split("T")[0];
 
@@ -190,31 +193,35 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: contasManuais = [] } = useQuery({
-    queryKey: ["contas_a_pagar"],
+    queryKey: ["contas_a_pagar", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_a_pagar")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data_vencimento", { ascending: true });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentos = [] } = useQuery({
-    queryKey: ["pagamentos-contas"],
+    queryKey: ["pagamentos-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
         .select("*, alunos(nome), produtos(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data_vencimento", { ascending: true });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comissoes = [] } = useQuery({
@@ -232,17 +239,19 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: processosIndividuais = [] } = useQuery({
-    queryKey: ["processos-ind-contas"],
+    queryKey: ["processos-ind-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("id, cliente_nome, valor_total, status, data_inicio, data_fim, profissional_id, responsavel, percentual_profissional, conta_bancaria_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .in("status", ["ativo", "aberto"]);
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({
@@ -259,16 +268,18 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: profissionais = [] } = useQuery({
-    queryKey: ["profissionais-contas"],
+    queryKey: ["profissionais-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profissionais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProfissional = [] } = useQuery({
@@ -299,17 +310,19 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: processosEmpresariais = [] } = useQuery({
-    queryKey: ["processos-emp-contas"],
+    queryKey: ["processos-emp-contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_empresariais")
         .select("id, empresa_nome, valor_total, status, data_inicio, data_fim, conta_bancaria_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .in("status", ["ativo", "aberto"]);
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcessoEmp = [] } = useQuery({
@@ -326,11 +339,12 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   });
 
   const { data: contas = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -338,14 +352,16 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: categoriasEmpresa = [] } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("id, nome, tipo, ativo")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome", { ascending: true });
@@ -353,6 +369,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
 
@@ -869,7 +886,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
   const saveMutation = useMutation({
     mutationFn: async (formData: any) => {
       if (Array.isArray(formData)) {
-        const { error } = await supabase.from("contas_a_pagar").insert(formData);
+        const { error } = await supabase.from("contas_a_pagar").insert(formData.map((item: any) => ({ ...item, empresa_id: empresaId })));
         if (error) throw error;
         return;
       }
@@ -1013,7 +1030,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       } else {
         const { id, ...insertPayload } = payload;
 
-        const { error } = await supabase.from("contas_a_pagar").insert(insertPayload);
+        const { error } = await supabase.from("contas_a_pagar").insert({ ...insertPayload, empresa_id: empresaId });
 
         if (error) throw error;
       }
@@ -1220,6 +1237,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       fornecedor: fornecedor || null,
       observacoes: observacoes || null,
       recorrente: false,
+      empresa_id: empresaId,
     });
 
     if (error) throw error;
@@ -1424,6 +1442,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
               .filter(Boolean)
               .join("\r\n"),
             recorrente: false,
+            empresa_id: empresaId,
           };
         });
 

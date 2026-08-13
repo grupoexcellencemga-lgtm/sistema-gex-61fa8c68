@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { TrendingUp, TrendingDown, Landmark, AlertTriangle, CreditCard } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,47 +14,53 @@ interface Props {
 }
 
 export function DashboardFinanceiro({ mes, ano }: Props) {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const startStr = new Date(ano, mes, 1).toISOString().split("T")[0];
   const endStr = new Date(ano, mes + 1, 0).toISOString().split("T")[0];
   const hoje = new Date().toISOString().split("T")[0];
 
   const { data: receitaMes = 0, isLoading } = useQuery({
-    queryKey: ["dash-fin-receita", mes, ano],
+    queryKey: ["dash-fin-receita", mes, ano, empresaId],
     queryFn: async () => {
-      const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
-      const { data: rec } = await supabase.from("receitas_avulsas").select("valor").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+      const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
+      const { data: rec } = await supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
       const totalPag = (pag || []).reduce((s, p) => s + Number(p.valor_pago || p.valor), 0);
       const totalRec = (rec || []).reduce((s, r) => s + Number(r.valor), 0);
       return totalPag + totalRec;
     },
+    enabled: !!empresaId,
   });
 
   const { data: despesasMes = 0 } = useQuery({
-    queryKey: ["dash-fin-despesas", mes, ano],
+    queryKey: ["dash-fin-despesas", mes, ano, empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("despesas").select("valor").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+      const { data } = await supabase.from("despesas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
       return (data || []).reduce((s, d) => s + Number(d.valor), 0);
     },
+    enabled: !!empresaId,
   });
 
   const { data: inadimplencia = { total: 0, count: 0 } } = useQuery({
-    queryKey: ["dash-fin-inadimplencia"],
+    queryKey: ["dash-fin-inadimplencia", empresaId],
     queryFn: async () => {
       const { data, count } = await supabase
         .from("pagamentos")
         .select("valor", { count: "exact" })
+        .eq("empresa_id", empresaId!)
         .eq("status", "pendente")
         .is("deleted_at", null)
         .lt("data_vencimento", hoje);
       const total = (data || []).reduce((s, p) => s + Number(p.valor), 0);
       return { total, count: count || 0 };
     },
+    enabled: !!empresaId,
   });
 
   const lucro = receitaMes - despesasMes;
 
   const { data: fluxo6meses = [] } = useQuery({
-    queryKey: ["dash-fin-fluxo6m", mes, ano],
+    queryKey: ["dash-fin-fluxo6m", mes, ano, empresaId],
     queryFn: async () => {
       const results = [];
       for (let i = 5; i >= 0; i--) {
@@ -62,9 +69,9 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
         const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
         const label = d.toLocaleDateString("pt-BR", { month: "short" });
 
-        const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd);
-        const { data: rec } = await supabase.from("receitas_avulsas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
-        const { data: desp } = await supabase.from("despesas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
+        const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd);
+        const { data: rec } = await supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
+        const { data: desp } = await supabase.from("despesas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
 
         const receita = (pag || []).reduce((s, p) => s + Number(p.valor_pago || p.valor), 0) + (rec || []).reduce((s, r) => s + Number(r.valor), 0);
         const despesa = (desp || []).reduce((s, d) => s + Number(d.valor), 0);
@@ -72,10 +79,11 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
       }
       return results;
     },
+    enabled: !!empresaId,
   });
 
   const { data: fluxoAnual = [] } = useQuery({
-    queryKey: ["dash-fin-fluxo-anual", ano],
+    queryKey: ["dash-fin-fluxo-anual", ano, empresaId],
     queryFn: async () => {
       const mesAtual = new Date().getFullYear() === ano ? new Date().getMonth() : 11;
       const results = [];
@@ -89,9 +97,9 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
           continue;
         }
         const [{ data: pag }, { data: rec }, { data: desp }] = await Promise.all([
-          supabase.from("pagamentos").select("valor, valor_pago").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd),
-          supabase.from("receitas_avulsas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
-          supabase.from("despesas").select("valor").is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
+          supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd),
+          supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
+          supabase.from("despesas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
         ]);
         const receita = (pag || []).reduce((s, p) => s + Number(p.valor_pago || p.valor), 0) + (rec || []).reduce((s, r) => s + Number(r.valor), 0);
         const despesa = (desp || []).reduce((s, d) => s + Number(d.valor), 0);
@@ -99,14 +107,16 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
       }
       return results;
     },
+    enabled: !!empresaId,
   });
 
   const { data: vencidos = [] } = useQuery({
-    queryKey: ["dash-fin-vencidos"],
+    queryKey: ["dash-fin-vencidos", empresaId],
     queryFn: async () => {
       const { data } = await supabase
         .from("pagamentos")
         .select("id, valor, data_vencimento, alunos(nome)")
+        .eq("empresa_id", empresaId!)
         .eq("status", "pendente")
         .is("deleted_at", null)
         .lt("data_vencimento", hoje)
@@ -120,15 +130,17 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
         diasAtraso: Math.floor((Date.now() - new Date((p.data_vencimento || "") + "T12:00:00").getTime()) / 86400000),
       }));
     },
+    enabled: !!empresaId,
   });
 
   const { data: contasProximas = [] } = useQuery({
-    queryKey: ["dash-fin-contas-proximas"],
+    queryKey: ["dash-fin-contas-proximas", empresaId],
     queryFn: async () => {
       const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
       const { data } = await supabase
         .from("contas_a_pagar")
         .select("id, descricao, valor, data_vencimento, fornecedor")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("status", "pendente")
         .gte("data_vencimento", hoje)
@@ -137,6 +149,7 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
         .limit(10);
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
 

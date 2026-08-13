@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,8 @@ function getNextBirthday(dataNascimento: string): Date {
 }
 
 export default function Aniversarios() {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState<"todos" | "aluno" | "profissional" | "vendedor">("todos");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -55,27 +58,29 @@ export default function Aniversarios() {
   const [tab, setTab] = useState("lista");
 
   const { data: alunos = [] } = useQuery({
-    queryKey: ["aniversarios-alunos"],
+    queryKey: ["aniversarios-alunos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("alunos").select("id, nome, data_nascimento, email, telefone").is("deleted_at", null).not("data_nascimento", "is", null);
+      const { data, error } = await supabase.from("alunos").select("id, nome, data_nascimento, email, telefone").eq("empresa_id", empresaId!).is("deleted_at", null).not("data_nascimento", "is", null);
       if (error) throw error;
       return (data || []).map(a => ({ ...a, tipo: "aluno" as const }));
     },
+    enabled: !!empresaId,
   });
 
   const { data: profissionais = [] } = useQuery({
-    queryKey: ["aniversarios-profissionais"],
+    queryKey: ["aniversarios-profissionais", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profissionais").select("id, nome, data_nascimento, email, telefone").eq("ativo", true).is("deleted_at", null).not("data_nascimento", "is", null);
+      const { data, error } = await supabase.from("profissionais").select("id, nome, data_nascimento, email, telefone").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).not("data_nascimento", "is", null);
       if (error) throw error;
       return (data || []).map(p => ({ ...p, tipo: "profissional" as const }));
     },
+    enabled: !!empresaId,
   });
 
   const { data: vendedores = [] } = useQuery({
-    queryKey: ["aniversarios-vendedores"],
+    queryKey: ["aniversarios-vendedores", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("comerciais").select("id, nome, data_nascimento, email, telefone").eq("ativo", true).is("deleted_at", null).not("data_nascimento", "is", null);
+      const { data, error } = await supabase.from("comerciais").select("id, nome, data_nascimento, email, telefone").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).not("data_nascimento", "is", null);
       if (error) throw error;
       return (data || []).map(v => ({ ...v, tipo: "vendedor" as const }));
     },

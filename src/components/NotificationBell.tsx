@@ -11,6 +11,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { playNotificationSound, somNotificacaoLigado, definirSomNotificacao } from "@/lib/notificationSound";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const tipoIcons: Record<string, string> = {
   pagamento_vencido: "💰",
@@ -24,6 +25,8 @@ const tipoIcons: Record<string, string> = {
 
 export function NotificationBell() {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -50,9 +53,9 @@ export function NotificationBell() {
   // Tarefas de checklist de EVENTO atrasadas/urgentes do usuário (ao vivo, sem cron).
   const hojeISO = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
   const { data: tarefasEvento = [] } = useQuery({
-    queryKey: ["notif-tarefas-evento", user?.id, hojeISO],
+    queryKey: ["notif-tarefas-evento", user?.id, hojeISO, empresaId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || !empresaId) return [];
       const limite = new Date(Date.now() - 3 * 3_600_000 + 2 * 86_400_000)
         .toISOString()
         .slice(0, 10); // hoje + 2 dias = janela "urgente"
@@ -69,6 +72,7 @@ export function NotificationBell() {
         .from("tarefas")
         .select("id, titulo, data_vencimento, evento_id, eventos(nome)")
         .in("id", tarefaIds)
+        .eq("empresa_id", empresaId)
         .eq("status", "pendente")
         .not("evento_id", "is", null)
         .not("data_vencimento", "is", null)
@@ -76,7 +80,7 @@ export function NotificationBell() {
         .order("data_vencimento", { ascending: true });
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && !!empresaId,
     refetchInterval: 60000,
   });
 

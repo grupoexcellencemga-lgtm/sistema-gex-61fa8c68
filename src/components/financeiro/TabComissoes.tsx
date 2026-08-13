@@ -36,9 +36,12 @@ import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: formasPagamento = [], isLoading: loadingFormasPagamento } = useFormasPagamento();
 
   const [expandedVendedor, setExpandedVendedor] = useState<string | null>(null);
@@ -55,11 +58,12 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: comerciais = [], isLoading } = useQuery({
-    queryKey: ["comerciais"],
+    queryKey: ["comerciais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
@@ -67,6 +71,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comissoes = [] } = useQuery({
@@ -86,11 +91,12 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: contas = [] } = useQuery({
-    queryKey: ["contas_bancarias_comissoes"],
+    queryKey: ["contas_bancarias_comissoes", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -98,6 +104,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const resetPgForm = () =>
@@ -161,6 +168,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
         observacoes: pgForm.obs.trim() || null,
         recorrente: false,
         categoria_id: categoriaId,
+        empresa_id: empresaId,
       });
 
       if (despError) throw despError;

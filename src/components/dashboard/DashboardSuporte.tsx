@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Users, Cake, Calendar, CheckSquare } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,33 +17,38 @@ interface Props {
 
 export function DashboardSuporte({ mes, ano }: Props) {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const hoje = new Date();
   const hojeStr = hoje.toISOString().split("T")[0];
   const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
   const { data: totalAlunos = 0, isLoading } = useQuery({
-    queryKey: ["dash-sup-alunos"],
+    queryKey: ["dash-sup-alunos", empresaId],
     queryFn: async () => {
-      const { count } = await supabase.from("alunos").select("id", { count: "exact", head: true }).is("deleted_at", null);
+      const { count } = await supabase.from("alunos").select("id", { count: "exact", head: true }).eq("empresa_id", empresaId!).is("deleted_at", null);
       return count || 0;
     },
+    enabled: !!empresaId,
   });
 
   const { data: aniversariantesMes = 0 } = useQuery({
-    queryKey: ["dash-sup-aniversarios", mes],
+    queryKey: ["dash-sup-aniversarios", mes, empresaId],
     queryFn: async () => {
       const mesStr = String(mes + 1).padStart(2, "0");
-      const { data } = await supabase.from("alunos").select("id, data_nascimento").is("deleted_at", null).not("data_nascimento", "is", null);
+      const { data } = await supabase.from("alunos").select("id, data_nascimento").eq("empresa_id", empresaId!).is("deleted_at", null).not("data_nascimento", "is", null);
       return (data || []).filter((a) => a.data_nascimento && a.data_nascimento.substring(5, 7) === mesStr).length;
     },
+    enabled: !!empresaId,
   });
 
   const { data: eventosProximos = [] } = useQuery({
-    queryKey: ["dash-sup-eventos"],
+    queryKey: ["dash-sup-eventos", empresaId],
     queryFn: async () => {
       const { data } = await supabase
         .from("eventos")
         .select("id, nome, data, local")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .gte("data", hojeStr)
         .lte("data", em7dias)
@@ -50,12 +56,13 @@ export function DashboardSuporte({ mes, ano }: Props) {
         .limit(5);
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: aniversariantesSemana = [] } = useQuery({
-    queryKey: ["dash-sup-aniversarios-semana"],
+    queryKey: ["dash-sup-aniversarios-semana", empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("alunos").select("id, nome, data_nascimento, telefone").is("deleted_at", null).not("data_nascimento", "is", null);
+      const { data } = await supabase.from("alunos").select("id, nome, data_nascimento, telefone").eq("empresa_id", empresaId!).is("deleted_at", null).not("data_nascimento", "is", null);
       const hojeMMDD = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
       const em7 = new Date(Date.now() + 7 * 86400000);
       const em7MMDD = `${String(em7.getMonth() + 1).padStart(2, "0")}-${String(em7.getDate()).padStart(2, "0")}`;
@@ -68,16 +75,17 @@ export function DashboardSuporte({ mes, ano }: Props) {
         })
         .slice(0, 10);
     },
+    enabled: !!empresaId,
   });
 
   const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
-    queryKey: ["minhas-tarefas-dashboard", user?.id],
+    queryKey: ["minhas-tarefas-dashboard", user?.id, empresaId],
     queryFn: async () => {
       if (!user) return [];
-      const { data } = await supabase.from("tarefas").select("id, titulo, prioridade, data_vencimento, status").eq("responsavel_id", user.id).in("status", ["pendente", "em_andamento"]).order("data_vencimento", { ascending: true, nullsFirst: false }).limit(5);
+      const { data } = await supabase.from("tarefas").select("id, titulo, prioridade, data_vencimento, status").eq("empresa_id", empresaId!).eq("responsavel_id", user.id).in("status", ["pendente", "em_andamento"]).order("data_vencimento", { ascending: true, nullsFirst: false }).limit(5);
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && !!empresaId,
   });
 
   const tarefasPendentes = minhasTarefas.length;

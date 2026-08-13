@@ -16,6 +16,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 // ─── Column definitions ───
 
@@ -82,6 +83,8 @@ export function RelatorioPersonalizado() {
   const [columnsOpen, setColumnsOpen] = useState(false);
 
   const { data: formasPagamento = [] } = useFormasPagamento();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   // Selected columns
   const [selectedCols, setSelectedCols] = useState<string[]>(
@@ -90,28 +93,33 @@ export function RelatorioPersonalizado() {
 
   // ─── Fetch reference data ───
   const { data: produtos } = useQuery({
-    queryKey: ["rel-produtos"],
-    queryFn: async () => { const { data } = await supabase.from("produtos").select("id, nome, tipo").is("deleted_at", null); return data || []; },
+    queryKey: ["rel-produtos", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("produtos").select("id, nome, tipo").eq("empresa_id", empresaId!).is("deleted_at", null); return data || []; },
+    enabled: !!empresaId,
   });
 
   const { data: turmasAll } = useQuery({
-    queryKey: ["rel-turmas"],
-    queryFn: async () => { const { data } = await supabase.from("turmas" as any).select("id, nome, produto_id").is("deleted_at", null); return (data || []) as any[]; },
+    queryKey: ["rel-turmas", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("turmas" as any).select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null); return (data || []) as any[]; },
+    enabled: !!empresaId,
   });
 
   const { data: eventosAll } = useQuery({
-    queryKey: ["rel-eventos"],
-    queryFn: async () => { const { data } = await supabase.from("eventos").select("id, nome, produto_id").is("deleted_at", null); return data || []; },
+    queryKey: ["rel-eventos", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("eventos").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null); return data || []; },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais } = useQuery({
-    queryKey: ["rel-comerciais"],
-    queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true); return data || []; },
+    queryKey: ["rel-comerciais", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true); return data || []; },
+    enabled: !!empresaId,
   });
 
   const { data: alunosAll } = useQuery({
-    queryKey: ["rel-alunos"],
-    queryFn: async () => { const { data } = await supabase.from("alunos").select("id, nome").is("deleted_at", null).order("nome").limit(500); return data || []; },
+    queryKey: ["rel-alunos", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("alunos").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome").limit(500); return data || []; },
+    enabled: !!empresaId,
   });
 
   // Cascade: filter turmas/eventos by selected product
@@ -136,7 +144,7 @@ export function RelatorioPersonalizado() {
 
   // ─── Fetch report data ───
   const { data: reportData, isLoading, refetch } = useQuery({
-    queryKey: ["relatorio-personalizado", dataInicio, dataFim, produtoId, turmaId, eventoId, vendedorId, alunoId, formaPgto, statusPgtoFilter, tipoLanc],
+    queryKey: ["relatorio-personalizado", dataInicio, dataFim, produtoId, turmaId, eventoId, vendedorId, alunoId, formaPgto, statusPgtoFilter, tipoLanc, empresaId],
     queryFn: async () => {
       const rows: any[] = [];
 
@@ -149,7 +157,7 @@ export function RelatorioPersonalizado() {
           produtos(nome, tipo),
           contas_bancarias(nome, banco),
           matriculas(comercial_id, turma_id, comerciais(nome))
-        `).is("deleted_at", null)
+        `).eq("empresa_id", empresaId!).is("deleted_at", null)
           .gte("data_vencimento", dataInicio)
           .lte("data_vencimento", dataFim);
 
@@ -196,7 +204,7 @@ export function RelatorioPersonalizado() {
 
         // Receitas avulsas
         let qa = supabase.from("receitas_avulsas").select("id, valor, data, forma_pagamento, categoria, descricao, observacoes, conta_bancaria_id, contas_bancarias(nome, banco)")
-          .is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
+          .eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
         if (formaPgto !== "todos") qa = qa.eq("forma_pagamento", formaPgto);
         const { data: avulsas } = await qa.limit(500);
         (avulsas || []).forEach((r: any) => {
@@ -221,7 +229,7 @@ export function RelatorioPersonalizado() {
         let qd = supabase.from("despesas").select(`
           id, valor, data, forma_pagamento, descricao, observacoes, fornecedor, turma_id, produto_id, evento_id,
           categorias_despesas(nome), contas_bancarias(nome, banco), produtos(nome), turmas:turma_id(nome), eventos:evento_id(nome)
-        `).is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
+        `).eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
 
         if (produtoId !== "todos") qd = qd.eq("produto_id", produtoId);
         if (turmaId !== "todos") qd = qd.eq("turma_id", turmaId);
@@ -251,6 +259,7 @@ export function RelatorioPersonalizado() {
 
       return rows;
     },
+    enabled: !!empresaId,
   });
 
   const rows = reportData || [];

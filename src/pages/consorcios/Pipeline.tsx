@@ -66,6 +66,7 @@ import {
   type Segmento,
   type InteracaoTipo,
 } from "@/lib/consorcios";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 // ── Pipeline stages with icons and colors ─────────────────────────────────────
 
@@ -293,6 +294,8 @@ function LeadFormDialog({
   comerciais: Array<{ id: string; nome: string }>;
 }) {
   const qc = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
 
   function set(field: keyof LeadConsorcioForm, value: string) {
@@ -304,7 +307,7 @@ function LeadFormDialog({
       if (!form.nome.trim()) throw new Error("Nome é obrigatório");
       const { error } = await (supabase as any)
         .from("consorcios_leads")
-        .insert(formToPayload(form));
+        .insert({ ...formToPayload(form), empresa_id: empresaId });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -937,6 +940,8 @@ interface Filters {
 
 const Pipeline = () => {
   const qc = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [filters, setFilters] = useState<Filters>({
     search: "",
     segmento: "todos",
@@ -956,30 +961,34 @@ const Pipeline = () => {
   const sensors = useSensors(pointerSensor, touchSensor);
 
   const { data: leads = [], isLoading } = useQuery<ConsorcioLead[]>({
-    queryKey: ["consorcios-leads"],
+    queryKey: ["consorcios-leads", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("consorcios_leads")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as ConsorcioLead[];
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery<Array<{ id: string; nome: string }>>({
-    queryKey: ["comerciais-consorcios"],
+    queryKey: ["comerciais-consorcios", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
       return data ?? [];
     },
+    enabled: !!empresaId,
   });
 
   const comerciaisMap = useMemo(

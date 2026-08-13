@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Loader2, Building2, DollarSign, TrendingUp, Download, Ban, Calendar } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PaginationControls, paginate } from "@/components/Pagination";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { DetalhesProcessoEmpDialog } from "@/components/processos-empresariais/ProcessoEmpDetailSheet";
 import { parseCurrencyToNumber, formatCurrencyInput, formatCurrency, formatDate, formatPhone, formatCNPJ, statusMap, periodoLabels, getDateRange } from "@/components/processos-empresariais/processosEmpresariaisUtils";
@@ -41,10 +42,12 @@ const ProcessoEmpresarial = () => {
   const [form, setForm] = useState<ProcessoEmpForm>(emptyProcessoEmpForm);
 
   const resetForm = () => { setForm({ ...emptyProcessoEmpForm, data_inicio: new Date().toISOString().split("T")[0] }); setEditing(null); setTipoPagamento("total"); setPropostaFile(null); };
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { filterByResponsavel } = useDataFilter();
 
   // ── Queries ──
-  const { data: processosRaw = [], isLoading } = useQuery({ queryKey: ["processos_empresariais"], queryFn: async () => { const { data, error } = await supabase.from("processos_empresariais").select("*").is("deleted_at", null).order("created_at", { ascending: false }); if (error) throw error; return data; } });
+  const { data: processosRaw = [], isLoading } = useQuery({ queryKey: ["processos_empresariais", empresaId], queryFn: async () => { const { data, error } = await supabase.from("processos_empresariais").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("created_at", { ascending: false }); if (error) throw error; return data; }, enabled: !!empresaId });
   const processos = filterByResponsavel(processosRaw);
 
   useEffect(() => {
@@ -74,9 +77,9 @@ const ProcessoEmpresarial = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const { data: profissionais = [] } = useQuery({ queryKey: ["profissionais-select"], queryFn: async () => { const { data } = await supabase.from("profissionais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
-  const { data: comerciais = [] } = useQuery({ queryKey: ["comerciais-select"], queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; } });
-  const { data: contas = [] } = useQuery({ queryKey: ["contas-select"], queryFn: async () => { const { data } = await supabase.from("contas_bancarias").select("id, nome, banco").is("deleted_at", null).eq("ativo", true).order("nome"); return data || []; } });
+  const { data: profissionais = [] } = useQuery({ queryKey: ["profissionais-select", empresaId], queryFn: async () => { const { data } = await supabase.from("profissionais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; }, enabled: !!empresaId });
+  const { data: comerciais = [] } = useQuery({ queryKey: ["comerciais-select", empresaId], queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; }, enabled: !!empresaId });
+  const { data: contas = [] } = useQuery({ queryKey: ["contas-select", empresaId], queryFn: async () => { const { data } = await supabase.from("contas_bancarias").select("id, nome, banco").eq("empresa_id", empresaId!).is("deleted_at", null).eq("ativo", true).order("nome"); return data || []; }, enabled: !!empresaId });
   const { data: formasPagamento = [] } = useFormasPagamento();
 
   const getFormaPagamento = (codigo: string | null | undefined) => {
@@ -123,7 +126,7 @@ const ProcessoEmpresarial = () => {
         if (valorEntrada > 0) { if (entradaAutomatica) { await supabase.from("pagamentos_processo_empresarial").update(payloadEntrada).eq("id", entradaAutomatica.id); } else if (!temEntradaManual) { await supabase.from("pagamentos_processo_empresarial").insert({ processo_id: editing.id, tipo: "entrada", ...payloadEntrada }); } }
         else if (entradaAutomatica) { await supabase.from("pagamentos_processo_empresarial").update({ deleted_at: new Date().toISOString() }).eq("id", entradaAutomatica.id); }
       } else {
-        const { data, error } = await supabase.from("processos_empresariais").insert(processoPayload).select("id").single() as { data: any; error: any };
+        const { data, error } = await supabase.from("processos_empresariais").insert({ ...processoPayload, empresa_id: empresaId }).select("id").single() as { data: any; error: any };
         if (error) throw error;
         if (valorEntrada > 0) { await supabase.from("pagamentos_processo_empresarial").insert({ processo_id: data.id, tipo: "entrada", valor: valorEntrada, data: payload.data_inicio || new Date().toISOString().split("T")[0], forma_pagamento: payload.forma_pagamento || null, observacoes: observacaoEntrada, conta_bancaria_id: payload.conta_bancaria_id || null, taxa_cartao: taxaCartao > 0 ? taxaCartao : null }); }
       }

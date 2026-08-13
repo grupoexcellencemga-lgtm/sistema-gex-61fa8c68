@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
 import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
 import { toast } from "sonner";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useProfissionais } from "@/hooks/useProfissionais";
 import { useDataFilter } from "@/hooks/useDataFilter";
 import { TurmaPresencaTab } from "@/components/turmas/TurmaPresencaTab";
@@ -67,6 +68,8 @@ const Turmas = () => {
     setSearchParams(next, { replace: true });
   };
 
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: profissionais = [] } = useProfissionais();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -93,11 +96,12 @@ const Turmas = () => {
   const { filterByResponsavel } = useDataFilter();
 
   const { data: turmasRaw = [], isLoading } = useQuery({
-    queryKey: ["turmas"],
+    queryKey: ["turmas", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("turmas")
         .select("*, produtos(nome), turmas_responsaveis(profissional_id, profissionais(id, nome))")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
       if (error) throw error;
@@ -110,6 +114,7 @@ const Turmas = () => {
         };
       });
     },
+    enabled: !!empresaId,
   });
 
   const turmas = filterByResponsavel(turmasRaw);
@@ -138,24 +143,27 @@ const Turmas = () => {
   };
 
   const { data: produtos = [] } = useQuery({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("produtos").select("id, nome").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("produtos").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: matriculaCounts = [] } = useQuery({
-    queryKey: ["matricula-counts"],
+    queryKey: ["matricula-counts", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("turma_id, aluno_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const countByTurma = (turmaId: string) => {
@@ -171,6 +179,7 @@ const Turmas = () => {
   const insertMutation = useMutation({
     mutationFn: async (data: TurmaForm) => {
       const { data: criada, error } = await supabase.from("turmas").insert({
+        empresa_id: empresaId,
         nome: data.nome, cidade: data.cidade, modalidade: data.modalidade.toLowerCase(),
         data_inicio: data.data_inicio || null, data_fim: data.data_fim || null,
         responsavel: null, produto_id: data.produto_id || null,

@@ -8,54 +8,62 @@ import { Loader2, GraduationCap, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
 import * as XLSX from "xlsx";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabTurmas = ({ mes, ano }: { mes: number; ano: number }) => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [expandedProduto, setExpandedProduto] = useState<string | null>(null);
   const [expandedTurma, setExpandedTurma] = useState<string | null>(null);
 
   const { data: produtos = [], isLoading } = useQuery({
-    queryKey: ["produtos-financeiro"],
+    queryKey: ["produtos-financeiro", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("produtos").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("produtos").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: turmas = [] } = useQuery({
-    queryKey: ["turmas-financeiro"],
+    queryKey: ["turmas-financeiro", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("turmas").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("turmas").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: matriculas = [] } = useQuery({
-    queryKey: ["matriculas-financeiro"],
+    queryKey: ["matriculas-financeiro", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("matriculas").select("*, alunos(nome)").is("deleted_at", null);
+      const { data, error } = await supabase.from("matriculas").select("*, alunos(nome)").eq("empresa_id", empresaId!).is("deleted_at", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentos = [] } = useQuery({
-    queryKey: ["pagamentos-financeiro-turmas"],
+    queryKey: ["pagamentos-financeiro-turmas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pagamentos").select("*, contas_bancarias(nome)").eq("status", "pago").is("deleted_at", null);
+      const { data, error } = await supabase.from("pagamentos").select("*, contas_bancarias(nome)").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: despesas = [] } = useQuery({
-    queryKey: ["despesas-financeiro-turmas"],
+    queryKey: ["despesas-financeiro-turmas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("despesas").select("*, contas_bancarias(nome)").is("deleted_at", null);
+      const { data, error } = await supabase.from("despesas").select("*, contas_bancarias(nome)").eq("empresa_id", empresaId!).is("deleted_at", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const pgMes = pagamentos.filter((p: any) => isInMonth(p.data_pagamento, mes, ano));

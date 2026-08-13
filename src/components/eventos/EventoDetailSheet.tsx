@@ -34,6 +34,7 @@ import {
 } from "@/lib/checklistEvento";
 import { ChecklistKanban } from "./operacao/ChecklistKanban";
 import { EventoMateriaisTab } from "./operacao/EventoMateriaisTab";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import {
   EventoEquipeTab,
   EventoHistoricoTab,
@@ -60,6 +61,8 @@ export function EventoDetailSheet({
   currentUserName: string | null;
 }) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [templateEscolhido, setTemplateEscolhido] = useState<string>("");
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSubTab = searchParams.get("sub") || "resumo";
@@ -71,7 +74,7 @@ export function EventoDetailSheet({
 
   // Busca o evento fresco: os campos de checklist/status mudam dentro do painel.
   const { data: eventoAtual } = useQuery({
-    queryKey: ["evento-operacao", evento.id],
+    queryKey: ["evento-operacao", evento.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("eventos")
@@ -85,16 +88,18 @@ export function EventoDetailSheet({
   });
 
   const { data: tarefas = [] } = useQuery({
-    queryKey: ["tarefas-evento", evento.id],
+    queryKey: ["tarefas-evento", evento.id, empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
         .select("*")
         .eq("evento_id", evento.id)
+        .eq("empresa_id", empresaId!)
         .order("data_vencimento", { ascending: true, nullsFirst: false });
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: profiles = [] } = useQuery({
@@ -152,6 +157,7 @@ export function EventoDetailSheet({
         { id: eventoAtual.id, nome: eventoAtual.nome, data: eventoAtual.data },
         templateEscolhido,
         auth.user.id,
+        empresaId,
       );
     },
     onSuccess: (r) => {

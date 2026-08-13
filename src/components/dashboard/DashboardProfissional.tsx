@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Briefcase, Calendar, CheckCircle, Users, CheckSquare } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,8 @@ interface Props {
 
 export function DashboardProfissional({ mes, ano }: Props) {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const startStr = new Date(ano, mes, 1).toISOString().split("T")[0];
   const endStr = new Date(ano, mes + 1, 0).toISOString().split("T")[0];
 
@@ -31,58 +34,62 @@ export function DashboardProfissional({ mes, ano }: Props) {
   });
 
   const { data: profId } = useQuery({
-    queryKey: ["my-prof-id", user?.id, profNome],
+    queryKey: ["my-prof-id", user?.id, profNome, empresaId],
     queryFn: async () => {
       if (!profNome) return null;
       const { data } = await supabase
         .from("profissionais")
         .select("id")
+        .eq("empresa_id", empresaId!)
         .ilike("nome", profNome)
         .is("deleted_at", null)
         .limit(1)
         .maybeSingle();
       return data?.id || null;
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: processosIndAtivos = 0, isLoading } = useQuery({
-    queryKey: ["dash-prof-ind", profNome],
+    queryKey: ["dash-prof-ind", profNome, empresaId],
     queryFn: async () => {
       if (!profNome) return 0;
       const { count } = await supabase
         .from("processos_individuais")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "ativo")
         .is("deleted_at", null);
       return count || 0;
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: processosEmpAtivos = 0 } = useQuery({
-    queryKey: ["dash-prof-emp", profNome],
+    queryKey: ["dash-prof-emp", profNome, empresaId],
     queryFn: async () => {
       if (!profNome) return 0;
       const { count } = await supabase
         .from("processos_empresariais")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "ativo")
         .is("deleted_at", null);
       return count || 0;
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: concluidosMes = 0 } = useQuery({
-    queryKey: ["dash-prof-concluidos", profNome, mes, ano],
+    queryKey: ["dash-prof-concluidos", profNome, mes, ano, empresaId],
     queryFn: async () => {
       if (!profNome) return 0;
       const { count: c1 } = await supabase
         .from("processos_individuais")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "concluido")
         .is("deleted_at", null)
@@ -91,6 +98,7 @@ export function DashboardProfissional({ mes, ano }: Props) {
       const { count: c2 } = await supabase
         .from("processos_empresariais")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "concluido")
         .is("deleted_at", null)
@@ -98,31 +106,33 @@ export function DashboardProfissional({ mes, ano }: Props) {
         .lte("data_finalizacao", endStr);
       return (c1 || 0) + (c2 || 0);
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: turmasAtivas = 0 } = useQuery({
-    queryKey: ["dash-prof-turmas", profNome],
+    queryKey: ["dash-prof-turmas", profNome, empresaId],
     queryFn: async () => {
       if (!profNome) return 0;
       const { count } = await supabase
         .from("turmas")
         .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .is("deleted_at", null)
         .eq("status", "ativa");
       return count || 0;
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: meusProcessos = [] } = useQuery({
-    queryKey: ["dash-prof-processos-lista", profNome],
+    queryKey: ["dash-prof-processos-lista", profNome, empresaId],
     queryFn: async () => {
       if (!profNome) return [];
       const { data: ind } = await supabase
         .from("processos_individuais")
         .select("id, cliente_nome, sessoes, sessoes_realizadas, status")
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "ativo")
         .is("deleted_at", null)
@@ -131,6 +141,7 @@ export function DashboardProfissional({ mes, ano }: Props) {
       const { data: emp } = await supabase
         .from("processos_empresariais")
         .select("id, empresa_nome, sessoes, sessoes_realizadas, status")
+        .eq("empresa_id", empresaId!)
         .ilike("responsavel", profNome)
         .eq("status", "ativo")
         .is("deleted_at", null)
@@ -141,17 +152,17 @@ export function DashboardProfissional({ mes, ano }: Props) {
         ...(emp || []).map((p) => ({ id: p.id, nome: p.empresa_nome, tipo: "Empresarial" as const, sessoes: p.sessoes || 0, realizadas: p.sessoes_realizadas })),
       ];
     },
-    enabled: !!profNome,
+    enabled: !!profNome && !!empresaId,
   });
 
   const { data: minhasTarefas = [] } = useQuery<Pick<TarefaRow, "id" | "titulo" | "prioridade" | "data_vencimento" | "status">[]>({
-    queryKey: ["minhas-tarefas-dashboard", user?.id],
+    queryKey: ["minhas-tarefas-dashboard", user?.id, empresaId],
     queryFn: async () => {
       if (!user) return [];
-      const { data } = await supabase.from("tarefas").select("id, titulo, prioridade, data_vencimento, status").eq("responsavel_id", user.id).in("status", ["pendente", "em_andamento"]).order("data_vencimento", { ascending: true, nullsFirst: false }).limit(5);
+      const { data } = await supabase.from("tarefas").select("id, titulo, prioridade, data_vencimento, status").eq("empresa_id", empresaId!).eq("responsavel_id", user.id).in("status", ["pendente", "em_andamento"]).order("data_vencimento", { ascending: true, nullsFirst: false }).limit(5);
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && !!empresaId,
   });
 
   if (isLoading && !profNome) {

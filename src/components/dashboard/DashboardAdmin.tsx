@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Users, UserPlus, CreditCard, AlertTriangle, Calendar, TrendingUp, TrendingDown, Landmark, Target, Briefcase, CheckSquare } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,21 +31,25 @@ interface Props {
 }
 
 export function DashboardAdmin({ mes, ano }: Props) {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
 
   // Checklists de eventos/turmas com tarefas em aberto — visão geral da empresa,
   // agrupada por evento/turma para apontar onde agir primeiro.
   const { data: checklistPendentes = [] } = useQuery({
-    queryKey: ["checklist-pendentes-dashboard"],
+    queryKey: ["checklist-pendentes-dashboard", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tarefas")
         .select("evento_id, turma_id, data_vencimento, eventos(nome), turmas(nome)")
+        .eq("empresa_id", empresaId!)
         .eq("origem_tarefa", "template")
         .eq("status", "pendente");
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const gruposChecklist = (() => {
@@ -74,7 +79,7 @@ export function DashboardAdmin({ mes, ano }: Props) {
   });
 
   const { data: detailData } = useQuery<MetricDetailItem[] | null>({
-    queryKey: ["dashboard-detail", activeDialog, mes, ano],
+    queryKey: ["dashboard-detail", activeDialog, mes, ano, empresaId],
     queryFn: async () => {
       if (!activeDialog) return null;
       const startDate = new Date(ano, mes, 1);
@@ -85,29 +90,29 @@ export function DashboardAdmin({ mes, ano }: Props) {
 
       switch (activeDialog) {
         case "alunos": {
-          const { data } = await supabase.from("alunos").select("nome, cidade, created_at").is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
+          const { data } = await supabase.from("alunos").select("nome, cidade, created_at").eq("empresa_id", empresaId!).is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
           return (data || []).map(a => ({ nome: a.nome, data: a.created_at, valor: a.cidade || "—" }));
         }
         case "matriculas": {
-          const { data } = await supabase.from("matriculas").select("created_at, alunos(nome), produtos(nome)").eq("status", "ativo").is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
+          const { data } = await supabase.from("matriculas").select("created_at, alunos(nome), produtos(nome)").eq("empresa_id", empresaId!).eq("status", "ativo").is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
           return (data || []).map((m) => ({ nome: (m.alunos as { nome: string } | null)?.nome || "—", data: m.created_at, valor: (m.produtos as { nome: string } | null)?.nome || "—" }));
         }
         case "receita": {
-          const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago, data_pagamento, alunos(nome)").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
-          const { data: rec } = await supabase.from("receitas_avulsas").select("valor, data, descricao").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+          const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago, data_pagamento, alunos(nome)").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
+          const { data: rec } = await supabase.from("receitas_avulsas").select("valor, data, descricao").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
           return [
             ...(pag || []).map((p) => ({ nome: (p.alunos as { nome: string } | null)?.nome || "—", data: p.data_pagamento || "", valor: formatCurrency(Number(p.valor_pago || p.valor)) })),
             ...(rec || []).map((r) => ({ nome: r.descricao, data: r.data, valor: formatCurrency(Number(r.valor)) })),
           ];
         }
         case "despesas": {
-          const { data } = await supabase.from("despesas").select("descricao, data, valor").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+          const { data } = await supabase.from("despesas").select("descricao, data, valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
           return (data || []).map(d => ({ nome: d.descricao, data: d.data, valor: formatCurrency(Number(d.valor)) }));
         }
         case "lucro": {
-          const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago, data_pagamento, alunos(nome)").eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
-          const { data: rec } = await supabase.from("receitas_avulsas").select("valor, data, descricao").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
-          const { data: desp } = await supabase.from("despesas").select("descricao, data, valor").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+          const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago, data_pagamento, alunos(nome)").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
+          const { data: rec } = await supabase.from("receitas_avulsas").select("valor, data, descricao").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+          const { data: desp } = await supabase.from("despesas").select("descricao, data, valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
           return [
             ...(pag || []).map((p) => ({ nome: `Receita: ${(p.alunos as { nome: string } | null)?.nome || "—"}`, data: p.data_pagamento || "", valor: formatCurrency(Number(p.valor_pago || p.valor)) })),
             ...(rec || []).map((r) => ({ nome: `Receita: ${r.descricao}`, data: r.data, valor: formatCurrency(Number(r.valor)) })),
@@ -115,11 +120,11 @@ export function DashboardAdmin({ mes, ano }: Props) {
           ];
         }
         case "pendentes": {
-          const { data } = await supabase.from("pagamentos").select("valor, data_vencimento, alunos(nome)").eq("status", "pendente").is("deleted_at", null).or(`data_pagamento.gte.${startStr},data_vencimento.gte.${startStr}`).or(`data_pagamento.lte.${endStr},data_vencimento.lte.${endStr}`);
+          const { data } = await supabase.from("pagamentos").select("valor, data_vencimento, alunos(nome)").eq("empresa_id", empresaId!).eq("status", "pendente").is("deleted_at", null).or(`data_pagamento.gte.${startStr},data_vencimento.gte.${startStr}`).or(`data_pagamento.lte.${endStr},data_vencimento.lte.${endStr}`);
           return (data || []).map((p) => ({ nome: (p.alunos as { nome: string } | null)?.nome || "—", data: p.data_vencimento || "", valor: formatCurrency(Number(p.valor)) }));
         }
         case "vencidos": {
-          const { data } = await supabase.from("pagamentos").select("valor, data_vencimento, alunos(nome)").eq("status", "pendente").is("deleted_at", null).lt("data_vencimento", hoje);
+          const { data } = await supabase.from("pagamentos").select("valor, data_vencimento, alunos(nome)").eq("empresa_id", empresaId!).eq("status", "pendente").is("deleted_at", null).lt("data_vencimento", hoje);
           return (data || []).map((p) => ({ nome: (p.alunos as { nome: string } | null)?.nome || "—", data: p.data_vencimento || "", valor: formatCurrency(Number(p.valor)) }));
         }
         case "comissoes": {
@@ -127,17 +132,17 @@ export function DashboardAdmin({ mes, ano }: Props) {
           return (data || []).map((c) => ({ nome: (c.comerciais as { nome: string } | null)?.nome || "—", data: c.created_at, valor: formatCurrency(Number(c.valor_comissao)) }));
         }
         case "processos": {
-          const { data } = await supabase.from("processos_individuais").select("cliente_nome, created_at, valor_total").eq("status", "ativo").is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
+          const { data } = await supabase.from("processos_individuais").select("cliente_nome, created_at, valor_total").eq("empresa_id", empresaId!).eq("status", "ativo").is("deleted_at", null).gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
           return (data || []).map(p => ({ nome: p.cliente_nome, data: p.created_at, valor: formatCurrency(Number(p.valor_total)) }));
         }
         case "eventos": {
-          const { data } = await supabase.from("eventos").select("nome, data").is("deleted_at", null).gte("data", startStr).lte("data", endStr);
+          const { data } = await supabase.from("eventos").select("nome, data").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
           return (data || []).map(e => ({ nome: e.nome, data: e.data || "", valor: "—" }));
         }
         default: return [];
       }
     },
-    enabled: !!activeDialog,
+    enabled: !!activeDialog && !!empresaId,
   });
 
   const m = metrics || {} as Partial<DashboardMetrics>;

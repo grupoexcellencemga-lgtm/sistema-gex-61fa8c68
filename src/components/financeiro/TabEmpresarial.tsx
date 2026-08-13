@@ -8,21 +8,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DollarSign, Loader2, Building2, TrendingUp, UserCheck } from "lucide-react";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabEmpresarial = ({ mes, ano }: { mes: number; ano: number }) => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [expandedEmpresa, setExpandedEmpresa] = useState<string | null>(null);
 
   const { data: processos = [], isLoading } = useQuery({
-    queryKey: ["processos_empresariais_fin"],
+    queryKey: ["processos_empresariais_fin", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_empresariais" as any)
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as any[];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentos = [] } = useQuery({

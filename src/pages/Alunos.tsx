@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { maskPhone, maskCPF, formatPhone, formatCPF, validateCPF, exportToCSV } from "@/lib/utils";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { PageHeader } from "@/components/PageHeader";
@@ -22,6 +23,8 @@ import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
 
 const Alunos = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -62,45 +65,51 @@ const Alunos = () => {
 
   // ── Queries ──
   const { data: alunos = [], isLoading } = useQuery({
-    queryKey: ["alunos"],
+    queryKey: ["alunos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("alunos")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: produtos = [] } = useQuery({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
         .select("id, nome, valor")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: turmas = [] } = useQuery({
-    queryKey: ["turmas"],
+    queryKey: ["turmas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("turmas")
         .select("id, nome, produto_id, data_inicio, data_fim")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Deep-link vindo de "Matricular na turma" (participante de evento): abre a
@@ -184,11 +193,12 @@ const Alunos = () => {
   }, [searchParams]);
 
   const { data: contasBancarias = [] } = useQuery({
-    queryKey: ["contas_bancarias"],
+    queryKey: ["contas_bancarias", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contas_bancarias")
         .select("id, nome, banco")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome");
@@ -196,14 +206,16 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais"],
+    queryKey: ["comerciais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .is("deleted_at", null)
         .order("nome");
@@ -211,16 +223,18 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: matriculas = [] } = useQuery({
-    queryKey: ["matriculas", selectedAluno?.id],
+    queryKey: ["matriculas", selectedAluno?.id, empresaId],
     queryFn: async () => {
       if (!selectedAluno) return [];
 
       const { data, error } = await supabase
         .from("matriculas")
         .select("*, produtos(nome), turmas(nome)")
+        .eq("empresa_id", empresaId!)
         .eq("aluno_id", selectedAluno.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -228,17 +242,18 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!selectedAluno,
+    enabled: !!selectedAluno && !!empresaId,
   });
 
   const { data: pagamentos = [] } = useQuery({
-    queryKey: ["pagamentos-aluno", selectedAluno?.id],
+    queryKey: ["pagamentos-aluno", selectedAluno?.id, empresaId],
     queryFn: async () => {
       if (!selectedAluno) return [];
 
       const { data, error } = await supabase
         .from("pagamentos")
         .select("*, produtos(nome), contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .eq("aluno_id", selectedAluno.id)
         .is("deleted_at", null)
         .order("data_vencimento", { ascending: false });
@@ -246,13 +261,14 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!selectedAluno,
+    enabled: !!selectedAluno && !!empresaId,
   });
 
   // ── Mutations ──
   const insertMutation = useMutation({
     mutationFn: async (data: AlunoForm) => {
       const { error } = await supabase.from("alunos").insert({
+        empresa_id: empresaId,
         nome: data.nome,
         email: data.email || null,
         telefone: data.telefone || null,
@@ -462,6 +478,7 @@ const Alunos = () => {
       const { data: mat, error: matErr } = await supabase
         .from("matriculas")
         .insert({
+          empresa_id: empresaId,
           aluno_id: selectedAluno.id,
           produto_id: produtoIdResolvido,
           turma_id: matriculaForm.turma_id || null,
@@ -515,6 +532,7 @@ const Alunos = () => {
           if (!recebeIntegral) d.setMonth(d.getMonth() + i);
 
           return {
+            empresa_id: empresaId,
             aluno_id: selectedAluno.id,
             produto_id: produtoIdResolvido,
             matricula_id: mat.id,
@@ -1313,6 +1331,7 @@ const Alunos = () => {
 
     try {
       const rows = importPreview.map((r) => ({
+        empresa_id: empresaId,
         nome: String(r.nome).trim(),
         email: r.email ? String(r.email).trim() : null,
         telefone: r.telefone ? String(r.telefone).trim() : null,

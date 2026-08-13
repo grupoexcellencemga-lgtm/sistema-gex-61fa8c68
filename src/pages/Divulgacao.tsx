@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,8 @@ const COLUNAS_PADRAO = [
 ];
 
 const DivulgacaoPage = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
 
   const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
@@ -79,11 +82,12 @@ const DivulgacaoPage = () => {
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
 
   const { data: quadros = [], isLoading: quadrosLoading } = useQuery<DivulgacaoQuadro[]>({
-    queryKey: ["divulgacao-quadros"],
+    queryKey: ["divulgacao-quadros", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("divulgacao_quadros")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("ordem", { ascending: true })
         .order("created_at", { ascending: true });
@@ -91,6 +95,7 @@ const DivulgacaoPage = () => {
       if (error) throw error;
       return (data ?? []) as DivulgacaoQuadro[];
     },
+    enabled: !!empresaId,
   });
 
   useEffect(() => {
@@ -244,7 +249,7 @@ const DivulgacaoPage = () => {
 
       const { data: quadro, error } = await supabase
         .from("divulgacao_quadros")
-        .insert([{ nome, ordem }])
+        .insert([{ nome, ordem, empresa_id: empresaId }])
         .select("id")
         .single();
 

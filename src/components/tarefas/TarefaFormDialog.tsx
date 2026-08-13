@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,8 @@ interface Props {
 
 export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, defaultLeadId, defaultProcessoId, defaultEscopo, onSaved }: Props) {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     titulo: "", descricao: "", tipo: "outro", prioridade: "media",
@@ -170,6 +173,7 @@ export function TarefaFormDialog({ open, onOpenChange, tarefa, defaultAlunoId, d
       } else {
         payload.created_by = user?.id;
         payload.status = "pendente";
+        payload.empresa_id = empresaId;
         const { data: inserted, error } = await (supabase as any)
           .from("tarefas").insert(payload).select("id").single();
         if (error) throw error;

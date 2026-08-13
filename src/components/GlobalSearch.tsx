@@ -5,6 +5,7 @@ import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, C
 import { Search, Users, UserCheck, Calendar, Package, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 interface SearchResult {
   id: string;
@@ -18,6 +19,8 @@ export function GlobalSearch() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 300);
   const navigate = useNavigate();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const [alunos, setAlunos] = useState<SearchResult[]>([]);
   const [leads, setLeads] = useState<SearchResult[]>([]);
@@ -39,7 +42,7 @@ export function GlobalSearch() {
   }, []);
 
   const search = useCallback(async (term: string) => {
-    if (!term || term.length < 2) {
+    if (!term || term.length < 2 || !empresaId) {
       setAlunos([]); setLeads([]); setEventos([]); setProdutos([]); setTurmas([]);
       return;
     }
@@ -47,19 +50,19 @@ export function GlobalSearch() {
     const pattern = `%${term}%`;
 
     const [aRes, lRes, eRes, pRes, tRes] = await Promise.all([
-      supabase.from("alunos").select("id, nome, email, cpf").is("deleted_at", null)
+      supabase.from("alunos").select("id, nome, email, cpf").eq("empresa_id", empresaId).is("deleted_at", null)
         .or(`nome.ilike.${pattern},email.ilike.${pattern},cpf.ilike.${pattern}`)
         .limit(5),
-      supabase.from("leads").select("id, nome, email").is("deleted_at", null)
+      supabase.from("leads").select("id, nome, email").eq("empresa_id", empresaId).is("deleted_at", null)
         .or(`nome.ilike.${pattern},email.ilike.${pattern}`)
         .limit(5),
-      supabase.from("eventos").select("id, nome, data")
+      supabase.from("eventos").select("id, nome, data").eq("empresa_id", empresaId)
         .is("deleted_at", null).ilike("nome", pattern)
         .limit(5),
-      supabase.from("produtos").select("id, nome, tipo")
+      supabase.from("produtos").select("id, nome, tipo").eq("empresa_id", empresaId)
         .is("deleted_at", null).ilike("nome", pattern)
         .limit(5),
-      supabase.from("turmas").select("id, nome, cidade")
+      supabase.from("turmas").select("id, nome, cidade").eq("empresa_id", empresaId)
         .is("deleted_at", null).ilike("nome", pattern)
         .limit(5),
     ]);
@@ -70,7 +73,7 @@ export function GlobalSearch() {
     setProdutos((pRes.data || []).map((p) => ({ id: p.id, label: p.nome, subtitle: p.tipo || undefined, route: "/produtos" })));
     setTurmas((tRes.data || []).map((t) => ({ id: t.id, label: t.nome, subtitle: t.cidade || undefined, route: "/turmas" })));
     setLoading(false);
-  }, []);
+  }, [empresaId]);
 
   useEffect(() => { search(debouncedQuery); }, [debouncedQuery, search]);
 

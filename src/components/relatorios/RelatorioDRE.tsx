@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export function RelatorioDRE() {
   const [dataInicio, setDataInicio] = useState(() => {
@@ -29,23 +30,29 @@ export function RelatorioDRE() {
   const [eventoId, setEventoId] = useState("todos");
   const [vendedorId, setVendedorId] = useState("todos");
   const [filtersOpen, setFiltersOpen] = useState(true);
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   // Reference data
   const { data: produtos } = useQuery({
-    queryKey: ["dre-produtos"],
-    queryFn: async () => { const { data } = await supabase.from("produtos").select("id, nome").is("deleted_at", null).order("nome"); return data || []; },
+    queryKey: ["dre-produtos", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("produtos").select("id, nome").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome"); return data || []; },
+    enabled: !!empresaId,
   });
   const { data: turmasAll } = useQuery({
-    queryKey: ["dre-turmas"],
-    queryFn: async () => { const { data } = await supabase.from("turmas").select("id, nome, produto_id").is("deleted_at", null).order("nome"); return data || []; },
+    queryKey: ["dre-turmas", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("turmas").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome"); return data || []; },
+    enabled: !!empresaId,
   });
   const { data: eventosAll } = useQuery({
-    queryKey: ["dre-eventos"],
-    queryFn: async () => { const { data } = await supabase.from("eventos").select("id, nome, produto_id").is("deleted_at", null).order("nome"); return data || []; },
+    queryKey: ["dre-eventos", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("eventos").select("id, nome, produto_id").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome"); return data || []; },
+    enabled: !!empresaId,
   });
   const { data: comerciais } = useQuery({
-    queryKey: ["dre-comerciais"],
-    queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; },
+    queryKey: ["dre-comerciais", empresaId],
+    queryFn: async () => { const { data } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome"); return data || []; },
+    enabled: !!empresaId,
   });
   const { data: taxas } = useQuery({
     queryKey: ["dre-taxas"],
@@ -54,26 +61,29 @@ export function RelatorioDRE() {
 
   // Financial data
   const { data: pagamentos, isLoading: loadPag } = useQuery({
-    queryKey: ["dre-pagamentos", dataInicio, dataFim],
+    queryKey: ["dre-pagamentos", dataInicio, dataFim, empresaId],
     queryFn: async () => {
       const { data } = await supabase.from("pagamentos").select("*, alunos!pagamentos_aluno_id_fkey(nome), produtos!pagamentos_produto_id_fkey(nome), matriculas!pagamentos_matricula_id_fkey(turma_id, comercial_id, produto_id)")
-        .is("deleted_at", null).eq("status", "pago").gte("data_pagamento", dataInicio).lte("data_pagamento", dataFim);
+        .eq("empresa_id", empresaId!).is("deleted_at", null).eq("status", "pago").gte("data_pagamento", dataInicio).lte("data_pagamento", dataFim);
       return data || [];
     },
+    enabled: !!empresaId,
   });
   const { data: receitasAvulsas, isLoading: loadRA } = useQuery({
-    queryKey: ["dre-receitas-avulsas", dataInicio, dataFim],
+    queryKey: ["dre-receitas-avulsas", dataInicio, dataFim, empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("receitas_avulsas").select("*").is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
+      const { data } = await supabase.from("receitas_avulsas").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
       return data || [];
     },
+    enabled: !!empresaId,
   });
   const { data: despesas, isLoading: loadDesp } = useQuery({
-    queryKey: ["dre-despesas", dataInicio, dataFim],
+    queryKey: ["dre-despesas", dataInicio, dataFim, empresaId],
     queryFn: async () => {
-      const { data } = await supabase.from("despesas").select("*, categorias_despesas!despesas_categoria_id_fkey(nome)").is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
+      const { data } = await supabase.from("despesas").select("*, categorias_despesas!despesas_categoria_id_fkey(nome)").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", dataInicio).lte("data", dataFim);
       return data || [];
     },
+    enabled: !!empresaId,
   });
   const { data: comissoes, isLoading: loadCom } = useQuery({
     queryKey: ["dre-comissoes", dataInicio, dataFim],

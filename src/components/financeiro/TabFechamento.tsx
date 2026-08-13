@@ -14,9 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Plus, Building2, Receipt, Pencil, Trash2, Download, X, Check, History, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabFechamento = () => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingConta, setEditingConta] = useState<any>(null);
   const [expandedConta, setExpandedConta] = useState<string | null>(null);
@@ -30,12 +33,13 @@ export const TabFechamento = () => {
   const [autoFechamentoLoading, setAutoFechamentoLoading] = useState(false);
 
   const { data: contas = [], isLoading } = useQuery({
-    queryKey: ["contas_bancarias_all"],
+    queryKey: ["contas_bancarias_all", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contas_bancarias").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("contas_bancarias").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: movimentacoesContas = [] } = useQuery({
@@ -67,57 +71,65 @@ export const TabFechamento = () => {
 
   // Pagamentos de alunos (entradas)
   const { data: pagamentosPorConta = [] } = useQuery({
-    queryKey: ["pagamentos_por_conta_detail"],
+    queryKey: ["pagamentos_por_conta_detail", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos")
         .select("id, conta_bancaria_id, valor, valor_pago, status, data_pagamento, forma_pagamento, alunos(nome), produtos(nome)")
+        .eq("empresa_id", empresaId!)
         .eq("status", "pago")
         .not("conta_bancaria_id", "is", null)
         .is("deleted_at", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Despesas (saídas)
   const { data: despesasPorConta = [] } = useQuery({
-    queryKey: ["despesas_por_conta_detail"],
+    queryKey: ["despesas_por_conta_detail", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select("conta_bancaria_id, valor, data, descricao, forma_pagamento, categorias_despesas(nome)")
+        .eq("empresa_id", empresaId!)
         .not("conta_bancaria_id", "is", null)
         .is("deleted_at", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Receitas avulsas (entradas)
   const { data: receitasAvulsasPorConta = [] } = useQuery({
-    queryKey: ["receitas_avulsas_por_conta_detail"],
+    queryKey: ["receitas_avulsas_por_conta_detail", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("receitas_avulsas")
         .select("conta_bancaria_id, valor, data, descricao, forma_pagamento, categoria")
+        .eq("empresa_id", empresaId!)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Processos individuais
   const { data: processosPorConta = [] } = useQuery({
-    queryKey: ["processos_individuais_financeiro"],
+    queryKey: ["processos_individuais_financeiro", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("id, conta_bancaria_id, valor_entrada, cliente_nome, responsavel")
+        .eq("empresa_id", empresaId!)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcessoPorConta = [] } = useQuery({
@@ -134,15 +146,17 @@ export const TabFechamento = () => {
 
   // Processos empresariais
   const { data: processosEmpresariaisPorConta = [] } = useQuery({
-    queryKey: ["processos_empresariais_financeiro_contas"],
+    queryKey: ["processos_empresariais_financeiro_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_empresariais")
         .select("id, conta_bancaria_id, empresa_nome, responsavel")
+        .eq("empresa_id", empresaId!)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosEmpresariaisPorConta = [] } = useQuery({
@@ -203,16 +217,18 @@ export const TabFechamento = () => {
 
   // Fechamentos mensais
   const { data: fechamentos = [] } = useQuery({
-    queryKey: ["fechamentos_mensais"],
+    queryKey: ["fechamentos_mensais", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("fechamentos_mensais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .order("ano", { ascending: false })
         .order("mes", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const getUltimoFechamento = (contaId: string) => {
@@ -660,6 +676,7 @@ export const TabFechamento = () => {
                 mes,
                 ano,
                 saldo_fechamento: saldoFechamento,
+                empresa_id: empresaId,
               },
               { onConflict: "conta_bancaria_id,mes,ano" }
             );
@@ -822,7 +839,7 @@ export const TabFechamento = () => {
         const { error } = await supabase.from("contas_bancarias").update(payload).eq("id", form.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("contas_bancarias").insert(payload);
+        const { error } = await supabase.from("contas_bancarias").insert({ ...payload, empresa_id: empresaId });
         if (error) throw error;
       }
     },
@@ -892,6 +909,7 @@ export const TabFechamento = () => {
               mes: mesAtual,
               ano: anoAtual,
               saldo_fechamento: saldoAtual,
+              empresa_id: empresaId,
             },
             { onConflict: "conta_bancaria_id,mes,ano" }
           );

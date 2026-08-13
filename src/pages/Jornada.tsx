@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatPhone, formatCPF } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -68,6 +69,8 @@ const getEventoLabel = (tipo?: string | null) => {
 const getEntryDate = (entry: any) => entry.dataInicio || entry.data || entry.created_at || "";
 
 const Jornada = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [filterVinculo, setFilterVinculo] = useState("all");
@@ -78,46 +81,52 @@ const Jornada = () => {
   const [page, setPage] = useState(1);
 
   const { data: alunos = [], isLoading } = useQuery({
-    queryKey: ["jornada-alunos"],
+    queryKey: ["jornada-alunos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("alunos").select("*").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("alunos").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: matriculas = [] } = useQuery({
-    queryKey: ["jornada-matriculas"],
+    queryKey: ["jornada-matriculas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("matriculas")
         .select("*, produtos(nome), turmas(nome, cidade)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentos = [] } = useQuery({
-    queryKey: ["jornada-pagamentos"],
+    queryKey: ["jornada-pagamentos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pagamentos").select("*").is("deleted_at", null);
+      const { data, error } = await supabase.from("pagamentos").select("*").eq("empresa_id", empresaId!).is("deleted_at", null);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: processos = [] } = useQuery({
-    queryKey: ["jornada-processos"],
+    queryKey: ["jornada-processos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("processos_individuais")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({

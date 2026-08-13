@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import { formatCurrencyNullable as formatCurrency, formatDate } from "@/lib/formatters";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 interface DespesaForm {
   descricao: string;
@@ -40,45 +41,52 @@ interface Props {
 
 export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: Props) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<DespesaForm>(emptyForm);
   const { data: formasPagamento = [], isLoading: loadingFormasPagamento } = useFormasPagamento();
 
   const { data: despesas = [], isLoading } = useQuery({
-    queryKey: ["despesas_evento", eventoId],
+    queryKey: ["despesas_evento", eventoId, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas")
         .select("*")
         .eq("evento_id", eventoId)
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: categorias = [] } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("tipo", "despesa")
         .order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: contasBancarias = [] } = useQuery({
-    queryKey: ["contas_bancarias_ativas"],
+    queryKey: ["contas_bancarias_ativas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contas_bancarias").select("*").is("deleted_at", null).eq("ativo", true).order("nome");
+      const { data, error } = await supabase.from("contas_bancarias").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).eq("ativo", true).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const [categoriaId, setCategoriaId] = useState<string>("");
@@ -98,6 +106,7 @@ export function EventoDespesasTab({ eventoId, eventoProdutoId, eventoTurmaId }: 
         conta_bancaria_id: contaBancariaId || null,
         produto_id: eventoProdutoId || null,
         turma_id: eventoTurmaId || null,
+        empresa_id: empresaId,
       });
       if (error) throw error;
     },

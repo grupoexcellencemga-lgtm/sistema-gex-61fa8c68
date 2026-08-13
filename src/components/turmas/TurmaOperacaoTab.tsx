@@ -20,11 +20,14 @@ import {
   recalcularPrazosDaTurma,
 } from "@/lib/checklistEvento";
 import { ChecklistKanban } from "@/components/eventos/operacao/ChecklistKanban";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 // Painel operacional da turma: mesmo checklist usado em Eventos, mas as
 // tarefas se referem a datas da turma (início/primeira/última sessão).
 export function TurmaOperacaoTab({ turma }: { turma: any }) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [templateEscolhido, setTemplateEscolhido] = useState<string>("");
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSubTab = searchParams.get("sub") || "resumo";
@@ -45,17 +48,19 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
   });
 
   const { data: tarefas = [] } = useQuery({
-    queryKey: ["tarefas-turma", turma.id],
+    queryKey: ["tarefas-turma", turma.id, empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tarefas")
         .select("*, encontros(sessao_numero)")
         .eq("turma_id", turma.id)
+        .eq("empresa_id", empresaId!)
         .order("data_vencimento", { ascending: true, nullsFirst: false });
       if (error) throw error;
       // Achata a sessão pro Kanban filtrar sem precisar saber do join.
       return (data || []).map((t: any) => ({ ...t, sessao_numero: t.encontros?.sessao_numero ?? null }));
     },
+    enabled: !!empresaId,
   });
 
   const { data: modelos = [] } = useQuery({
@@ -97,6 +102,7 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
         { id: turmaAtual.id, nome: turmaAtual.nome, data_inicio: turmaAtual.data_inicio, data_fim: turmaAtual.data_fim },
         templateEscolhido,
         auth.user.id,
+        empresaId,
       );
     },
     onSuccess: (r) => {
@@ -121,7 +127,7 @@ export function TurmaOperacaoTab({ turma }: { turma: any }) {
   });
 
   const recalcularMutation = useMutation({
-    mutationFn: () => recalcularPrazosDaTurma(turma.id),
+    mutationFn: () => recalcularPrazosDaTurma(turma.id, empresaId),
     onSuccess: (r) => {
       invalidateAll();
       if (r.atualizadas > 0 || r.criadas > 0) {

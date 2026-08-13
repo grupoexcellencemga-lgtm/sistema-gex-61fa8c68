@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,8 @@ const defaultFilters: Filters = {
 };
 
 const Funil = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const debouncedSearch = useDebounce(filters.search, 300);
@@ -82,16 +85,18 @@ const Funil = () => {
 
   // ── Queries ──
   const { data: quadros = [], isLoading: quadrosLoading } = useQuery<FunilQuadro[]>({
-    queryKey: ["funil-quadros"],
+    queryKey: ["funil-quadros", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("funil_quadros")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("ordem", { ascending: true });
       if (error) throw error;
       return (data || []) as FunilQuadro[];
     },
+    enabled: !!empresaId,
   });
 
   useEffect(() => {
@@ -106,12 +111,13 @@ const Funil = () => {
   );
 
   const { data: leads = [], isLoading } = useQuery<LeadRow[]>({
-    queryKey: ["leads"],
+    queryKey: ["leads", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("leads").select("*").is("deleted_at", null).order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("leads").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
@@ -130,7 +136,7 @@ const Funil = () => {
   });
 
   const { data: allEtapas = [] } = useQuery<FunilEtapa[]>({
-    queryKey: ["funil-etapas-all"],
+    queryKey: ["funil-etapas-all", empresaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("funil_etapas")
@@ -139,30 +145,33 @@ const Funil = () => {
       if (error) throw error;
       return (data || []) as FunilEtapa[];
     },
+    enabled: !!empresaId,
   });
 
   const { data: produtos = [] } = useQuery<ProdutoSelect[]>({
-    queryKey: ["produtos"],
+    queryKey: ["produtos", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("produtos").select("id, nome, valor").is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("produtos").select("id, nome, valor").eq("empresa_id", empresaId!).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: comerciais = [] } = useQuery<ComercialSelect[]>({
-    queryKey: ["comerciais-funil"],
+    queryKey: ["comerciais-funil", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("comerciais").select("id, nome").eq("ativo", true).is("deleted_at", null).order("nome");
+      const { data, error } = await supabase.from("comerciais").select("id, nome").eq("empresa_id", empresaId!).eq("ativo", true).is("deleted_at", null).order("nome");
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: turmas = [] } = useQuery<TurmaSelect[]>({
-    queryKey: ["turmas-funil"],
+    queryKey: ["turmas-funil", empresaId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("turmas").select("id, nome, produto_id, produtos(nome)").is("deleted_at", null);
+      const { data, error } = await (supabase as any).from("turmas").select("id, nome, produto_id, produtos(nome)").eq("empresa_id", empresaId!).is("deleted_at", null);
       if (error) throw error;
       return (data || []).sort((a: TurmaSelect, b: TurmaSelect) => {
         const pa = a.produtos?.nome ?? "";
@@ -170,19 +179,22 @@ const Funil = () => {
         return pa.localeCompare(pb, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR");
       });
     },
+    enabled: !!empresaId,
   });
 
   const { data: eventosImport = [] } = useQuery({
-    queryKey: ["eventos-funil-import"],
+    queryKey: ["eventos-funil-import", empresaId],
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("eventos")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false })
         .limit(100);
       return (data || []) as { id: string; nome: string }[];
     },
+    enabled: !!empresaId,
   });
 
   const { data: previewCount, isFetching: previewFetching } = useQuery({
@@ -253,7 +265,7 @@ const Funil = () => {
       const ordem = quadros.length;
       const { data: quadro, error } = await (supabase as any)
         .from("funil_quadros")
-        .insert({ nome: nome.trim(), ordem })
+        .insert({ nome: nome.trim(), ordem, empresa_id: empresaId })
         .select("id")
         .single();
       if (error) throw error;
@@ -311,6 +323,7 @@ const Funil = () => {
                   telefone: c.telefone?.trim() || null,
                   email: c.email?.trim() || null,
                   etapa_id: primeiraEtapa.id,
+                  empresa_id: empresaId,
                 }))
               );
             }
@@ -399,6 +412,7 @@ const Funil = () => {
     mutationFn: async (data: LeadForm) => {
       if (!data.etapa_id) throw new Error("Selecione uma coluna no funil antes de cadastrar.");
       const { error } = await supabase.from("leads").insert({
+        empresa_id: empresaId,
         nome: data.nome,
         email: data.email || null,
         telefone: data.telefone || null,

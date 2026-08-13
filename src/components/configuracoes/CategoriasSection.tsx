@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Check, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 type Categoria = {
   id: string;
@@ -41,17 +42,20 @@ const tipoLabels: Record<string, string> = {
 
 export function CategoriasSection() {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [nome, setNome] = useState("");
 
   const { data: categorias = [], isLoading } = useQuery({
-    queryKey: ["categorias_despesas"],
+    queryKey: ["categorias_despesas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categorias_despesas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("ativo", true)
         .order("nome", { ascending: true });
@@ -59,6 +63,7 @@ export function CategoriasSection() {
       if (error) throw error;
       return data as Categoria[];
     },
+    enabled: !!empresaId,
   });
 
   const resetForm = () => {
@@ -121,6 +126,7 @@ export function CategoriasSection() {
       } else {
         const { error } = await supabase.from("categorias_despesas").insert({
           ...payload,
+          empresa_id: empresaId,
           created_at: new Date().toISOString(),
         });
 

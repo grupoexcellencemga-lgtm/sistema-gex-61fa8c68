@@ -6,17 +6,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, CalendarDays } from "lucide-react";
 import { formatDate, formatCurrency } from "./financeiroUtils";
 import { isInMonth } from "@/components/MonthFilter";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [expandedEvento, setExpandedEvento] = useState<string | null>(null);
 
   const { data: eventos = [], isLoading } = useQuery({
-    queryKey: ["eventos", "financeiro"],
+    queryKey: ["eventos", "financeiro", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("eventos").select("*, produtos(nome)").is("deleted_at", null).order("data", { ascending: false });
+      const { data, error } = await supabase.from("eventos").select("*, produtos(nome)").eq("empresa_id", empresaId!).is("deleted_at", null).order("data", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Busca todos os participantes pagos sem filtro de data.
@@ -34,13 +38,14 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: despesas = [] } = useQuery({
-    queryKey: ["despesas", "financeiro-eventos", mes, ano],
+    queryKey: ["despesas", "financeiro-eventos", mes, ano, empresaId],
     queryFn: async () => {
       const inicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
       const fim = new Date(ano, mes, 0).toISOString().split("T")[0];
       const { data, error } = await supabase
         .from("despesas")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .not("evento_id", "is", null)
         .gte("data", inicio)
@@ -48,6 +53,7 @@ export const TabEventos = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const getEventoData = (evento: any) => {

@@ -22,6 +22,7 @@ import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Edit2, Check, X, Download, PanelLeftClose, PanelLeft, Brain, Undo2, Hand, MousePointer2 } from "lucide-react";
@@ -40,6 +41,8 @@ const NODE_COLORS = [
 
 const MindMap = () => {
   const { user } = useAuth();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -86,17 +89,18 @@ const MindMap = () => {
 
   // Fetch maps
   const { data: maps = [] } = useQuery({
-    queryKey: ["mindmaps", user?.id],
+    queryKey: ["mindmaps", user?.id, empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mindmaps")
         .select("id, nome, updated_at, user_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data;
     },
-    enabled: !!user,
+    enabled: !!user && !!empresaId,
   });
 
   // Load selected map — staleTime 0 garante que sempre busca do banco ao voltar
@@ -484,7 +488,7 @@ const MindMap = () => {
       };
       const { data, error } = await supabase
         .from("mindmaps")
-        .insert({ user_id: user!.id, nome: name || "Novo Mapa", nodes: [rootNode] as any, edges: [] as any })
+        .insert({ user_id: user!.id, empresa_id: empresaId, nome: name || "Novo Mapa", nodes: [rootNode] as any, edges: [] as any })
         .select("id")
         .single();
       if (error) throw error;

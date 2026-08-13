@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, CheckCircle2, Circle, Clock, Calendar } from "lucide-react";
 import { TarefaFormDialog } from "./TarefaFormDialog";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -31,6 +32,8 @@ interface Props {
 
 export function TarefasContextSection({ alunoId, leadId, processoId }: Props) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [formOpen, setFormOpen] = useState(false);
   const [editTarefa, setEditTarefa] = useState<any>(null);
 
@@ -38,18 +41,19 @@ export function TarefasContextSection({ alunoId, leadId, processoId }: Props) {
   const filterVal = alunoId || leadId || processoId;
 
   const { data: tarefas = [] } = useQuery({
-    queryKey: ["tarefas-context", filterCol, filterVal],
+    queryKey: ["tarefas-context", filterCol, filterVal, empresaId],
     queryFn: async () => {
       if (!filterVal) return [];
       const { data } = await supabase
         .from("tarefas")
         .select("*")
         .eq(filterCol, filterVal)
+        .eq("empresa_id", empresaId!)
         .neq("status", "cancelada")
         .order("data_vencimento", { ascending: true, nullsFirst: false });
       return data || [];
     },
-    enabled: !!filterVal,
+    enabled: !!filterVal && !!empresaId,
   });
 
   const toggleStatus = useMutation({
