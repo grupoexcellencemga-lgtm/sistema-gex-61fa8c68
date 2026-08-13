@@ -1,12 +1,16 @@
 import {
   LayoutDashboard, Users, Package, GraduationCap, Calendar,
-  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight, Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target, ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter, CalendarDays, Home, Kanban, LayoutList,
+  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight,
+  Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target,
+  ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter,
+  CalendarDays, Home, Kanban, LayoutList, Crown,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { APP_VERSION } from "@/lib/version";
 import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { usePermissions, type PageKey } from "@/hooks/usePermissions";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -71,6 +75,7 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const { canAccess } = usePermissions();
+  const { empresa, isAdminMaster, hasEmpresa } = useEmpresa();
   const { theme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -81,20 +86,40 @@ export function AppSidebar() {
 
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
+  // Nome e logo dinâmicos por empresa
+  const nomeEmpresa = empresa?.nome ?? "Sistema GEx";
+  const logoSrc = empresa?.logo_url ?? "/logo.png";
+
+  // Filtra itens: role + empresa.modulos (se atribuído e não for admin master)
+  function isVisible(pageKey: PageKey): boolean {
+    if (!canAccess(pageKey)) return false;
+    // Usuário sem empresa atribuída ou admin_master: vê tudo que o role permite
+    if (!hasEmpresa || isAdminMaster) return true;
+    // Usuário com empresa: apenas módulos habilitados para ela
+    return empresa?.modulos.includes(pageKey) ?? false;
+  }
+
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <div className="shrink-0 flex items-center justify-center">
-            <img src="/logo.png" alt="GEx" className="h-9 w-9 object-contain" />
+            <img
+              src={logoSrc}
+              alt={nomeEmpresa}
+              className="h-9 w-9 object-contain rounded"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logo.png"; }}
+            />
           </div>
           {!collapsed && (
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-sidebar-foreground dark:text-white">Sistema GEx</span>
-                <span className="text-[10px] text-sidebar-muted">v{APP_VERSION}</span>
+                <span className="text-sm font-semibold text-sidebar-foreground dark:text-white truncate">
+                  {nomeEmpresa}
+                </span>
+                <span className="text-[10px] text-sidebar-muted shrink-0">v{APP_VERSION}</span>
               </div>
-              <span className="text-xs text-sidebar-muted">Grupo Excellence</span>
+              <span className="text-xs text-sidebar-muted truncate">Grupo Excellence</span>
             </div>
           )}
         </div>
@@ -102,7 +127,7 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2">
         {menuGroups.map((group) => {
-          const visibleItems = group.items.filter((item) => canAccess(item.pageKey));
+          const visibleItems = group.items.filter((item) => isVisible(item.pageKey));
           if (!visibleItems.length) return null;
           return (
             <SidebarGroup key={group.label}>
@@ -133,9 +158,44 @@ export function AppSidebar() {
             </SidebarGroup>
           );
         })}
+
+        {/* Item exclusivo Admin Master */}
+        {isAdminMaster && (
+          <SidebarGroup>
+            {!collapsed && (
+              <SidebarGroupLabel className="text-xs font-semibold text-sidebar-muted px-3 py-1">
+                Master
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild size="default" className="transition-snappy">
+                    <NavLink
+                      to="/empresas"
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 dark:text-[#8B8B9E] hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-white/5 transition-all duration-200 border-l-2 border-transparent relative group"
+                      activeClassName="bg-sidebar-accent text-primary font-medium dark:bg-gradient-to-r dark:from-primary/15 dark:to-transparent dark:text-[#C8860A] dark:border-primary border-primary [&>svg]:text-primary [&>svg]:drop-shadow-[0_0_5px_rgba(200,134,10,0.8)]"
+                    >
+                      <Crown className="h-4 w-4 shrink-0 transition-all duration-200 group-hover:text-sidebar-foreground dark:group-hover:text-white" />
+                      {!collapsed && <span>Empresas</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-2 space-y-1">
+        {/* Indicador de empresa (quando atribuída) */}
+        {!collapsed && empresa && (
+          <div className="px-3 py-1.5 rounded-md bg-muted/50 mb-1">
+            <p className="text-[10px] text-muted-foreground leading-none">Empresa</p>
+            <p className="text-xs font-medium truncate mt-0.5">{empresa.nome}</p>
+          </div>
+        )}
+
         <Button variant="ghost" size="sm" onClick={cycleTheme}
           className="w-full justify-start gap-3 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
           title={`Tema: ${theme === "dark" ? "Escuro" : theme === "light" ? "Claro" : "Sistema"}`}>

@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
+import { EmpresaProvider } from "@/contexts/EmpresaContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
@@ -43,6 +44,7 @@ const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 const Funil = lazy(() => import("./pages/Funil"));
 const ConsorcioPipeline = lazy(() => import("./pages/consorcios/Pipeline"));
 const ConsorcioLeads = lazy(() => import("./pages/consorcios/Leads"));
+const Empresas = lazy(() => import("./pages/Empresas"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Inscricao = lazy(() => import("./pages/Inscricao"));
 const EventoPublico = lazy(() => import("./pages/EventoPublico"));
@@ -50,7 +52,7 @@ const EventoPublico = lazy(() => import("./pages/EventoPublico"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     },
   },
 });
@@ -95,41 +97,44 @@ const AppRoutes = () => {
   }
 
   return (
-    <AppLayout>
-      <ErrorBoundary inline resetKey={location.pathname}>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-          <Route path="/" element={<PR path="/"><Inicio /></PR>} />
-          <Route path="/dashboard" element={<PR path="/dashboard"><Dashboard /></PR>} />
-          <Route path="/alunos" element={<PR path="/alunos"><Alunos /></PR>} />
-          <Route path="/jornada" element={<PR path="/jornada"><Jornada /></PR>} />
-          <Route path="/produtos" element={<PR path="/produtos"><Produtos /></PR>} />
-          <Route path="/turmas" element={<PR path="/turmas"><Turmas /></PR>} />
-          <Route path="/eventos" element={<PR path="/eventos"><Eventos /></PR>} />
-          <Route path="/agenda" element={<PR path="/agenda"><Agenda /></PR>} />
-          <Route path="/processo-individual" element={<PR path="/processo-individual"><ProcessoIndividual /></PR>} />
-          <Route path="/processo-empresarial" element={<PR path="/processo-empresarial"><ProcessoEmpresarial /></PR>} />
-          <Route path="/profissionais" element={<PR path="/profissionais"><Profissionais /></PR>} />
-          <Route path="/vendedores" element={<PR path="/vendedores"><Vendedores /></PR>} />
-          <Route path="/financeiro" element={<PR path="/financeiro"><Financeiro /></PR>} />
-          <Route path="/metas" element={<PR path="/metas"><Metas /></PR>} />
-          <Route path="/relatorios" element={<PR path="/relatorios"><Relatorios /></PR>} />
-          <Route path="/usuarios" element={<PR path="/usuarios"><UsuariosADM /></PR>} />
-          <Route path="/configuracoes" element={<PR path="/configuracoes"><Configuracoes /></PR>} />
-          <Route path="/aniversarios" element={<PR path="/aniversarios"><Aniversarios /></PR>} />
-          <Route path="/mindmap" element={<PR path="/mindmap"><MindMap /></PR>} />
-          <Route path="/auditoria" element={<PR path="/auditoria"><Auditoria /></PR>} />
-          <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
-          <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
-          <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
-          <Route path="/consorcios/pipeline" element={<PR path="/consorcios/pipeline"><ConsorcioPipeline /></PR>} />
-          <Route path="/consorcios/leads" element={<PR path="/consorcios/leads"><ConsorcioLeads /></PR>} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </AppLayout>
+    <EmpresaProvider>
+      <AppLayout>
+        <ErrorBoundary inline resetKey={location.pathname}>
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/" element={<PR path="/"><Inicio /></PR>} />
+              <Route path="/dashboard" element={<PR path="/dashboard"><Dashboard /></PR>} />
+              <Route path="/alunos" element={<PR path="/alunos"><Alunos /></PR>} />
+              <Route path="/jornada" element={<PR path="/jornada"><Jornada /></PR>} />
+              <Route path="/produtos" element={<PR path="/produtos"><Produtos /></PR>} />
+              <Route path="/turmas" element={<PR path="/turmas"><Turmas /></PR>} />
+              <Route path="/eventos" element={<PR path="/eventos"><Eventos /></PR>} />
+              <Route path="/agenda" element={<PR path="/agenda"><Agenda /></PR>} />
+              <Route path="/processo-individual" element={<PR path="/processo-individual"><ProcessoIndividual /></PR>} />
+              <Route path="/processo-empresarial" element={<PR path="/processo-empresarial"><ProcessoEmpresarial /></PR>} />
+              <Route path="/profissionais" element={<PR path="/profissionais"><Profissionais /></PR>} />
+              <Route path="/vendedores" element={<PR path="/vendedores"><Vendedores /></PR>} />
+              <Route path="/financeiro" element={<PR path="/financeiro"><Financeiro /></PR>} />
+              <Route path="/metas" element={<PR path="/metas"><Metas /></PR>} />
+              <Route path="/relatorios" element={<PR path="/relatorios"><Relatorios /></PR>} />
+              <Route path="/usuarios" element={<PR path="/usuarios"><UsuariosADM /></PR>} />
+              <Route path="/configuracoes" element={<PR path="/configuracoes"><Configuracoes /></PR>} />
+              <Route path="/aniversarios" element={<PR path="/aniversarios"><Aniversarios /></PR>} />
+              <Route path="/mindmap" element={<PR path="/mindmap"><MindMap /></PR>} />
+              <Route path="/auditoria" element={<PR path="/auditoria"><Auditoria /></PR>} />
+              <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
+              <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
+              <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
+              <Route path="/consorcios/pipeline" element={<PR path="/consorcios/pipeline"><ConsorcioPipeline /></PR>} />
+              <Route path="/consorcios/leads" element={<PR path="/consorcios/leads"><ConsorcioLeads /></PR>} />
+              <Route path="/empresas" element={<PR path="/empresas"><Empresas /></PR>} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
+      </AppLayout>
+    </EmpresaProvider>
   );
 };
 

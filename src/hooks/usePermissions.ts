@@ -30,6 +30,7 @@ export const ALL_PAGES = [
   { key: "funil", label: "Funil de Vendas", path: "/funil" },
   { key: "consorcios-pipeline", label: "Pipeline — Consórcio", path: "/consorcios/pipeline" },
   { key: "consorcios-leads", label: "Leads — Consórcio", path: "/consorcios/leads" },
+  { key: "empresas", label: "Gestão de Empresas", path: "/empresas" },
 ] as const;
 
 export type PageKey = (typeof ALL_PAGES)[number]["key"];
