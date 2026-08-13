@@ -565,7 +565,7 @@ function LeadDetailDialog({
 
   return (
     <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[95vw] w-[1100px] h-[92svh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="!max-w-[98vw] !w-[min(1400px,98vw)] h-[92svh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* ── Blue header ── */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shrink-0">
           <div className="flex items-start gap-4 px-5 py-4">
