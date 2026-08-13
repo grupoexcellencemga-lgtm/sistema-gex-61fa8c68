@@ -31,16 +31,18 @@ export const TabEmpresarial = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: pagamentos = [] } = useQuery({
-    queryKey: ["pagamentos_processo_empresarial_fin"],
+    queryKey: ["pagamentos_processo_empresarial_fin", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo_empresarial")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
       if (error) throw error;
       return data as any[];
     },
+    enabled: !!empresaId,
   });
 
   const pgMes = pagamentos.filter((p: any) => isInMonth(p.data, mes, ano));

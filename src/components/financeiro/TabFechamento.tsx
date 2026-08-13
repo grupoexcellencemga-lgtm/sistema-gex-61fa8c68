@@ -43,17 +43,19 @@ export const TabFechamento = () => {
   });
 
   const { data: movimentacoesContas = [] } = useQuery({
-    queryKey: ["movimentacoes_contas_bancos"],
+    queryKey: ["movimentacoes_contas_bancos", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("movimentacoes_contas" as any)
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const temMovimentacaoAluno = (pagamentoId: string) =>
@@ -133,15 +135,17 @@ export const TabFechamento = () => {
   });
 
   const { data: pagamentosProcessoPorConta = [] } = useQuery({
-    queryKey: ["pagamentos_processo_financeiro_detail"],
+    queryKey: ["pagamentos_processo_financeiro_detail", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo")
         .select("processo_id, valor, tipo, data, forma_pagamento, observacoes, conta_bancaria_id")
+        .eq("empresa_id", empresaId!)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Processos empresariais
@@ -160,59 +164,67 @@ export const TabFechamento = () => {
   });
 
   const { data: pagamentosEmpresariaisPorConta = [] } = useQuery({
-    queryKey: ["pagamentos_processo_empresarial_contas"],
+    queryKey: ["pagamentos_processo_empresarial_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo_empresarial")
         .select("processo_id, valor, tipo, data, forma_pagamento, observacoes, conta_bancaria_id")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Pagamentos profissional (saídas)
   const { data: pagamentosProfissionalPorConta = [] } = useQuery({
-    queryKey: ["pagamentos_profissional_contas"],
+    queryKey: ["pagamentos_profissional_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_profissional")
         .select("conta_bancaria_id, valor, data, forma_pagamento, observacoes, despesa_id, profissionais(nome), processos_individuais(cliente_nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Comissões pagas (saídas)
   const { data: comissoesPorConta = [] } = useQuery({
-    queryKey: ["comissoes_contas"],
+    queryKey: ["comissoes_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comissoes")
         .select("conta_bancaria_id, valor_pago, data_pagamento, forma_pagamento, comerciais(nome), alunos(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .eq("status", "pago")
         .not("conta_bancaria_id", "is", null);
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Transferências entre contas
   const { data: transferencias = [] } = useQuery({
-    queryKey: ["transferencias_entre_contas"],
+    queryKey: ["transferencias_entre_contas", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transferencias_entre_contas")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   // Fechamentos mensais
@@ -254,6 +266,7 @@ export const TabFechamento = () => {
         valor: Number(form.valor),
         data: form.data,
         descricao: form.descricao || null,
+        empresa_id: empresaId,
       });
       if (error) throw error;
     },

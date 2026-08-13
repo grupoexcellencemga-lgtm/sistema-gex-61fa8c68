@@ -75,19 +75,21 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
   });
 
   const { data: comissoes = [] } = useQuery({
-    queryKey: ["comissoes"],
+    queryKey: ["comissoes", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comissoes")
         .select(
           "*, alunos(nome), produtos(nome), turmas(nome), comerciais(nome), contas_bancarias(nome)"
         )
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [] } = useQuery({
@@ -130,6 +132,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
         .from("categorias_despesas")
         .select("id")
         .eq("nome", "Comissão Comercial")
+        .eq("empresa_id", empresaId!)
         .maybeSingle();
 
       if (catExist) {
@@ -141,6 +144,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
           id: newCatId,
           nome: "Comissão Comercial",
           tipo: "empresa",
+          empresa_id: empresaId,
         });
 
         categoriaId = newCatId;
@@ -190,7 +194,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comissoes"] });
+      queryClient.invalidateQueries({ queryKey: ["comissoes", empresaId] });
       queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast({ title: "Comissão paga e despesa registrada!" });
       setShowPagarForm(null);
@@ -228,7 +232,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comissoes"] });
+      queryClient.invalidateQueries({ queryKey: ["comissoes", empresaId] });
       queryClient.invalidateQueries({ queryKey: ["despesas"] });
       toast({ title: "Pagamento desfeito" });
     },
@@ -263,7 +267,7 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
       if (error) throw error;
     },
     onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["comissoes"] });
+  queryClient.invalidateQueries({ queryKey: ["comissoes", empresaId] });
   queryClient.invalidateQueries({ queryKey: ["comissoes-contas"] });
   toast({ title: "Comissão excluída com sucesso!" });
 },

@@ -79,31 +79,35 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
   });
 
   const { data: pagamentosProcesso = [] } = useQuery({
-    queryKey: ["pagamentos_processo_financeiro_prof"],
+    queryKey: ["pagamentos_processo_financeiro_prof", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_processo")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: pagamentosProf = [] } = useQuery({
-    queryKey: ["pagamentos_profissional"],
+    queryKey: ["pagamentos_profissional", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pagamentos_profissional")
         .select("*, contas_bancarias(nome)")
+        .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("data", { ascending: false });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!empresaId,
   });
 
   const { data: contas = [] } = useQuery({
@@ -147,6 +151,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
       .from("categorias_despesas")
       .select("id")
       .eq("nome", "Pagamento Profissional")
+      .eq("empresa_id", empresaId!)
       .is("deleted_at", null)
       .maybeSingle();
 
@@ -163,6 +168,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
       nome: "Pagamento Profissional",
       tipo: "geral",
       ativo: true,
+      empresa_id: empresaId,
     });
 
     if (error) throw error;
@@ -183,7 +189,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
   };
 
   const invalidateFinanceiro = () => {
-    queryClient.invalidateQueries({ queryKey: ["pagamentos_profissional"] });
+    queryClient.invalidateQueries({ queryKey: ["pagamentos_profissional", empresaId] });
     queryClient.invalidateQueries({ queryKey: ["despesas"] });
     queryClient.invalidateQueries({ queryKey: ["despesas-financeiro"] });
     queryClient.invalidateQueries({ queryKey: ["contas_bancarias_all"] });
@@ -242,6 +248,7 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
         conta_bancaria_id: pgForm.conta_id || null,
         observacoes: pgForm.obs.trim() || null,
         despesa_id: despesaId,
+        empresa_id: empresaId,
       } as any);
 
       if (pgError) throw pgError;
