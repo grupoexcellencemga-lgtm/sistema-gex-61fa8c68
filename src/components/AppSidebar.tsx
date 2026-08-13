@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { usePermissions, type PageKey } from "@/hooks/usePermissions";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -89,7 +90,7 @@ export function AppSidebar() {
 
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
-  const isConsorcioPrincipal = empresa?.modulos?.includes("consorcios-pipeline") ?? false;
+  const { plural: alunoPlural } = useAlunoLabel();
   const nomeEmpresa = empresa?.nome ?? "Sistema GEx";
   const logoSrc = empresa?.logo_url ?? "/logo.png";
   const canSwitch = isAdminMaster && empresas.length > 1;
@@ -172,7 +173,7 @@ export function AppSidebar() {
                           activeClassName="bg-sidebar-accent text-primary font-medium dark:bg-gradient-to-r dark:from-primary/15 dark:to-transparent dark:text-[#C8860A] dark:border-primary border-primary [&>svg]:text-primary [&>svg]:drop-shadow-[0_0_5px_rgba(200,134,10,0.8)]"
                         >
                           <item.icon className="h-4 w-4 shrink-0 transition-all duration-200 group-hover:text-sidebar-foreground dark:group-hover:text-white" />
-                          {!collapsed && <span>{item.pageKey === "alunos" && isConsorcioPrincipal ? "Clientes" : item.title}</span>}
+                          {!collapsed && <span>{item.pageKey === "alunos" ? alunoPlural : item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

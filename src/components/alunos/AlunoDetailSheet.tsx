@@ -27,6 +27,7 @@ import { formatDate, formatCurrency } from "./alunosUtils";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 
 interface Props {
   open: boolean;
@@ -88,6 +89,8 @@ export const AlunoDetailSheet = (props: Props) => {
     editPagamentoDialog, setEditPagamentoDialog, editPagForm, setEditPagForm, onSavePagamento, updatePagamentoIsPending,
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
   } = props;
+
+  const { singular, lower } = useAlunoLabel();
 
   const getComprovantesMatricula = (matricula: any) => {
     const lista = Array.isArray(matricula?.comprovantes_urls)
@@ -589,7 +592,7 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="space-y-4">
               <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
                 <div>
-                  <p className="text-xs text-muted-foreground">Aluno</p>
+                  <p className="text-xs text-muted-foreground">{singular}</p>
                   <p className="font-semibold">{selectedAluno?.nome || "—"}</p>
                 </div>
 
@@ -736,7 +739,7 @@ export const AlunoDetailSheet = (props: Props) => {
       <AlertDialog open={deleteAlunoDialogOpen} onOpenChange={setDeleteAlunoDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir aluno permanentemente?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir {lower} permanentemente?</AlertDialogTitle>
             <AlertDialogDescription>
               Isso irá excluir <strong>{selectedAluno?.nome}</strong> e todos os dados relacionados: matrículas, pagamentos, comissões, presenças, inscrições e atividades. Esta ação não pode ser desfeita.
             </AlertDialogDescription>

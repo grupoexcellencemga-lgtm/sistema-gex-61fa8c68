@@ -6,6 +6,7 @@ import { Search, Users, UserCheck, Calendar, Package, GraduationCap } from "luci
 import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 
 interface SearchResult {
   id: string;
@@ -21,6 +22,7 @@ export function GlobalSearch() {
   const navigate = useNavigate();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+  const { plural: alunoPlural } = useAlunoLabel();
 
   const [alunos, setAlunos] = useState<SearchResult[]>([]);
   const [leads, setLeads] = useState<SearchResult[]>([]);
@@ -86,7 +88,7 @@ export function GlobalSearch() {
   const hasResults = alunos.length + leads.length + eventos.length + produtos.length + turmas.length > 0;
 
   const groups: { heading: string; icon: React.ReactNode; items: SearchResult[] }[] = [
-    { heading: "Alunos", icon: <Users className="h-4 w-4 mr-2 text-muted-foreground" />, items: alunos },
+    { heading: alunoPlural, icon: <Users className="h-4 w-4 mr-2 text-muted-foreground" />, items: alunos },
     { heading: "Leads", icon: <UserCheck className="h-4 w-4 mr-2 text-muted-foreground" />, items: leads },
     { heading: "Eventos", icon: <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />, items: eventos },
     { heading: "Produtos", icon: <Package className="h-4 w-4 mr-2 text-muted-foreground" />, items: produtos },
@@ -109,7 +111,7 @@ export function GlobalSearch() {
       </Button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Buscar alunos, leads, eventos..." value={query} onValueChange={setQuery} />
+        <CommandInput placeholder={`Buscar ${alunoPlural.toLowerCase()}, leads, eventos...`} value={query} onValueChange={setQuery} />
         <CommandList>
           {!loading && !hasResults && debouncedQuery.length >= 2 && (
             <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>

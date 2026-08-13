@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { maskPhone, maskCPF } from "@/lib/utils";
 import { AlunoForm } from "./alunosUtils";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 
 interface Props {
   open: boolean;
@@ -18,15 +19,17 @@ interface Props {
   cpfWarning?: string;
 }
 
-export const AlunoFormDialog = ({ open, onOpenChange, editingId, form, updateField, onSave, isSaving, cpfWarning }: Props) => (
+export const AlunoFormDialog = ({ open, onOpenChange, editingId, form, updateField, onSave, isSaving, cpfWarning }: Props) => {
+  const { singular } = useAlunoLabel();
+  return (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-lg">
       <DialogHeader>
-        <DialogTitle>{editingId ? "Editar Aluno" : "Cadastrar Novo Aluno"}</DialogTitle>
-        <DialogDescription>Preencha os dados do aluno</DialogDescription>
+        <DialogTitle>{editingId ? `Editar ${singular}` : `Cadastrar Novo ${singular}`}</DialogTitle>
+        <DialogDescription>Preencha os dados do {singular.toLowerCase()}</DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-4 mt-4">
-        <div className="col-span-2"><Label>Nome completo</Label><Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} placeholder="Nome do aluno" /></div>
+        <div className="col-span-2"><Label>Nome completo</Label><Input value={form.nome} onChange={(e) => updateField("nome", e.target.value)} placeholder={`Nome do ${singular.toLowerCase()}`} /></div>
         <div><Label>Data de nascimento</Label><Input type="date" value={form.data_nascimento} onChange={(e) => updateField("data_nascimento", e.target.value)} /></div>
         <div><Label>Sexo</Label>
           <Select value={form.sexo} onValueChange={(v) => updateField("sexo", v)}>
@@ -40,10 +43,11 @@ export const AlunoFormDialog = ({ open, onOpenChange, editingId, form, updateFie
         <div className="col-span-2">
           <Button className="w-full" onClick={onSave} disabled={isSaving}>
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {editingId ? "Salvar Alterações" : "Cadastrar Aluno"}
+            {editingId ? "Salvar Alterações" : `Cadastrar ${singular}`}
           </Button>
         </div>
       </div>
     </DialogContent>
   </Dialog>
-);
+  );
+};

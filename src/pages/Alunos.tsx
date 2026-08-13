@@ -21,10 +21,12 @@ import { AlunoFormDialog } from "@/components/alunos/AlunoFormDialog";
 import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 
 const Alunos = () => {
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+  const { singular, plural, lower, lowerPlural } = useAlunoLabel();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -297,7 +299,7 @@ const Alunos = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alunos"] });
-      toast.success("Aluno cadastrado");
+      toast.success(`${singular} cadastrado`);
       setDialogOpen(false);
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
@@ -321,7 +323,7 @@ const Alunos = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alunos"] });
-      toast.success("Aluno atualizado");
+      toast.success(`${singular} atualizado`);
       setDialogOpen(false);
 
       if (selectedAluno && editingId === selectedAluno.id) {
@@ -365,7 +367,7 @@ const Alunos = () => {
       queryClient.invalidateQueries({ queryKey: ["pagamentos-contas"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
 
-      toast.success("Aluno excluído com sucesso");
+      toast.success(`${singular} excluído com sucesso`);
       setDeleteAlunoDialogOpen(false);
       setSheetOpen(false);
       setSelectedAluno(null);
@@ -1418,7 +1420,7 @@ const Alunos = () => {
 
   return (
     <div>
-      <PageHeader title={empresa?.modulos?.includes("consorcios-pipeline") ? "Clientes" : "Alunos"} description="Gerencie o cadastro de alunos do Grupo Excellence">
+      <PageHeader title={plural} description={`Gerencie o cadastro de ${lowerPlural} do Grupo Excellence`}>
         <input
           type="file"
           accept=".xlsx,.xls,.csv"
@@ -1459,13 +1461,13 @@ const Alunos = () => {
 
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" />
-          Novo Aluno
+          Novo {singular}
         </Button>
       </PageHeader>
 
       <Card className="mb-4">
         <CardContent className="py-3 text-sm text-muted-foreground">
-          Para matricular aluno e lançar pagamentos, clique em <span className="font-medium text-foreground">Ficha</span> na linha do aluno.
+          Para matricular {lower} e lançar pagamentos, clique em <span className="font-medium text-foreground">Ficha</span> na linha do {lower}.
         </CardContent>
       </Card>
 
@@ -1571,7 +1573,7 @@ const Alunos = () => {
                 {filtered.length === 0 && !isLoading && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Nenhum aluno encontrado
+                      Nenhum {lower} encontrado
                     </TableCell>
                   </TableRow>
                 )}

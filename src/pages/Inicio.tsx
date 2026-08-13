@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProximosEventosCard } from "@/components/dashboard/ProximosEventosCard";
@@ -33,6 +34,7 @@ const Inicio = () => {
   const { canAccess } = usePermissions();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+  const { plural: alunoPlural } = useAlunoLabel();
   const hoje = hojeBrasilISO();
 
   const dataExtenso = new Date(hoje + "T12:00:00").toLocaleDateString("pt-BR", {
@@ -201,7 +203,7 @@ const Inicio = () => {
   const tarefasTop = tarefas.slice(0, 3);
 
   const atalhos = [
-    { label: "Alunos", icon: Users, url: "/alunos" },
+    { label: alunoPlural, icon: Users, url: "/alunos" },
     { label: "Eventos", icon: CalendarPlus, url: "/eventos" },
     { label: "Agenda", icon: CalendarDays, url: "/agenda" },
     { label: "Tarefas", icon: ListChecks, url: "/tarefas" },

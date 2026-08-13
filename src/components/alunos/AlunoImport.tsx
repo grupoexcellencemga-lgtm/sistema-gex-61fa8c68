@@ -5,6 +5,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 
 interface Props {
   importDialogOpen: boolean;
@@ -15,13 +16,15 @@ interface Props {
   onConfirmImport: () => void;
 }
 
-export const AlunoImport = ({ importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, isImporting, onConfirmImport }: Props) => (
+export const AlunoImport = ({ importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, isImporting, onConfirmImport }: Props) => {
+  const { plural, lower } = useAlunoLabel();
+  return (
   <AlertDialog open={importDialogOpen} onOpenChange={(v) => { if (!v) { setImportDialogOpen(false); setImportPreview(null); } }}>
     <AlertDialogContent className="max-w-lg">
       <AlertDialogHeader>
-        <AlertDialogTitle>Importar Alunos</AlertDialogTitle>
+        <AlertDialogTitle>Importar {plural}</AlertDialogTitle>
         <AlertDialogDescription>
-          {importPreview?.length ?? 0} aluno(s) encontrado(s) na planilha. Deseja importar?
+          {importPreview?.length ?? 0} {lower}(s) encontrado(s) na planilha. Deseja importar?
         </AlertDialogDescription>
       </AlertDialogHeader>
       <div className="max-h-60 overflow-auto border rounded-md">
@@ -57,9 +60,10 @@ export const AlunoImport = ({ importDialogOpen, setImportDialogOpen, importPrevi
         <AlertDialogCancel>Cancelar</AlertDialogCancel>
         <AlertDialogAction onClick={onConfirmImport} disabled={isImporting}>
           {isImporting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Importar {importPreview?.length ?? 0} aluno(s)
+          Importar {importPreview?.length ?? 0} {lower}(s)
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
-);
+  );
+};
