@@ -91,7 +91,7 @@ export function AppSidebar() {
 
   const nomeEmpresa = empresa?.nome ?? "Sistema GEx";
   const logoSrc = empresa?.logo_url ?? "/logo.png";
-  const canSwitch = empresas.length > 1;
+  const canSwitch = isAdminMaster && empresas.length > 1;
 
   // Filtra itens pelos módulos da empresa selecionada
   function isVisible(pageKey: PageKey): boolean {
