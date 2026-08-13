@@ -44,6 +44,7 @@ const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 const Funil = lazy(() => import("./pages/Funil"));
 const ConsorcioPipeline = lazy(() => import("./pages/consorcios/Pipeline"));
 const ConsorcioLeads = lazy(() => import("./pages/consorcios/Leads"));
+const ConsorcioDashboard = lazy(() => import("./pages/consorcios/Dashboard"));
 const Empresas = lazy(() => import("./pages/Empresas"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Inscricao = lazy(() => import("./pages/Inscricao"));
@@ -125,6 +126,7 @@ const AppRoutes = () => {
               <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
               <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
               <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
+              <Route path="/consorcios/dashboard" element={<PR path="/consorcios/dashboard"><ConsorcioDashboard /></PR>} />
               <Route path="/consorcios/pipeline" element={<PR path="/consorcios/pipeline"><ConsorcioPipeline /></PR>} />
               <Route path="/consorcios/leads" element={<PR path="/consorcios/leads"><ConsorcioLeads /></PR>} />
               <Route path="/empresas" element={<PR path="/empresas"><Empresas /></PR>} />

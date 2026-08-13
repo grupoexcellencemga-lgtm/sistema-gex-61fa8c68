@@ -59,6 +59,7 @@ const menuGroups = [
   {
     label: "Consórcio",
     items: [
+      { title: "Dashboard", url: "/consorcios/dashboard", icon: LayoutDashboard, pageKey: "consorcios-dashboard" as PageKey },
       { title: "Pipeline", url: "/consorcios/pipeline", icon: Kanban, pageKey: "consorcios-pipeline" as PageKey },
       { title: "Leads", url: "/consorcios/leads", icon: LayoutList, pageKey: "consorcios-leads" as PageKey },
     ],

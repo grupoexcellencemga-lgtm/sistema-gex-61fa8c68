@@ -28,6 +28,7 @@ export const ALL_PAGES = [
   { key: "tarefas", label: "Tarefas", path: "/tarefas" },
   { key: "divulgacao", label: "Divulgação", path: "/divulgacao" },
   { key: "funil", label: "Funil de Vendas", path: "/funil" },
+  { key: "consorcios-dashboard", label: "Dashboard — Consórcio", path: "/consorcios/dashboard" },
   { key: "consorcios-pipeline", label: "Pipeline — Consórcio", path: "/consorcios/pipeline" },
   { key: "consorcios-leads", label: "Leads — Consórcio", path: "/consorcios/leads" },
   { key: "empresas", label: "Gestão de Empresas", path: "/empresas" },
@@ -38,7 +39,7 @@ export type PageKey = (typeof ALL_PAGES)[number]["key"];
 // Default pages per role (baseline)
 export const ROLE_DEFAULTS: Record<string, PageKey[]> = {
   admin: ALL_PAGES.map((p) => p.key) as PageKey[],
-  comercial: ["inicio", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "consorcios-pipeline", "consorcios-leads", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
+  comercial: ["inicio", "alunos", "jornada", "produtos", "turmas", "eventos", "agenda", "vendedores", "metas", "funil", "consorcios-dashboard", "consorcios-pipeline", "consorcios-leads", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
   financeiro: ["inicio", "financeiro", "relatorios", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
   suporte: ["inicio", "alunos", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
   profissional: ["inicio", "processo-individual", "processo-empresarial", "turmas", "eventos", "agenda", "aniversarios", "tarefas", "divulgacao", "configuracoes"],
