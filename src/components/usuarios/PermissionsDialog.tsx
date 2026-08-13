@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfissionais } from "@/hooks/useProfissionais";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { ALL_PAGES, ROLE_DEFAULTS, type PageKey } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
@@ -29,17 +30,21 @@ export function PermissionsDialog({
   userProfissionalId, userComercialId,
 }: PermissionsDialogProps) {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const { data: profissionais = [] } = useProfissionais();
   const { data: comerciais = [] } = useQuery({
-    queryKey: ["comerciais-ativos"],
+    queryKey: ["comerciais-ativos", empresaId],
     queryFn: async () => {
       const { data } = await supabase
         .from("comerciais")
         .select("id, nome")
+        .eq("empresa_id", empresaId!)
         .eq("ativo", true)
         .order("nome");
       return data ?? [];
     },
+    enabled: !!empresaId,
   });
 
   const [permChecked, setPermChecked] = useState<Record<string, boolean>>({});
