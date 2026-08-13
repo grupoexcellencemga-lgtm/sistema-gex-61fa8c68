@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MonthFilter, getBrazilNow } from "@/components/MonthFilter";
 import { PageHeader } from "@/components/PageHeader";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DollarSign,
@@ -29,6 +30,11 @@ import { TabEventos } from "@/components/financeiro/TabEventos";
 
 const Financeiro = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { empresa } = useEmpresa();
+  const modulos = empresa?.modulos ?? [];
+
+  const hasModulo = (key: string) => modulos.includes(key as any);
+
   const activeTab = searchParams.get("tab") || "dashboard";
 
   const handleTabChange = (tab: string) => {
@@ -77,25 +83,33 @@ const Financeiro = () => {
               <Receipt className="h-4 w-4" /> Despesas
             </TabsTrigger>
 
-            <TabsTrigger value="empresarial" className="gap-1.5 shrink-0">
-              <Building2 className="h-4 w-4" /> Empresarial
-            </TabsTrigger>
+            {hasModulo("processo-empresarial") && (
+              <TabsTrigger value="empresarial" className="gap-1.5 shrink-0">
+                <Building2 className="h-4 w-4" /> Empresarial
+              </TabsTrigger>
+            )}
 
-            <TabsTrigger value="turmas" className="gap-1.5 shrink-0">
-              <GraduationCap className="h-4 w-4" /> Turmas
-            </TabsTrigger>
+            {hasModulo("turmas") && (
+              <TabsTrigger value="turmas" className="gap-1.5 shrink-0">
+                <GraduationCap className="h-4 w-4" /> Turmas
+              </TabsTrigger>
+            )}
 
-            <TabsTrigger value="eventos" className="gap-1.5 shrink-0">
-              <CalendarDays className="h-4 w-4" /> Eventos
-            </TabsTrigger>
+            {hasModulo("eventos") && (
+              <TabsTrigger value="eventos" className="gap-1.5 shrink-0">
+                <CalendarDays className="h-4 w-4" /> Eventos
+              </TabsTrigger>
+            )}
 
             <TabsTrigger value="comissoes" className="gap-1.5 shrink-0">
               <Award className="h-4 w-4" /> Comissões
             </TabsTrigger>
 
-            <TabsTrigger value="profissionais" className="gap-1.5 shrink-0">
-              <UserCheck className="h-4 w-4" /> Profissionais
-            </TabsTrigger>
+            {hasModulo("profissionais") && (
+              <TabsTrigger value="profissionais" className="gap-1.5 shrink-0">
+                <UserCheck className="h-4 w-4" /> Profissionais
+              </TabsTrigger>
+            )}
 
             <TabsTrigger value="reembolsos" className="gap-1.5 shrink-0">
               <Wallet className="h-4 w-4" /> Reembolsos
@@ -123,25 +137,33 @@ const Financeiro = () => {
           <TabDespesas mes={mes} ano={ano} />
         </TabsContent>
 
-        <TabsContent value="empresarial">
-          <TabEmpresarial mes={mes} ano={ano} />
-        </TabsContent>
+        {hasModulo("processo-empresarial") && (
+          <TabsContent value="empresarial">
+            <TabEmpresarial mes={mes} ano={ano} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="turmas">
-          <TabTurmas mes={mes} ano={ano} />
-        </TabsContent>
+        {hasModulo("turmas") && (
+          <TabsContent value="turmas">
+            <TabTurmas mes={mes} ano={ano} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="eventos">
-          <TabEventos mes={mes} ano={ano} />
-        </TabsContent>
+        {hasModulo("eventos") && (
+          <TabsContent value="eventos">
+            <TabEventos mes={mes} ano={ano} />
+          </TabsContent>
+        )}
 
         <TabsContent value="comissoes">
           <TabComissoes mes={mes} ano={ano} />
         </TabsContent>
 
-        <TabsContent value="profissionais">
-          <TabProfissionais mes={mes} ano={ano} />
-        </TabsContent>
+        {hasModulo("profissionais") && (
+          <TabsContent value="profissionais">
+            <TabProfissionais mes={mes} ano={ano} />
+          </TabsContent>
+        )}
 
         <TabsContent value="reembolsos">
           <TabReembolsos mes={mes} ano={ano} />
