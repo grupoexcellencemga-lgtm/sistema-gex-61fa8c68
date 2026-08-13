@@ -202,9 +202,11 @@ const Inicio = () => {
   const tarefasHoje = tarefas.filter((t: any) => t.data_vencimento === hoje).length;
   const tarefasTop = tarefas.slice(0, 3);
 
+  const temEventos = empresa?.modulos?.includes("eventos") ?? true;
+
   const atalhos = [
     { label: alunoPlural, icon: Users, url: "/alunos" },
-    { label: "Eventos", icon: CalendarPlus, url: "/eventos" },
+    ...(temEventos ? [{ label: "Eventos", icon: CalendarPlus, url: "/eventos" }] : []),
     { label: "Agenda", icon: CalendarDays, url: "/agenda" },
     { label: "Tarefas", icon: ListChecks, url: "/tarefas" },
   ];
@@ -235,8 +237,7 @@ const Inicio = () => {
         ))}
       </div>
 
-      {/* Próximos eventos (reaproveita o card de contagem regressiva) */}
-      <ProximosEventosCard />
+      {temEventos && <ProximosEventosCard />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Minhas tarefas de hoje */}
