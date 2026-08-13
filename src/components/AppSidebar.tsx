@@ -3,7 +3,7 @@ import {
   DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight,
   Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target,
   ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter,
-  CalendarDays, Home, Kanban, LayoutList, Crown,
+  CalendarDays, Home, Kanban, LayoutList, Crown, ChevronDown, Check,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { APP_VERSION } from "@/lib/version";
@@ -17,6 +17,9 @@ import {
   SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const menuGroups = [
   {
@@ -75,7 +78,7 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const { canAccess } = usePermissions();
-  const { empresa, isAdminMaster, hasEmpresa } = useEmpresa();
+  const { empresa, empresas, isAdminMaster, hasEmpresa, setSelectedEmpresaId } = useEmpresa();
   const { theme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -86,43 +89,63 @@ export function AppSidebar() {
 
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
-  // Nome e logo dinâmicos por empresa
   const nomeEmpresa = empresa?.nome ?? "Sistema GEx";
   const logoSrc = empresa?.logo_url ?? "/logo.png";
+  const canSwitch = empresas.length > 1;
 
-  // Filtra itens: role + empresa.modulos (se atribuído e não for admin master)
+  // Filtra itens pelos módulos da empresa selecionada
   function isVisible(pageKey: PageKey): boolean {
     if (!canAccess(pageKey)) return false;
-    // Usuário sem empresa atribuída ou admin_master: vê tudo que o role permite
-    if (!hasEmpresa || isAdminMaster) return true;
-    // Usuário com empresa: apenas módulos habilitados para ela
-    return empresa?.modulos.includes(pageKey) ?? false;
+    if (!hasEmpresa) return true;            // usuário legado sem empresa
+    if (!empresa) return true;
+    return empresa.modulos.includes(pageKey);
   }
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="shrink-0 flex items-center justify-center">
-            <img
-              src={logoSrc}
-              alt={nomeEmpresa}
-              className="h-9 w-9 object-contain rounded"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logo.png"; }}
-            />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-sidebar-foreground dark:text-white truncate">
-                  {nomeEmpresa}
-                </span>
-                <span className="text-[10px] text-sidebar-muted shrink-0">v{APP_VERSION}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={!canSwitch || collapsed}>
+            <button className="flex items-center gap-3 w-full text-left rounded-md hover:bg-sidebar-accent transition-colors disabled:cursor-default">
+              <div className="shrink-0 flex items-center justify-center">
+                <img
+                  src={logoSrc}
+                  alt={nomeEmpresa}
+                  className="h-9 w-9 object-contain rounded"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logo.png"; }}
+                />
               </div>
-              <span className="text-xs text-sidebar-muted truncate">Grupo Excellence</span>
-            </div>
-          )}
-        </div>
+              {!collapsed && (
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-sidebar-foreground dark:text-white truncate">
+                      {nomeEmpresa}
+                    </span>
+                    <span className="text-[10px] text-sidebar-muted shrink-0">v{APP_VERSION}</span>
+                    {canSwitch && <ChevronDown className="h-3 w-3 text-sidebar-muted ml-auto shrink-0" />}
+                  </div>
+                  <span className="text-xs text-sidebar-muted truncate">Grupo Excellence</span>
+                </div>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            {empresas.map((e) => (
+              <DropdownMenuItem
+                key={e.id}
+                onClick={() => setSelectedEmpresaId(e.id)}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ background: e.cor_primaria }}
+                />
+                <span className="flex-1 truncate">{e.nome}</span>
+                {e.id === empresa?.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarHeader>
 
       <SidebarContent className="px-2">
@@ -188,14 +211,6 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2 space-y-1">
-        {/* Indicador de empresa (quando atribuída) */}
-        {!collapsed && empresa && (
-          <div className="px-3 py-1.5 rounded-md bg-muted/50 mb-1">
-            <p className="text-[10px] text-muted-foreground leading-none">Empresa</p>
-            <p className="text-xs font-medium truncate mt-0.5">{empresa.nome}</p>
-          </div>
-        )}
-
         <Button variant="ghost" size="sm" onClick={cycleTheme}
           className="w-full justify-start gap-3 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
           title={`Tema: ${theme === "dark" ? "Escuro" : theme === "light" ? "Claro" : "Sistema"}`}>

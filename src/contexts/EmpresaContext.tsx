@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,10 +16,14 @@ export interface EmpresaInfo {
 }
 
 interface EmpresaContextValue {
+  /** Empresa atualmente selecionada */
   empresa: EmpresaInfo | null;
+  /** Todas as empresas que o usuário pode acessar */
+  empresas: EmpresaInfo[];
+  selectedEmpresaId: string | null;
+  setSelectedEmpresaId: (id: string) => void;
   isLoading: boolean;
   isAdminMaster: boolean;
-  /** True when the user has an empresa assigned (not a legacy user without one) */
   hasEmpresa: boolean;
 }
 
@@ -27,6 +31,9 @@ interface EmpresaContextValue {
 
 const EmpresaContext = createContext<EmpresaContextValue>({
   empresa: null,
+  empresas: [],
+  selectedEmpresaId: null,
+  setSelectedEmpresaId: () => {},
   isLoading: false,
   isAdminMaster: false,
   hasEmpresa: false,
@@ -80,35 +87,46 @@ function applyEmpresaTheme(hex: string) {
 
 function resetTheme() {
   const props = [
-    "--primary",
-    "--ring",
-    "--sidebar-primary",
-    "--sidebar-ring",
-    "--sidebar-accent",
-    "--sidebar-accent-foreground",
+    "--primary", "--ring", "--sidebar-primary",
+    "--sidebar-ring", "--sidebar-accent", "--sidebar-accent-foreground",
   ];
   props.forEach((p) => document.documentElement.style.removeProperty(p));
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
+const STORAGE_KEY = "gex:empresa-id";
+
 type RawRow = {
   papel: string;
   empresas: {
-    id: string;
-    nome: string;
-    slug: string;
-    logo_url: string | null;
-    cor_primaria: string;
-    modulos: string[];
-    ativo: boolean;
+    id: string; nome: string; slug: string; logo_url: string | null;
+    cor_primaria: string; modulos: string[]; ativo: boolean;
   } | null;
+};
+
+type RawEmpresa = {
+  id: string; nome: string; slug: string; logo_url: string | null;
+  cor_primaria: string; modulos: string[]; ativo: boolean;
 };
 
 export function EmpresaProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
-  const { data: rows = [], isLoading } = useQuery<RawRow[]>({
+  // ── Selected empresa (persistida em localStorage) ──────────────────────────
+
+  const [selectedId, setSelectedIdState] = useState<string | null>(
+    () => localStorage.getItem(STORAGE_KEY)
+  );
+
+  const setSelectedEmpresaId = (id: string) => {
+    setSelectedIdState(id);
+    localStorage.setItem(STORAGE_KEY, id);
+  };
+
+  // ── Query 1: vínculos do usuário ───────────────────────────────────────────
+
+  const { data: rows = [], isLoading: rowsLoading } = useQuery<RawRow[]>({
     queryKey: ["user-empresa", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -127,41 +145,81 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
     [rows]
   );
 
-  const empresa: EmpresaInfo | null = useMemo(() => {
-    if (rows.length === 0) return null;
-    // Admin master gets the first empresa as "home" but with master role
-    const masterRow = rows.find((r) => r.papel === "admin_master" && r.empresas);
-    const anyRow = rows.find((r) => r.empresas);
-    const row = masterRow ?? anyRow;
-    if (!row?.empresas) return null;
-    return {
-      id: row.empresas.id,
-      nome: row.empresas.nome,
-      slug: row.empresas.slug,
-      logo_url: row.empresas.logo_url,
-      cor_primaria: row.empresas.cor_primaria,
-      modulos: row.empresas.modulos,
-      papel: row.papel as EmpresaInfo["papel"],
-    };
-  }, [rows]);
+  // ── Query 2: todas as empresas ativas (admin_master pode trocar entre todas) ──
 
-  // Apply/reset CSS theme when empresa color changes
+  const { data: allEmpresasData = [], isLoading: allLoading } = useQuery<RawEmpresa[]>({
+    queryKey: ["all-empresas"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("empresas")
+        .select("id, nome, slug, logo_url, cor_primaria, modulos, ativo")
+        .eq("ativo", true)
+        .order("nome");
+      return (data ?? []) as RawEmpresa[];
+    },
+    enabled: isAdminMaster,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Lista de empresas acessíveis ───────────────────────────────────────────
+
+  const empresas: EmpresaInfo[] = useMemo(() => {
+    if (isAdminMaster) {
+      return allEmpresasData.map((e) => ({
+        id: e.id,
+        nome: e.nome,
+        slug: e.slug,
+        logo_url: e.logo_url,
+        cor_primaria: e.cor_primaria,
+        modulos: e.modulos,
+        papel: "admin_master" as const,
+      }));
+    }
+    return rows
+      .filter((r) => r.empresas)
+      .map((r) => ({
+        id: r.empresas!.id,
+        nome: r.empresas!.nome,
+        slug: r.empresas!.slug,
+        logo_url: r.empresas!.logo_url,
+        cor_primaria: r.empresas!.cor_primaria,
+        modulos: r.empresas!.modulos,
+        papel: r.papel as EmpresaInfo["papel"],
+      }));
+  }, [isAdminMaster, allEmpresasData, rows]);
+
+  // Auto-selecionar primeira empresa se nada estiver salvo ou se o id salvo não existir mais
+  useEffect(() => {
+    if (empresas.length === 0) return;
+    if (!selectedId || !empresas.find((e) => e.id === selectedId)) {
+      setSelectedEmpresaId(empresas[0].id);
+    }
+  }, [empresas, selectedId]);
+
+  const empresa: EmpresaInfo | null = useMemo(
+    () => empresas.find((e) => e.id === selectedId) ?? empresas[0] ?? null,
+    [empresas, selectedId]
+  );
+
+  // ── Tema CSS dinâmico ──────────────────────────────────────────────────────
+
   useEffect(() => {
     if (empresa?.cor_primaria) {
       applyEmpresaTheme(empresa.cor_primaria);
     } else {
       resetTheme();
     }
-    return () => {
-      resetTheme();
-    };
+    return () => { resetTheme(); };
   }, [empresa?.cor_primaria]);
 
   return (
     <EmpresaContext.Provider
       value={{
         empresa,
-        isLoading,
+        empresas,
+        selectedEmpresaId: selectedId,
+        setSelectedEmpresaId,
+        isLoading: rowsLoading || (isAdminMaster && allLoading),
         isAdminMaster,
         hasEmpresa: rows.length > 0,
       }}
