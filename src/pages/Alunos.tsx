@@ -1418,7 +1418,7 @@ const Alunos = () => {
 
   return (
     <div>
-      <PageHeader title="Alunos" description="Gerencie o cadastro de alunos do Grupo Excellence">
+      <PageHeader title={empresa?.modulos?.includes("consorcios-pipeline") ? "Clientes" : "Alunos"} description="Gerencie o cadastro de alunos do Grupo Excellence">
         <input
           type="file"
           accept=".xlsx,.xls,.csv"

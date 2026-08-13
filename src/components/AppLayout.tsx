@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 
 const routeTitles: Record<string, string> = {
   "/": "Início",
@@ -34,7 +35,10 @@ const routeTitles: Record<string, string> = {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const pageTitle = routeTitles[location.pathname] ?? "Sistema GEx";
+  const { empresa } = useEmpresa();
+  const isConsorcioPrincipal = empresa?.modulos?.includes("consorcios-pipeline") ?? false;
+  const rawTitle = routeTitles[location.pathname] ?? "Sistema GEx";
+  const pageTitle = rawTitle === "Alunos" && isConsorcioPrincipal ? "Clientes" : rawTitle;
 
   return (
     <SidebarProvider>
