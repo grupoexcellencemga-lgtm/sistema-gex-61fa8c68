@@ -281,7 +281,8 @@ export function TabFinanceiroLead({
   // ── No contract — form ──
   if (!contrato && showForm) {
     return (
-      <div className="px-5 py-4 space-y-4 overflow-y-auto">
+      <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Registrar Contrato</h3>
           <button onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground">
@@ -364,6 +365,7 @@ export function TabFinanceiroLead({
             Criar e gerar {prazo || "?"} parcelas
           </Button>
         </div>
+      </div>
       </div>
     );
   }
