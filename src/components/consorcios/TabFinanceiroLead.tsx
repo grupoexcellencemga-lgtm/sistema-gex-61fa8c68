@@ -230,6 +230,8 @@ export function TabFinanceiroLead({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcio-contrato", lead.id] });
       qc.invalidateQueries({ queryKey: ["consorcios-contratos-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-contratos-financeiro-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-parcelas-financeiro-all"] });
       setShowForm(false);
       toast.success("Contrato criado e parcelas geradas");
     },
@@ -247,6 +249,8 @@ export function TabFinanceiroLead({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcio-parcelas", contrato?.id] });
       qc.invalidateQueries({ queryKey: ["consorcios-contratos-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-parcelas-financeiro-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-contratos-financeiro-all"] });
       setPagandoId(null);
       toast.success("Pagamento registrado");
     },
@@ -264,6 +268,7 @@ export function TabFinanceiroLead({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcio-contrato", lead.id] });
       qc.invalidateQueries({ queryKey: ["consorcios-contratos-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-contratos-financeiro-all"] });
       toast.success("Comissão marcada como paga");
     },
     onError: (e: any) => toast.error("Erro: " + e.message),
