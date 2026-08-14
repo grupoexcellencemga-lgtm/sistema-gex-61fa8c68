@@ -5,6 +5,7 @@ import {
   ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter,
   CalendarDays, Home, Kanban, LayoutList, Crown, ChevronDown, Check,
 } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { APP_VERSION } from "@/lib/version";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +83,8 @@ export function AppSidebar() {
   const { canAccess } = usePermissions();
   const { empresa, empresas, isAdminMaster, hasEmpresa, setSelectedEmpresaId } = useEmpresa();
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -136,7 +139,15 @@ export function AppSidebar() {
             {empresas.map((e) => (
               <DropdownMenuItem
                 key={e.id}
-                onClick={() => setSelectedEmpresaId(e.id)}
+                onClick={() => {
+                  setSelectedEmpresaId(e.id);
+                  // Se a rota atual não pertence aos módulos da nova empresa, volta para o início
+                  const allPageKeys = menuGroups.flatMap((g) => g.items.map((i) => ({ url: i.url, pageKey: i.pageKey })));
+                  const currentItem = allPageKeys.find((i) => location.pathname.startsWith(i.url) && i.url !== "/");
+                  if (currentItem && !e.modulos.includes(currentItem.pageKey)) {
+                    navigate("/");
+                  }
+                }}
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <span
