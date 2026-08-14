@@ -31,10 +31,12 @@ import { TabConsorcios } from "@/components/financeiro/TabConsorcios";
 
 const Financeiro = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { empresa } = useEmpresa();
+  const { empresa, empresas } = useEmpresa();
   const modulos = empresa?.modulos ?? [];
 
   const hasModulo = (key: string) => modulos.includes(key as any);
+  // Verifica se QUALQUER empresa do grupo tem o módulo (ex: consórcio em empresa separada)
+  const anyHasModulo = (key: string) => empresas.some((e) => e.modulos.includes(key as any));
 
   const activeTab = searchParams.get("tab") || "dashboard";
 
@@ -120,7 +122,7 @@ const Financeiro = () => {
               <Building2 className="h-4 w-4" /> Contas
             </TabsTrigger>
 
-            {hasModulo("consorcios-pipeline") && (
+            {anyHasModulo("consorcios-pipeline") && (
               <TabsTrigger value="consorcios" className="gap-1.5 shrink-0">
                 <DollarSign className="h-4 w-4" /> Consórcio
               </TabsTrigger>
@@ -180,7 +182,7 @@ const Financeiro = () => {
           <TabFechamento />
         </TabsContent>
 
-        {hasModulo("consorcios-pipeline") && (
+        {anyHasModulo("consorcios-pipeline") && (
           <TabsContent value="consorcios">
             <TabConsorcios />
           </TabsContent>

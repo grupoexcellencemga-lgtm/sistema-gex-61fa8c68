@@ -94,8 +94,6 @@ type PFilter = "todas" | "pendente" | "vencido" | "pago";
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TabConsorcios() {
-  const { empresa } = useEmpresa();
-  const empresaId = empresa?.id;
   const qc = useQueryClient();
 
   const [pFilter, setPFilter] = useState<PFilter>("todas");
@@ -104,43 +102,37 @@ export function TabConsorcios() {
   const [pgData,   setPgData]    = useState(hoje);
   const [pgForma,  setPgForma]   = useState("pix");
 
-  // ── Queries ──
+  // ── Queries — sem filtro de empresa_id para cruzar todas as empresas do grupo ──
 
   const { data: leads = [] } = useQuery<LeadRow[]>({
-    queryKey: ["consorcio-leads-names", empresaId],
+    queryKey: ["consorcio-leads-names-all"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("consorcios_leads").select("id, nome")
-        .eq("empresa_id", empresaId!).is("deleted_at", null);
+        .from("consorcios_leads").select("id, nome").is("deleted_at", null);
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!empresaId,
   });
   const leadsMap = useMemo(() => new Map(leads.map((l) => [l.id, l.nome])), [leads]);
 
   const { data: contratos = [], isLoading: cLoad } = useQuery<Contrato[]>({
-    queryKey: ["consorcio-contratos-financeiro", empresaId],
+    queryKey: ["consorcio-contratos-financeiro-all"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("consorcios_contratos").select("*")
-        .eq("empresa_id", empresaId!).is("deleted_at", null);
+        .from("consorcios_contratos").select("*").is("deleted_at", null);
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!empresaId,
   });
 
   const { data: parcelas = [], isLoading: pLoad } = useQuery<Parcela[]>({
-    queryKey: ["consorcio-parcelas-financeiro", empresaId],
+    queryKey: ["consorcio-parcelas-financeiro-all"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("consorcios_parcelas").select("*")
-        .eq("empresa_id", empresaId!);
+        .from("consorcios_parcelas").select("*");
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!empresaId,
   });
 
   const parcelasR = useMemo(() =>
@@ -188,8 +180,8 @@ export function TabConsorcios() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["consorcio-parcelas-financeiro", empresaId] });
-      qc.invalidateQueries({ queryKey: ["consorcios-contratos-all", empresaId] });
+      qc.invalidateQueries({ queryKey: ["consorcio-parcelas-financeiro-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcios-contratos-all"] });
       qc.invalidateQueries({ queryKey: ["consorcio-parcelas"] });
       setPagandoId(null);
       toast.success("Pagamento registrado");
