@@ -27,6 +27,7 @@ import { TabContasPagarReceber } from "@/components/financeiro/TabContasPagarRec
 import { DashboardFinanceiro } from "@/components/dashboard/DashboardFinanceiro";
 import { TabReembolsos } from "@/components/financeiro/TabReembolsos";
 import { TabEventos } from "@/components/financeiro/TabEventos";
+import { TabConsorcios } from "@/components/financeiro/TabConsorcios";
 
 const Financeiro = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -118,6 +119,12 @@ const Financeiro = () => {
             <TabsTrigger value="contas" className="gap-1.5 shrink-0">
               <Building2 className="h-4 w-4" /> Contas
             </TabsTrigger>
+
+            {hasModulo("consorcios-pipeline") && (
+              <TabsTrigger value="consorcios" className="gap-1.5 shrink-0">
+                <DollarSign className="h-4 w-4" /> Consórcio
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -172,6 +179,12 @@ const Financeiro = () => {
         <TabsContent value="contas">
           <TabFechamento />
         </TabsContent>
+
+        {hasModulo("consorcios-pipeline") && (
+          <TabsContent value="consorcios">
+            <TabConsorcios />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

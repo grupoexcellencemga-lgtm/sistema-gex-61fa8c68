@@ -27,7 +27,7 @@ import {
   ChevronLeft, ChevronRight, Pencil, Kanban,
   PanelLeftClose, PanelLeftOpen, Edit2, Check, X,
   Phone, MoreHorizontal, Tag, Calendar, MessageSquare,
-  Share2, FileText, Send, Tag as TagIcon,
+  Share2, FileText, Send, Tag as TagIcon, DollarSign,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Link } from "react-router-dom";
@@ -40,6 +40,7 @@ import {
   type Segmento, type InteracaoTipo,
 } from "@/lib/consorcios";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { TabFinanceiroLead } from "@/components/consorcios/TabFinanceiroLead";
 
 // ── Default etapas ao criar novo quadro ───────────────────────────────────────
 
@@ -81,7 +82,7 @@ function daysBadgeClass(d: number): string {
 // ── LeadCard ──────────────────────────────────────────────────────────────────
 
 function LeadCard({
-  lead, comerciaisMap, etapaNome, onClick, onDelete, isOverlay = false,
+  lead, comerciaisMap, etapaNome, onClick, onDelete, isOverlay = false, hasContract = false,
 }: {
   lead: ConsorcioLead;
   comerciaisMap: Map<string, string>;
@@ -89,6 +90,7 @@ function LeadCard({
   onClick: () => void;
   onDelete: () => void;
   isOverlay?: boolean;
+  hasContract?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
@@ -124,6 +126,11 @@ function LeadCard({
           <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", daysBadgeClass(d))}>
             {d}d
           </span>
+          {hasContract && (
+            <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <DollarSign className="h-2.5 w-2.5" />
+            </span>
+          )}
         </div>
         <div
           className="flex items-center gap-1.5"
@@ -222,7 +229,7 @@ function KanbanColumn({
   etapa, leads, comerciaisMap,
   onLeadClick, onDeleteLead,
   onEditEtapa, onDeleteEtapa, onMoveEtapa,
-  canMoveLeft, canMoveRight,
+  canMoveLeft, canMoveRight, contractLeadIds,
 }: {
   etapa: FunilEtapa;
   leads: ConsorcioLead[];
@@ -234,6 +241,7 @@ function KanbanColumn({
   onMoveEtapa: (etapa: FunilEtapa, direction: -1 | 1) => void;
   canMoveLeft: boolean;
   canMoveRight: boolean;
+  contractLeadIds?: Set<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa.id });
   const cores = ETAPA_CORES[etapa.cor] || ETAPA_CORES.slate;
@@ -286,6 +294,7 @@ function KanbanColumn({
             etapaNome={etapa.nome}
             onClick={() => onLeadClick(lead)}
             onDelete={() => onDeleteLead(lead.id)}
+            hasContract={contractLeadIds?.has(lead.id)}
           />
         ))}
         {leads.length === 0 && (
@@ -447,6 +456,8 @@ function LeadDetailDialog({
   onUpdated: () => void;
 }) {
   const qc = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id ?? "";
   const [form, setForm] = useState<LeadConsorcioForm>(EMPTY_LEAD_FORM);
   const [dirty, setDirty] = useState(false);
   const [novaInteracao, setNovaInteracao] = useState<{ tipo: InteracaoTipo; descricao: string }>({ tipo: "nota", descricao: "" });
@@ -760,6 +771,9 @@ function LeadDetailDialog({
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="dados">Dados</TabsTrigger>
+                  <TabsTrigger value="financeiro" className="gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5" />Financeiro
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -927,6 +941,16 @@ function LeadDetailDialog({
                   </Button>
                 </div>
               </TabsContent>
+
+              {/* Financeiro */}
+              <TabsContent value="financeiro" className="flex-1 m-0 p-0 overflow-hidden">
+                <TabFinanceiroLead
+                  lead={lead}
+                  etapa={etapaAtual}
+                  comerciais={comerciais}
+                  empresaId={empresaId}
+                />
+              </TabsContent>
             </Tabs>
           </div>
         </div>
@@ -1029,6 +1053,19 @@ const Pipeline = () => {
 
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
+
+  const { data: contratos = [] } = useQuery<Array<{ lead_id: string }>>({
+    queryKey: ["consorcios-contratos-all", empresaId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("consorcios_contratos").select("lead_id")
+        .eq("empresa_id", empresaId!).is("deleted_at", null);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+  const contractLeadIds = useMemo(() => new Set(contratos.map((c) => c.lead_id)), [contratos]);
 
   const currentEtapaIds = useMemo(() => new Set(etapas.map((e) => e.id)), [etapas]);
   const quadroLeads = useMemo(() => leads.filter((l) => l.etapa_id && currentEtapaIds.has(l.etapa_id)), [leads, currentEtapaIds]);
@@ -1370,6 +1407,7 @@ const Pipeline = () => {
                             onMoveEtapa={handleMoveEtapa}
                             canMoveLeft={idx > 0}
                             canMoveRight={idx < etapasOrdenadas.length - 1}
+                            contractLeadIds={contractLeadIds}
                           />
                         ))}
                         <div className="flex flex-col w-[200px] shrink-0 pt-1">
