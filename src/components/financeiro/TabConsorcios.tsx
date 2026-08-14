@@ -93,8 +93,18 @@ type PFilter = "todas" | "pendente" | "vencido" | "pago";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// converte string numérica do Supabase para number
+const n = (v: any): number => Number(v) || 0;
+
 export function TabConsorcios() {
+  const { empresas } = useEmpresa();
   const qc = useQueryClient();
+
+  // IDs das empresas que têm módulo de consórcio (isolamento: só dados de consórcio)
+  const consorcioIds = useMemo(
+    () => empresas.filter((e) => e.modulos.includes("consorcios-pipeline" as any)).map((e) => e.id),
+    [empresas],
+  );
 
   const [pFilter, setPFilter] = useState<PFilter>("todas");
   const [mesFiltro, setMesFiltro] = useState<string>("todos");
@@ -102,37 +112,59 @@ export function TabConsorcios() {
   const [pgData,   setPgData]    = useState(hoje);
   const [pgForma,  setPgForma]   = useState("pix");
 
-  // ── Queries — sem filtro de empresa_id para cruzar todas as empresas do grupo ──
+  // ── Queries — filtradas pelas empresas de consórcio do grupo ──
 
   const { data: leads = [] } = useQuery<LeadRow[]>({
-    queryKey: ["consorcio-leads-names-all"],
+    queryKey: ["consorcio-leads-names-all", consorcioIds],
     queryFn: async () => {
+      if (!consorcioIds.length) return [];
       const { data, error } = await (supabase as any)
-        .from("consorcios_leads").select("id, nome").is("deleted_at", null);
+        .from("consorcios_leads").select("id, nome")
+        .in("empresa_id", consorcioIds).is("deleted_at", null);
       if (error) throw error;
       return data ?? [];
     },
+    enabled: consorcioIds.length > 0,
   });
   const leadsMap = useMemo(() => new Map(leads.map((l) => [l.id, l.nome])), [leads]);
 
   const { data: contratos = [], isLoading: cLoad } = useQuery<Contrato[]>({
-    queryKey: ["consorcio-contratos-financeiro-all"],
+    queryKey: ["consorcio-contratos-financeiro-all", consorcioIds],
     queryFn: async () => {
+      if (!consorcioIds.length) return [];
       const { data, error } = await (supabase as any)
-        .from("consorcios_contratos").select("*").is("deleted_at", null);
+        .from("consorcios_contratos").select("*")
+        .in("empresa_id", consorcioIds).is("deleted_at", null);
       if (error) throw error;
-      return data ?? [];
+      // Converte NUMERIC (string) para number
+      return (data ?? []).map((c: any) => ({
+        ...c,
+        valor_credito:  n(c.valor_credito),
+        taxa_admin:     n(c.taxa_admin),
+        valor_parcela:  n(c.valor_parcela),
+        comissao_pct:   n(c.comissao_pct),
+        comissao_valor: c.comissao_valor != null ? n(c.comissao_valor) : null,
+      })) as Contrato[];
     },
+    enabled: consorcioIds.length > 0,
   });
 
   const { data: parcelas = [], isLoading: pLoad } = useQuery<Parcela[]>({
-    queryKey: ["consorcio-parcelas-financeiro-all"],
+    queryKey: ["consorcio-parcelas-financeiro-all", consorcioIds],
     queryFn: async () => {
+      if (!consorcioIds.length) return [];
       const { data, error } = await (supabase as any)
-        .from("consorcios_parcelas").select("*");
+        .from("consorcios_parcelas").select("*")
+        .in("empresa_id", consorcioIds);
       if (error) throw error;
-      return data ?? [];
+      // Converte NUMERIC (string) para number
+      return (data ?? []).map((p: any) => ({
+        ...p,
+        valor:      n(p.valor),
+        valor_pago: p.valor_pago != null ? n(p.valor_pago) : null,
+      })) as Parcela[];
     },
+    enabled: consorcioIds.length > 0,
   });
 
   const parcelasR = useMemo(() =>
@@ -159,7 +191,8 @@ export function TabConsorcios() {
   [contratos]);
 
   const recebidoMes = useMemo(() =>
-    parcelasR.filter((p) => p.status === "pago" && p.data_pagamento?.startsWith(mesAtual))
+    parcelasR
+      .filter((p) => p.status === "pago" && p.data_pagamento?.startsWith(mesAtual))
       .reduce((s, p) => s + (p.valor_pago ?? p.valor), 0),
   [parcelasR]);
 

@@ -155,7 +155,15 @@ export function TabFinanceiroLead({
         .is("deleted_at", null)
         .maybeSingle();
       if (error) throw error;
-      return data as Contrato | null;
+      if (!data) return null;
+      return {
+        ...data,
+        valor_credito:  Number(data.valor_credito),
+        taxa_admin:     Number(data.taxa_admin),
+        valor_parcela:  Number(data.valor_parcela),
+        comissao_pct:   Number(data.comissao_pct),
+        comissao_valor: data.comissao_valor != null ? Number(data.comissao_valor) : null,
+      } as Contrato;
     },
     enabled: !!lead.id,
   });
@@ -169,7 +177,11 @@ export function TabFinanceiroLead({
         .eq("contrato_id", contrato!.id)
         .order("numero_parcela", { ascending: true });
       if (error) throw error;
-      return data as Parcela[];
+      return (data ?? []).map((p: any) => ({
+        ...p,
+        valor:      Number(p.valor),
+        valor_pago: p.valor_pago != null ? Number(p.valor_pago) : null,
+      })) as Parcela[];
     },
     enabled: !!contrato?.id,
   });
@@ -232,6 +244,7 @@ export function TabFinanceiroLead({
       qc.invalidateQueries({ queryKey: ["consorcios-contratos-all"] });
       qc.invalidateQueries({ queryKey: ["consorcio-contratos-financeiro-all"] });
       qc.invalidateQueries({ queryKey: ["consorcio-parcelas-financeiro-all"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-leads-names-all"] });
       setShowForm(false);
       toast.success("Contrato criado e parcelas geradas");
     },
