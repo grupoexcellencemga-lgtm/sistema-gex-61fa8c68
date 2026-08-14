@@ -275,7 +275,7 @@ const Funil = () => {
 
       await Promise.all(
         ETAPAS_PADRAO.map((e, i) =>
-          (supabase as any).from("funil_etapas").insert({ ...e, quadro_id: quadro.id, ordem: i, observacoes: null })
+          (supabase as any).from("funil_etapas").insert({ ...e, quadro_id: quadro.id, ordem: i, observacoes: null, empresa_id: empresaId })
         )
       );
 
@@ -536,7 +536,7 @@ const Funil = () => {
 
   const handleDeleteEtapa = (etapa: FunilEtapa) => {
     if (etapas.length <= 1) { toast.error("O funil precisa de ao menos uma coluna."); return; }
-    if (confirm(`Excluir a coluna "${etapa.nome}"?`)) deleteEtapaMutation.mutate(etapa);
+    deleteEtapaMutation.mutate(etapa);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -757,10 +757,7 @@ const Funil = () => {
                         </Button>
                         <Button
                           size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                          onClick={() => {
-                            if (confirm(`Excluir o quadro "${quadro.nome}"? As colunas sem leads serão removidas.`))
-                              deleteQuadroMutation.mutate(quadro);
-                          }}
+                          onClick={() => deleteQuadroMutation.mutate(quadro)}
                           title="Excluir"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -842,10 +839,7 @@ const Funil = () => {
                               leads={getLeadsByEtapa(etapa.id)}
                               comerciaisMap={comerciaisMap}
                               onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
-                              onDeleteLead={(lead) => {
-                                if (confirm(`Excluir o lead "${lead.nome}"? Esta ação não pode ser desfeita.`))
-                                  deleteLeadMutation.mutate(lead.id);
-                              }}
+                              onDeleteLead={(lead) => deleteLeadMutation.mutate(lead.id)}
                               onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
                               onDeleteEtapa={handleDeleteEtapa}
                               onMoveEtapa={handleMoveEtapa}
