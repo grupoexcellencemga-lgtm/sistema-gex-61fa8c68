@@ -76,7 +76,7 @@ const AppRoutes = () => {
     return <LoadingScreen />;
   }
 
-  // Public routes — accessible regardless of auth state
+  // Public routes — accessible regardless of auth state (no PWA prompts)
   if (location.pathname.startsWith("/inscricao/") || location.pathname.startsWith("/e/")) {
     return (
       <Suspense fallback={<LoadingScreen />}>
@@ -90,14 +90,19 @@ const AppRoutes = () => {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="*" element={<Auth />} />
-      </Routes>
+      <>
+        <Routes>
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="*" element={<Auth />} />
+        </Routes>
+        <PWAUpdatePrompt />
+        <IOSInstallPrompt />
+      </>
     );
   }
 
   return (
+    <>
     <EmpresaProvider>
       <AppLayout>
         <ErrorBoundary inline resetKey={location.pathname}>
@@ -137,6 +142,9 @@ const AppRoutes = () => {
         </ErrorBoundary>
       </AppLayout>
     </EmpresaProvider>
+    <PWAUpdatePrompt />
+    <IOSInstallPrompt />
+    </>
   );
 };
 
@@ -149,8 +157,6 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <AppRoutes />
-            <PWAUpdatePrompt />
-            <IOSInstallPrompt />
           </BrowserRouter>
         </TooltipProvider>
       </QueryClientProvider>
