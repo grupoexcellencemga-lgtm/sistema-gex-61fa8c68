@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -52,6 +52,24 @@ export function ParticipantesSection({
   const { data: formasPagamento = [] } = useFormasPagamento();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+  const queryClient = useQueryClient();
+
+  const cancelarMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("eventos")
+        .update({ status: "cancelado" } as any)
+        .eq("id", evento.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["eventos"] });
+      queryClient.invalidateQueries({ queryKey: ["evento-operacao", evento.id] });
+      queryClient.invalidateQueries({ queryKey: ["proximos-eventos-card"] });
+      toast.success("Evento cancelado. Os dados foram preservados.");
+    },
+    onError: (err: any) => toast.error("Erro ao cancelar: " + err.message),
+  });
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "participantes";
@@ -326,6 +344,7 @@ export function ParticipantesSection({
         turmas={turmas}
         onBack={onBack}
         onEditEvento={onEditEvento}
+        onCancelarEvento={() => cancelarMutation.mutate()}
         onImportFile={setImportFile}
         onExport={() =>
           exportParticipantes(participantes, evento, formasPagamento)

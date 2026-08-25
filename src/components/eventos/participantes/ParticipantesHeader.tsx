@@ -4,6 +4,16 @@ import { UTMLinksDialog } from "./UTMLinksDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowLeft,
   Users,
   Pencil,
@@ -16,6 +26,7 @@ import {
   CheckCircle2,
   Package,
   Link2,
+  XCircle,
 } from "lucide-react";
 import {
   formatDate,
@@ -29,6 +40,7 @@ interface Props {
   turmas: any[];
   onBack: () => void;
   onEditEvento: (e: any) => void;
+  onCancelarEvento: () => void;
   onImportFile: (file: File) => void;
   onExport: () => void;
   onOpenMetrics: () => void;
@@ -42,6 +54,7 @@ export function ParticipantesHeader({
   turmas,
   onBack,
   onEditEvento,
+  onCancelarEvento,
   onImportFile,
   onExport,
   onOpenMetrics,
@@ -49,6 +62,8 @@ export function ParticipantesHeader({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [utmOpen, setUtmOpen] = useState(false);
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
+  const jaCancelado = evento.status === "cancelado";
 
   const isPago = evento.pago;
   const total = participantes.length;
@@ -103,13 +118,29 @@ export function ParticipantesHeader({
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onEditEvento(evento)}
-        >
-          <Pencil className="h-4 w-4 mr-1" /> Editar Evento
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEditEvento(evento)}
+          >
+            <Pencil className="h-4 w-4 mr-1" /> Editar Evento
+          </Button>
+          {jaCancelado ? (
+            <Badge variant="destructive" className="gap-1 px-3 py-1.5 text-sm">
+              <XCircle className="h-3.5 w-3.5" /> Cancelado
+            </Badge>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={() => setConfirmCancelar(true)}
+            >
+              <XCircle className="h-4 w-4 mr-1" /> Cancelar Evento
+            </Button>
+          )}
+        </div>
       </div>
 
       {evento.descricao && (
@@ -231,6 +262,29 @@ export function ParticipantesHeader({
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={confirmCancelar} onOpenChange={setConfirmCancelar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar o evento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O evento será marcado como <strong>Cancelado</strong>. Ele não vai mais aparecer
+              na tela de Início, nas notificações nem nos próximos eventos — mas todos os
+              dados (leads, participantes e checklist) serão preservados. Esta ação pode ser
+              desfeita alterando o status novamente no painel de operação.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => { onCancelarEvento(); setConfirmCancelar(false); }}
+            >
+              Sim, cancelar evento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
