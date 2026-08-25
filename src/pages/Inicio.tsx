@@ -81,7 +81,7 @@ const Inicio = () => {
     queryKey: ["inicio-agenda", hoje, empresaId],
     queryFn: async () => {
       const [{ data: eventos }, { data: encontros }, { data: googleEventos }] = await Promise.all([
-        supabase.from("eventos").select("id, nome").eq("empresa_id", empresaId!).eq("data", hoje).is("deleted_at", null),
+        supabase.from("eventos").select("id, nome").eq("empresa_id", empresaId!).eq("data", hoje).is("deleted_at", null).neq("status", "cancelado"),
         (supabase as any)
           .from("encontros")
           .select("id, sessao_numero, turma_id, turmas(nome, produtos(nome))")

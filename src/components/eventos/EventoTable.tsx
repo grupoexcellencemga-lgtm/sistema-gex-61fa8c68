@@ -36,10 +36,17 @@ export function EventoTable({ eventos, isLoading, countParticipantes, onSelect, 
             <TableBody>
               {eventos.map((e: any) => {
                 const total = countParticipantes(e.id);
+                const cancelado = e.status === "cancelado";
                 return (
-                  <TableRow key={e.id} className="cursor-pointer transition-snappy hover:bg-secondary/50" onClick={() => onSelect(e)}>
+                  <TableRow key={e.id} className={`cursor-pointer transition-snappy hover:bg-secondary/50 ${cancelado ? "opacity-60" : ""}`} onClick={() => onSelect(e)}>
                     <TableCell>
-                      <div><p className="font-medium text-sm">{e.nome}</p><p className="text-xs text-muted-foreground">{e.tipo}</p></div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{e.nome}</p>
+                          {cancelado && <Badge variant="destructive" className="text-xs py-0">Cancelado</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{e.tipo}</p>
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm">{formatDate(e.data)}</TableCell>
                     <TableCell><div className="flex items-center gap-1 text-sm"><MapPin className="h-3 w-3 text-muted-foreground" />{e.local || "—"}</div></TableCell>

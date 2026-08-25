@@ -13,6 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   LayoutDashboard,
   ListChecks,
   Users,
@@ -64,6 +74,7 @@ export function EventoDetailSheet({
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const [templateEscolhido, setTemplateEscolhido] = useState<string>("");
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSubTab = searchParams.get("sub") || "resumo";
   const handleSubTabChange = (v: string) => {
@@ -243,7 +254,10 @@ export function EventoDetailSheet({
               <span className="text-sm text-muted-foreground">Status do evento:</span>
               <Select
                 value={eventoAtual.status || "planejado"}
-                onValueChange={(v) => statusMutation.mutate(v)}
+                onValueChange={(v) => {
+                  if (v === "cancelado") { setConfirmCancelar(true); return; }
+                  statusMutation.mutate(v);
+                }}
               >
                 <SelectTrigger className="w-44 h-9">
                   <SelectValue />
@@ -390,6 +404,29 @@ export function EventoDetailSheet({
           <PaginaPublicaTab evento={eventoAtual} />
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={confirmCancelar} onOpenChange={setConfirmCancelar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar o evento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O evento será marcado como <strong>Cancelado</strong>. Ele não vai mais aparecer
+              na tela de Início, nas notificações nem nos próximos eventos — mas todos os
+              dados (leads, participantes e checklist) serão preservados. Esta ação pode ser
+              desfeita alterando o status novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => { statusMutation.mutate("cancelado"); setConfirmCancelar(false); }}
+            >
+              Sim, cancelar evento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

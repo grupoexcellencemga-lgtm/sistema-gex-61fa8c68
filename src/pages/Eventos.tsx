@@ -5,7 +5,7 @@ import { definirChecklistDoEvento, recalcularPrazosDoEvento } from "@/lib/checkl
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, XCircle, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { NOMES_MES } from "@/components/agenda/agendaUtils";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -67,14 +67,17 @@ const Eventos = () => {
 
   // Navegação por mês
   const [verTodos, setVerTodos] = useState(false);
+  const [verCancelados, setVerCancelados] = useState(false);
   const [mesRef, setMesRef] = useState(() => {
     const h = new Date(Date.now() - 3 * 3_600_000);
     return new Date(h.getFullYear(), h.getMonth(), 1);
   });
   const refMesStr = `${mesRef.getFullYear()}-${String(mesRef.getMonth() + 1).padStart(2, "0")}`;
+  const eventosCancelados = eventos.filter((e: any) => e.status === "cancelado");
+  const eventosAtivos = eventos.filter((e: any) => e.status !== "cancelado");
   const eventosDoMes = verTodos
-    ? eventos
-    : eventos.filter((e: any) => e.data && e.data.slice(0, 7) === refMesStr);
+    ? eventosAtivos
+    : eventosAtivos.filter((e: any) => e.data && e.data.slice(0, 7) === refMesStr);
   const irMes = (delta: number) =>
     setMesRef((r) => new Date(r.getFullYear(), r.getMonth() + delta, 1));
   const irHoje = () => {
@@ -416,6 +419,31 @@ const Eventos = () => {
         onEdit={openEdit}
         onDelete={(id) => deleteMutation.mutate(id)}
       />
+
+      {eventosCancelados.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setVerCancelados((v) => !v)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <XCircle className="h-4 w-4 text-destructive" />
+            {eventosCancelados.length} evento(s) cancelado(s)
+            <ChevronDown className={`h-4 w-4 transition-transform ${verCancelados ? "rotate-180" : ""}`} />
+          </button>
+          {verCancelados && (
+            <div className="mt-3">
+              <EventoTable
+                eventos={eventosCancelados}
+                isLoading={false}
+                countParticipantes={countParticipantes}
+                onSelect={openEventoDetail}
+                onEdit={openEdit}
+                onDelete={(id) => deleteMutation.mutate(id)}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

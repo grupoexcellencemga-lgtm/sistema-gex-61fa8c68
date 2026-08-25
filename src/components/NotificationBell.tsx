@@ -70,7 +70,7 @@ export function NotificationBell() {
 
       const { data } = await (supabase as any)
         .from("tarefas")
-        .select("id, titulo, data_vencimento, evento_id, eventos(nome)")
+        .select("id, titulo, data_vencimento, evento_id, eventos(nome, status)")
         .in("id", tarefaIds)
         .eq("empresa_id", empresaId)
         .eq("status", "pendente")
@@ -78,7 +78,7 @@ export function NotificationBell() {
         .not("data_vencimento", "is", null)
         .lte("data_vencimento", limite)
         .order("data_vencimento", { ascending: true });
-      return data || [];
+      return (data || []).filter((t: any) => t.eventos?.status !== "cancelado");
     },
     enabled: !!user && !!empresaId,
     refetchInterval: 60000,

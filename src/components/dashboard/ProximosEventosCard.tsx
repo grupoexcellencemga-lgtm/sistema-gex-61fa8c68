@@ -49,6 +49,7 @@ export function ProximosEventosCard() {
           .select("id, nome, tipo, data")
           .eq("empresa_id", empresaId!)
           .is("deleted_at", null)
+          .neq("status", "cancelado")
           .gte("data", hoje)
           .lte("data", limite),
         (supabase as any)
