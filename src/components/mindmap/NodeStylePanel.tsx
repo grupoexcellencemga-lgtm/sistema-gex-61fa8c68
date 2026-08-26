@@ -62,6 +62,7 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const labelTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSelRef = useRef({ start: 0, end: 0 });
 
   useEffect(() => {
     setLabelText((d.label as string) || "");
@@ -75,8 +76,8 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
   const applyFormatting = useCallback((marker: string, globalKey: "bold" | "italic") => {
     const el = labelTextareaRef.current;
     if (!el) { update(globalKey, !d[globalKey]); return; }
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
+    const start = lastSelRef.current.start;
+    const end = lastSelRef.current.end;
     if (start === end) { update(globalKey, !d[globalKey]); return; }
 
     const selected = labelText.slice(start, end);
@@ -112,8 +113,8 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
   const insertEmoji = useCallback((emoji: string) => {
     const el = labelTextareaRef.current;
     if (el) {
-      const start = el.selectionStart ?? labelText.length;
-      const end = el.selectionEnd ?? start;
+      const start = lastSelRef.current.start;
+      const end = lastSelRef.current.end;
       const newLabel = labelText.slice(0, start) + emoji + labelText.slice(end);
       setLabelText(newLabel);
       onUpdate(node.id, { label: newLabel });
@@ -309,7 +310,22 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
           className="w-full text-[11px] border border-border rounded p-1.5 bg-background text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary min-h-[52px]"
           value={labelText}
           onChange={(e) => setLabelText(e.target.value)}
-          onBlur={() => onUpdate(node.id, { label: labelText })}
+          onSelect={(e) => {
+            const el = e.target as HTMLTextAreaElement;
+            lastSelRef.current = { start: el.selectionStart, end: el.selectionEnd };
+          }}
+          onClick={(e) => {
+            const el = e.target as HTMLTextAreaElement;
+            lastSelRef.current = { start: el.selectionStart, end: el.selectionEnd };
+          }}
+          onKeyUp={(e) => {
+            const el = e.target as HTMLTextAreaElement;
+            lastSelRef.current = { start: el.selectionStart, end: el.selectionEnd };
+          }}
+          onBlur={(e) => {
+            lastSelRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
+            onUpdate(node.id, { label: labelText });
+          }}
           placeholder="Texto do nó..."
         />
       </div>
