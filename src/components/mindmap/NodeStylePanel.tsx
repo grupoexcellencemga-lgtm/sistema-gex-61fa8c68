@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   Bold, Italic, Image as ImageIcon, StickyNote, ExternalLink, Trash2, Upload, Loader2,
@@ -239,43 +240,38 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
       </div>
 
       {/* Emojis */}
-      <div>
-        <Label className="text-[11px] text-muted-foreground mb-1 block">Emojis</Label>
-        {[
-          {
-            label: "Checklist",
-            emojis: ["✅", "☑️", "🔲", "⬜", "❌", "✔️", "❎", "📋", "📝", "🗒️"],
-          },
-          {
-            label: "Status",
-            emojis: ["🟢", "🟡", "🔴", "🟠", "🔵", "⚫", "⚪", "🔴", "🛑", "⚠️"],
-          },
-          {
-            label: "Prioridade",
-            emojis: ["🔥", "‼️", "❗", "⭐", "💡", "📌", "📍", "🎯", "🏆", "🚀"],
-          },
-          {
-            label: "Pessoas",
-            emojis: ["👤", "👥", "💪", "🙌", "👍", "👎", "🧠", "💬", "📣", "🤝"],
-          },
-        ].map((grupo) => (
-          <div key={grupo.label} className="mb-1.5">
-            <span className="text-[10px] text-muted-foreground block mb-0.5">{grupo.label}</span>
-            <div className="flex flex-wrap gap-0.5">
-              {grupo.emojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  className="text-base leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
-                  title={emoji}
-                  onClick={() => update("label", ((d.label as string) || "") + emoji)}
-                >
-                  {emoji}
-                </button>
-              ))}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="w-full h-7 text-[11px] gap-1.5">
+            😊 Emojis
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent side="left" align="start" className="w-64 p-3">
+          <p className="text-[11px] font-semibold mb-2">Clique para adicionar ao nó</p>
+          {[
+            { label: "Checklist", emojis: ["✅", "☑️", "🔲", "⬜", "❌", "✔️", "❎", "📋", "📝", "🗒️"] },
+            { label: "Status",    emojis: ["🟢", "🟡", "🔴", "🟠", "🔵", "⚫", "⚪", "🛑", "⚠️", "💤"] },
+            { label: "Prioridade",emojis: ["🔥", "‼️", "❗", "⭐", "💡", "📌", "📍", "🎯", "🏆", "🚀"] },
+            { label: "Pessoas",   emojis: ["👤", "👥", "💪", "🙌", "👍", "👎", "🧠", "💬", "📣", "🤝"] },
+          ].map((grupo) => (
+            <div key={grupo.label} className="mb-2">
+              <span className="text-[10px] text-muted-foreground font-medium block mb-0.5">{grupo.label}</span>
+              <div className="flex flex-wrap gap-0.5">
+                {grupo.emojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    className="text-lg leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                    title={emoji}
+                    onClick={() => update("label", ((d.label as string) || "") + emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </PopoverContent>
+      </Popover>
 
       {/* List style */}
       <div>
