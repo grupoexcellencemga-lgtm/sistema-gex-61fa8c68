@@ -411,17 +411,8 @@ const Eventos = () => {
         </div>
       </div>
 
-      <EventoTable
-        eventos={eventosDoMes}
-        isLoading={isLoading}
-        countParticipantes={countParticipantes}
-        onSelect={openEventoDetail}
-        onEdit={openEdit}
-        onDelete={(id) => deleteMutation.mutate(id)}
-      />
-
       {eventosCancelados.length > 0 && (
-        <div className="mt-6">
+        <div className="mb-4">
           <button
             onClick={() => setVerCancelados((v) => !v)}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -444,6 +435,15 @@ const Eventos = () => {
           )}
         </div>
       )}
+
+      <EventoTable
+        eventos={eventosDoMes}
+        isLoading={isLoading}
+        countParticipantes={countParticipantes}
+        onSelect={openEventoDetail}
+        onEdit={openEdit}
+        onDelete={(id) => deleteMutation.mutate(id)}
+      />
     </div>
   );
 };
