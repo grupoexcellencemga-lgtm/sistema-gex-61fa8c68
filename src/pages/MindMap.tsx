@@ -223,17 +223,23 @@ const MindMap = () => {
       if (!parentNode) return;
       pushHistory();
       const childId = crypto.randomUUID();
+      // child fica à direita do pai por padrão
+      const childPos = { x: parentNode.position.x + 250, y: parentNode.position.y + Math.random() * 100 - 50 };
       const newNode: Node = {
         id: childId,
         type: "mindmap",
-        position: { x: parentNode.position.x + 250, y: parentNode.position.y + Math.random() * 100 - 50 },
+        position: childPos,
         data: { label: "Nova ideia", color: parentNode.data.color || NODE_COLORS[0], isRoot: false, textColor: "#000000" },
       };
       const lineColor = (parentNode.data.color as string) || NODE_COLORS[0];
+      // filho à direita → handle "right" do pai → handle "left" do filho
+      const childIsRight = childPos.x >= parentNode.position.x;
       const newEdge: Edge = {
         id: `e-${parentId}-${childId}`,
         source: parentId,
         target: childId,
+        sourceHandle: childIsRight ? "right" : "left",
+        targetHandle: childIsRight ? "left" : "right",
         type: "smoothstep",
         style: { stroke: lineColor, strokeWidth: 2 },
       };
@@ -252,20 +258,25 @@ const MindMap = () => {
       if (!currentNode) return;
       pushHistory();
       const siblingId = crypto.randomUUID();
+      const siblingPos = { x: currentNode.position.x, y: currentNode.position.y + 80 };
       const newNode: Node = {
         id: siblingId,
         type: "mindmap",
-        position: { x: currentNode.position.x, y: currentNode.position.y + 80 },
+        position: siblingPos,
         data: { label: "Nova ideia", color: currentNode.data.color || NODE_COLORS[0], isRoot: false, textColor: "#000000" },
       };
       setNodes((nds) => [...nds, newNode]);
       if (parentEdge) {
         const parentNode = nodes.find((n) => n.id === parentEdge.source);
         const lineColor = (parentNode?.data.color as string) || NODE_COLORS[0];
+        // determina o lado baseado na posição relativa ao pai
+        const siblingIsRight = parentNode ? siblingPos.x >= parentNode.position.x : true;
         const newEdge: Edge = {
           id: `e-${parentEdge.source}-${siblingId}`,
           source: parentEdge.source,
           target: siblingId,
+          sourceHandle: siblingIsRight ? "right" : "left",
+          targetHandle: siblingIsRight ? "left" : "right",
           type: "smoothstep",
           style: { stroke: lineColor, strokeWidth: 2 },
         };
@@ -393,6 +404,8 @@ const MindMap = () => {
           id: `e-${parentId}-${childId}`,
           source: parentId,
           target: childId,
+          sourceHandle: "right",
+          targetHandle: "left",
           type: "smoothstep",
           style: { stroke: lineColor, strokeWidth: 2 },
         });
