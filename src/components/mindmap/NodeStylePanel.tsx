@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Node } from "@xyflow/react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -57,14 +57,39 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
   const [uploading, setUploading] = useState(false);
   const [videoUploading, setVideoUploading] = useState(false);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [labelText, setLabelText] = useState((d.label as string) || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const labelTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setLabelText((d.label as string) || "");
+  }, [d.label]);
 
   const update = useCallback(
     (key: string, value: any) => onUpdate(node.id, { [key]: value }),
     [node.id, onUpdate]
   );
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = labelTextareaRef.current;
+    if (el) {
+      const start = el.selectionStart ?? labelText.length;
+      const end = el.selectionEnd ?? start;
+      const newLabel = labelText.slice(0, start) + emoji + labelText.slice(end);
+      setLabelText(newLabel);
+      onUpdate(node.id, { label: newLabel });
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      const newLabel = labelText + emoji;
+      setLabelText(newLabel);
+      onUpdate(node.id, { label: newLabel });
+    }
+  }, [labelText, node.id, onUpdate]);
 
   return (
     <div className="bg-card border border-border rounded-lg p-3 shadow-lg space-y-3 w-56 max-h-[70vh] overflow-y-auto text-xs">
@@ -239,6 +264,19 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
         </div>
       </div>
 
+      {/* Texto do nó — clique para posicionar o cursor antes de inserir emoji */}
+      <div>
+        <Label className="text-[11px] text-muted-foreground mb-1 block">Texto do nó</Label>
+        <textarea
+          ref={labelTextareaRef}
+          className="w-full text-[11px] border border-border rounded p-1.5 bg-background text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary min-h-[52px]"
+          value={labelText}
+          onChange={(e) => setLabelText(e.target.value)}
+          onBlur={() => onUpdate(node.id, { label: labelText })}
+          placeholder="Texto do nó..."
+        />
+      </div>
+
       {/* Emojis */}
       <Popover>
         <PopoverTrigger asChild>
@@ -262,7 +300,7 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
                     key={emoji}
                     className="text-lg leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-muted transition-colors"
                     title={emoji}
-                    onClick={() => update("label", ((d.label as string) || "") + emoji)}
+                    onClick={() => insertEmoji(emoji)}
                   >
                     {emoji}
                   </button>
