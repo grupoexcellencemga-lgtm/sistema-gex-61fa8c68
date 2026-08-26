@@ -238,6 +238,45 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
         </div>
       </div>
 
+      {/* Emojis */}
+      <div>
+        <Label className="text-[11px] text-muted-foreground mb-1 block">Emojis</Label>
+        {[
+          {
+            label: "Checklist",
+            emojis: ["✅", "☑️", "🔲", "⬜", "❌", "✔️", "❎", "📋", "📝", "🗒️"],
+          },
+          {
+            label: "Status",
+            emojis: ["🟢", "🟡", "🔴", "🟠", "🔵", "⚫", "⚪", "🔴", "🛑", "⚠️"],
+          },
+          {
+            label: "Prioridade",
+            emojis: ["🔥", "‼️", "❗", "⭐", "💡", "📌", "📍", "🎯", "🏆", "🚀"],
+          },
+          {
+            label: "Pessoas",
+            emojis: ["👤", "👥", "💪", "🙌", "👍", "👎", "🧠", "💬", "📣", "🤝"],
+          },
+        ].map((grupo) => (
+          <div key={grupo.label} className="mb-1.5">
+            <span className="text-[10px] text-muted-foreground block mb-0.5">{grupo.label}</span>
+            <div className="flex flex-wrap gap-0.5">
+              {grupo.emojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  className="text-base leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                  title={emoji}
+                  onClick={() => update("label", ((d.label as string) || "") + emoji)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* List style */}
       <div>
         <Label className="text-[11px] text-muted-foreground mb-1 block">Lista / marcadores</Label>
