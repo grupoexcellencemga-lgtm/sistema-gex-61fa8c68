@@ -3,6 +3,22 @@ import { Handle, Position, type NodeProps, useReactFlow } from "@xyflow/react";
 import { Plus, StickyNote, ExternalLink, Image as ImageIcon, Video, Lock, LockOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type Seg = { t: string; b: boolean; i: boolean };
+function parseMarkdown(raw: string, gb: boolean, gi: boolean): Seg[] {
+  const segs: Seg[] = [];
+  const re = /\*\*([\s\S]+?)\*\*|\*([^*]+?)\*/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) segs.push({ t: raw.slice(last, m.index), b: gb, i: gi });
+    if (m[1] !== undefined) segs.push({ t: m[1], b: true, i: gi });
+    else segs.push({ t: m[2], b: gb, i: true });
+    last = m.index + m[0].length;
+  }
+  if (last < raw.length) segs.push({ t: raw.slice(last), b: gb, i: gi });
+  return segs;
+}
+
 function getVideoEmbedUrl(url: string): string | null {
   try {
     const u = new URL(url);
@@ -189,15 +205,17 @@ function MindMapNode({ id, data, selected }: NodeProps) {
             className="text-sm break-words whitespace-pre-wrap"
             style={{
               color: textColor,
-              fontWeight: bold ? "bold" : "normal",
-              fontStyle: italic ? "italic" : "normal",
               fontSize: `${fontSize}px`,
               textAlign: textAlign as any,
               display: "block",
               width: "100%",
             }}
           >
-            {displayLabel}
+            {parseMarkdown(displayLabel, !!bold, !!italic).map((seg, i) => (
+              <span key={i} style={{ fontWeight: seg.b ? "bold" : "normal", fontStyle: seg.i ? "italic" : "normal" }}>
+                {seg.t}
+              </span>
+            ))}
           </span>
         )}
 

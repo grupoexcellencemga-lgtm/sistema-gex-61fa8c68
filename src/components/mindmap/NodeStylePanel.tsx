@@ -72,6 +72,43 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
     [node.id, onUpdate]
   );
 
+  const applyFormatting = useCallback((marker: string, globalKey: "bold" | "italic") => {
+    const el = labelTextareaRef.current;
+    if (!el) { update(globalKey, !d[globalKey]); return; }
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    if (start === end) { update(globalKey, !d[globalKey]); return; }
+
+    const selected = labelText.slice(start, end);
+    const before = labelText.slice(0, start);
+    const after = labelText.slice(end);
+
+    const surroundedBy = before.endsWith(marker) && after.startsWith(marker);
+    const selfWrapped = selected.startsWith(marker) && selected.endsWith(marker) && selected.length > marker.length * 2;
+
+    let newLabel: string;
+    let newStart: number;
+    let newEnd: number;
+
+    if (surroundedBy) {
+      newLabel = before.slice(0, -marker.length) + selected + after.slice(marker.length);
+      newStart = start - marker.length;
+      newEnd = end - marker.length;
+    } else if (selfWrapped) {
+      newLabel = before + selected.slice(marker.length, -marker.length) + after;
+      newStart = start;
+      newEnd = end - marker.length * 2;
+    } else {
+      newLabel = before + marker + selected + marker + after;
+      newStart = start + marker.length;
+      newEnd = end + marker.length;
+    }
+
+    setLabelText(newLabel);
+    onUpdate(node.id, { label: newLabel });
+    setTimeout(() => { el.focus(); el.setSelectionRange(newStart, newEnd); }, 0);
+  }, [labelText, d, node.id, onUpdate, update]);
+
   const insertEmoji = useCallback((emoji: string) => {
     const el = labelTextareaRef.current;
     if (el) {
@@ -164,7 +201,7 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
             size="icon"
             variant={d.bold ? "default" : "outline"}
             className="h-7 w-7"
-            onClick={() => update("bold", !d.bold)}
+            onClick={() => applyFormatting("**", "bold")}
           >
             <Bold className="h-3 w-3" />
           </Button>
@@ -172,7 +209,7 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
             size="icon"
             variant={d.italic ? "default" : "outline"}
             className="h-7 w-7"
-            onClick={() => update("italic", !d.italic)}
+            onClick={() => applyFormatting("*", "italic")}
           >
             <Italic className="h-3 w-3" />
           </Button>
