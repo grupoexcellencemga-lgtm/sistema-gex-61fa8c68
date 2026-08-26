@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Loader2, Plus, Building2, Receipt, Pencil, Trash2, Download, X, Check, History, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDate, formatCurrency } from "./financeiroUtils";
@@ -31,6 +32,8 @@ export const TabFechamento = () => {
   const [fechamentoLoading, setFechamentoLoading] = useState<string | null>(null);
   const autoFechamentoRodouRef = useRef(false);
   const [autoFechamentoLoading, setAutoFechamentoLoading] = useState(false);
+  const [deleteConfirmConta, setDeleteConfirmConta] = useState<{ id: string; nome: string } | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
 
   const { data: contas = [], isLoading } = useQuery({
     queryKey: ["contas_bancarias_all", empresaId],
@@ -1078,7 +1081,7 @@ export const TabFechamento = () => {
                           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                             <Badge variant={c.ativo ? "default" : "outline"} className="text-xs">{c.ativo ? "Ativa" : "Inativa"}</Badge>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteConta.mutate(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { setDeleteConfirmConta({ id: c.id, nome: c.nome }); setDeleteConfirmInput(""); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                           </div>
                         </div>
                       </div>
@@ -1198,6 +1201,40 @@ export const TabFechamento = () => {
         </CardContent>
       </Card>
 
+
+      {/* Confirmação de exclusão de conta */}
+      <AlertDialog open={!!deleteConfirmConta} onOpenChange={(o) => { if (!o) setDeleteConfirmConta(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conta bancária</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita facilmente. Para confirmar, digite o nome da conta exatamente como aparece:
+              <span className="block mt-2 font-semibold text-foreground">{deleteConfirmConta?.nome}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            placeholder={deleteConfirmConta?.nome}
+            value={deleteConfirmInput}
+            onChange={(e) => setDeleteConfirmInput(e.target.value)}
+            className="mt-1"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmInput !== deleteConfirmConta?.nome}
+              onClick={() => {
+                if (deleteConfirmConta) {
+                  deleteConta.mutate(deleteConfirmConta.id);
+                  setDeleteConfirmConta(null);
+                }
+              }}
+            >
+              Excluir
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog Extratos Anteriores */}
       <Dialog open={extratosOpen} onOpenChange={setExtratosOpen}>
