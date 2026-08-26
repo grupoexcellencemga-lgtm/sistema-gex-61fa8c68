@@ -197,12 +197,14 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
       {/* Node size */}
       <div>
         <Label className="text-[11px] text-muted-foreground mb-1 block">Tamanho do nó</Label>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {[
             { label: "P", value: 160 },
             { label: "M", value: 250 },
             { label: "G", value: 350 },
             { label: "GG", value: 450 },
+            { label: "3G", value: 600 },
+            { label: "4G", value: 800 },
           ].map((s) => (
             <Button
               key={s.label}
@@ -214,6 +216,25 @@ export default function NodeStylePanel({ node, onUpdate, onBulkImages }: NodeSty
               {s.label}
             </Button>
           ))}
+        </div>
+        <div className="flex items-center gap-1 mt-1">
+          <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Personalizado (px):</Label>
+          <Input
+            type="number"
+            min={100}
+            max={2000}
+            step={50}
+            defaultValue={d.nodeWidth || 160}
+            key={d.nodeWidth}
+            className="h-6 text-[11px] px-1"
+            onBlur={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 100 && v <= 2000) update("nodeWidth", v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+          />
         </div>
       </div>
 
