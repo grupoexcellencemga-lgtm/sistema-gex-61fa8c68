@@ -25,11 +25,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Edit2, Check, X, Download, PanelLeftClose, PanelLeft, Brain, Undo2, Hand, MousePointer2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Download, PanelLeftClose, PanelLeft, Brain, Undo2, Hand, MousePointer2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import MindMapNode from "@/components/mindmap/MindMapNode";
 import NodeStylePanel from "@/components/mindmap/NodeStylePanel";
+import MindMapAgenda, { type Agenda } from "@/components/mindmap/MindMapAgenda";
 import NodeContextMenu from "@/components/mindmap/NodeContextMenu";
 
 const nodeTypes = { mindmap: MindMapNode };
@@ -48,6 +49,7 @@ const MindMap = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const [newMapName, setNewMapName] = useState("");
   const [editingMapId, setEditingMapId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -130,6 +132,11 @@ const MindMap = () => {
       updated_at: new Date().toISOString(),
     }).eq("id", mapId);
   }, []);
+
+  const saveAgenda = useCallback(async (agenda: Agenda) => {
+    if (!selectedMapId) return;
+    await supabase.from("mindmaps").update({ agenda: agenda as any }).eq("id", selectedMapId);
+  }, [selectedMapId]);
 
   // Troca de mapa: salva o atual antes de mudar
   const handleMapSelect = useCallback(async (newMapId: string) => {
@@ -668,6 +675,9 @@ const MindMap = () => {
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={undo} disabled={history.length === 0}>
                   <Undo2 className="h-3 w-3 mr-1" /> Desfazer
                 </Button>
+                <Button size="sm" variant={agendaOpen ? "default" : "outline"} className="h-7 text-xs" onClick={() => setAgendaOpen(o => !o)}>
+                  <CalendarDays className="h-3 w-3 mr-1" /> Dias
+                </Button>
               </div>
             </Panel>
 
@@ -709,6 +719,17 @@ const MindMap = () => {
           </ReactFlow>
         )}
       </div>
+
+      {/* Agenda de dias */}
+      {selectedMapId && (
+        <MindMapAgenda
+          open={agendaOpen}
+          onOpenChange={setAgendaOpen}
+          mindmapId={selectedMapId}
+          agenda={(currentMap as any)?.agenda ?? null}
+          onSave={saveAgenda}
+        />
+      )}
 
       {/* Context menu */}
       {contextMenu && (
