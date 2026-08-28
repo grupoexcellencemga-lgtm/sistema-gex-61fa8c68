@@ -3,9 +3,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, FileText, Paperclip, X, ExternalLink } from "lucide-react";
+import { Loader2, FileText, Paperclip, X, ExternalLink, CheckCircle2, Clock } from "lucide-react";
 import { gerarContratoMatricula } from "@/lib/pdfUtils";
 import { formatCurrency, formatDate } from "./alunosUtils";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +14,13 @@ import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { abrirComprovante } from "@/lib/comprovantes";
+import { cn } from "@/lib/utils";
+
+const ASAAS_FORMAS = [
+  { codigo: "asaas_pix", nome: "PIX (ASAAS)" },
+  { codigo: "asaas_boleto", nome: "Boleto bancário (ASAAS)" },
+  { codigo: "asaas_cartao", nome: "Cartão de crédito (ASAAS)" },
+];
 
 interface Props {
   open: boolean;
@@ -71,6 +78,9 @@ export const MatriculaFormDialog = ({
   const formaAtual = formasPagamento.find(
     (f) => f.codigo === matriculaForm.forma_pagamento
   );
+
+  const modalidade: "ja_pago" | "a_pagar" = matriculaForm.modalidade_cobranca || "ja_pago";
+  const isAsaasFP = ASAAS_FORMAS.some(f => f.codigo === matriculaForm.forma_pagamento);
 
   const isCredito = ["credito", "cartao", "cartao_credito"].includes(
     matriculaForm.forma_pagamento
@@ -345,6 +355,44 @@ export const MatriculaFormDialog = ({
             </div>
           </div>
 
+          {/* Toggle: Já foi pago / A pagar */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMatriculaForm((p: any) => ({
+                ...p,
+                modalidade_cobranca: "ja_pago",
+                forma_pagamento: isAsaasFP ? "" : p.forma_pagamento,
+              }))}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                modalidade === "ja_pago"
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+              )}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Já foi pago
+            </button>
+            <button
+              type="button"
+              onClick={() => setMatriculaForm((p: any) => ({
+                ...p,
+                modalidade_cobranca: "a_pagar",
+                conta_bancaria_id: "",
+              }))}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                modalidade === "a_pagar"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+              )}
+            >
+              <Clock className="h-4 w-4" />
+              A pagar (cobrar via ASAAS)
+            </button>
+          </div>
+
           <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
             <p className="text-sm font-semibold">Valores do Contrato</p>
 
@@ -438,54 +486,81 @@ export const MatriculaFormDialog = ({
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        formasPagamentoLoading
-                          ? "Carregando..."
-                          : "Selecione"
+                        formasPagamentoLoading ? "Carregando..." : "Selecione"
                       }
                     />
                   </SelectTrigger>
 
                   <SelectContent>
-                    {formasPagamento.map((forma) => (
-                      <SelectItem key={forma.id} value={forma.codigo}>
-                        {forma.nome}
-                      </SelectItem>
-                    ))}
-
-                    {formasPagamento.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        Nenhuma forma cadastrada
-                      </div>
+                    {modalidade === "a_pagar" ? (
+                      <>
+                        {ASAAS_FORMAS.map((f) => (
+                          <SelectItem key={f.codigo} value={f.codigo}>
+                            {f.nome}
+                          </SelectItem>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        {formasPagamento.map((forma) => (
+                          <SelectItem key={forma.id} value={forma.codigo}>
+                            {forma.nome}
+                          </SelectItem>
+                        ))}
+                        {formasPagamento.length === 0 && (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            Nenhuma forma cadastrada
+                          </div>
+                        )}
+                      </>
                     )}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div>
-                <Label>Conta Bancária</Label>
-                <Select
-                  value={matriculaForm.conta_bancaria_id}
-                  onValueChange={(v) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      conta_bancaria_id: v,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o banco" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {contasBancarias.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nome} ({c.banco})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {modalidade === "ja_pago" ? (
+                <div>
+                  <Label>Conta Bancária</Label>
+                  <Select
+                    value={matriculaForm.conta_bancaria_id}
+                    onValueChange={(v) =>
+                      setMatriculaForm((p) => ({ ...p, conta_bancaria_id: v }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o banco" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contasBancarias.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.nome} ({c.banco})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex items-end">
+                  <p className="text-xs text-muted-foreground leading-tight pb-1">
+                    O pagamento será processado pelo ASAAS e o saldo ficará disponível na conta ASAAS.
+                  </p>
+                </div>
+              )}
             </div>
+
+            {/* Banner ASAAS */}
+            {modalidade === "a_pagar" && isAsaasFP && (
+              <div className="flex gap-2.5 items-start rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-3">
+                <span className="text-base mt-px">⚡</span>
+                <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                  <span className="font-semibold">Cobrança automática via ASAAS.</span> Ao salvar, o aluno receberá o{" "}
+                  {matriculaForm.forma_pagamento === "asaas_pix" ? "QR Code PIX" :
+                   matriculaForm.forma_pagamento === "asaas_boleto" ? "boleto bancário" :
+                   "link de pagamento por cartão"} por e-mail automaticamente.
+                  O status do pagamento no GEx será atualizado assim que for confirmado.
+                </p>
+              </div>
+            )}
 
             {showTaxa && taxaPercentual > 0 && (
               <div className="rounded-md border p-3 bg-accent/30 space-y-2">
