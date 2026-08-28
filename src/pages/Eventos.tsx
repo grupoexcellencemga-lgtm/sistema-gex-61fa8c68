@@ -189,6 +189,7 @@ const Eventos = () => {
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
         pergunta_inscricao: data.pergunta_inscricao || null,
         asaas_link_pagamento: data.asaas_link_pagamento || null,
+        pix_chave: data.pix_chave || null,
       }).select("id, nome, tipo, data").single();
       if (error) throw error;
 
@@ -245,6 +246,7 @@ const Eventos = () => {
         produto_id: data.produto_id || null, turma_id: data.turma_id || null,
         pergunta_inscricao: data.pergunta_inscricao || null,
         asaas_link_pagamento: data.asaas_link_pagamento || null,
+        pix_chave: data.pix_chave || null,
       }).eq("id", id);
       if (error) throw error;
 
@@ -282,6 +284,7 @@ const Eventos = () => {
           produto_id: form.produto_id || null, turma_id: form.turma_id || null,
           pergunta_inscricao: form.pergunta_inscricao || null,
           asaas_link_pagamento: form.asaas_link_pagamento || null,
+          pix_chave: form.pix_chave || null,
         }));
       }
     },
@@ -310,6 +313,7 @@ const Eventos = () => {
       checklist_template_id: e.checklist_template_id || "",
       pergunta_inscricao: e.pergunta_inscricao || "",
       asaas_link_pagamento: e.asaas_link_pagamento || "",
+      pix_chave: e.pix_chave || "",
     });
     setEditingId(e.id); setDialogOpen(true);
   };

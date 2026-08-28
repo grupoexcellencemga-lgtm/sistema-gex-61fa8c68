@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarDays, MapPin, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, CalendarDays, MapPin, CheckCircle2, ExternalLink, Copy, Check, QrCode, CreditCard } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const Inscricao = () => {
   const { eventoId } = useParams<{ eventoId: string }>();
@@ -16,13 +17,14 @@ const Inscricao = () => {
   const utmSource = searchParams.get("utm_source") ?? undefined;
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", observacoes: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
 
   const { data: evento, isLoading, error } = useQuery({
     queryKey: ["inscricao-evento", eventoId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("eventos")
-        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status, pergunta_inscricao, asaas_link_pagamento")
+        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status, pergunta_inscricao, asaas_link_pagamento, pix_chave")
         .eq("id", eventoId)
         .is("deleted_at", null)
         .single();
@@ -107,18 +109,68 @@ const Inscricao = () => {
             <MapPin className="h-4 w-4" /> {evento.local}
           </p>
         )}
-        {evento.pago && evento.asaas_link_pagamento && (
-          <div className="pt-2 space-y-2">
-            <p className="text-sm font-medium">Agora realize o pagamento para garantir sua vaga:</p>
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={() => window.open(evento.asaas_link_pagamento, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Pagar agora
-            </Button>
-            <p className="text-xs text-muted-foreground">Você será redirecionado para o ambiente seguro de pagamento.</p>
+        {evento.pago && (evento.pix_chave || evento.asaas_link_pagamento) && (
+          <div className="pt-2 w-full space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-sm font-semibold text-foreground">Pagar agora</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* PIX */}
+            {evento.pix_chave && (
+              <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 p-4 space-y-3 text-left">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                    <QrCode className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-emerald-900 dark:text-emerald-200 text-sm">Pagar com PIX</p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400">Aprovação imediata</p>
+                  </div>
+                  {evento.valor > 0 && (
+                    <span className="ml-auto font-bold text-emerald-800 dark:text-emerald-200 text-lg">
+                      R$ {Number(evento.valor).toFixed(2).replace(".", ",")}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 bg-white dark:bg-emerald-900/30 rounded-xl border border-emerald-200 dark:border-emerald-700 px-3 py-2.5">
+                  <span className="text-sm font-mono flex-1 text-foreground tracking-wide">{evento.pix_chave}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={cn("shrink-0 h-7 px-2 gap-1 text-xs", pixCopiado ? "text-emerald-600" : "text-muted-foreground")}
+                    onClick={() => {
+                      navigator.clipboard.writeText(evento.pix_chave);
+                      setPixCopiado(true);
+                      toast.success("Chave PIX copiada!");
+                      setTimeout(() => setPixCopiado(false), 3000);
+                    }}
+                  >
+                    {pixCopiado ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {pixCopiado ? "Copiado!" : "Copiar"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 text-center">
+                  Copie a chave e cole no app do seu banco para pagar
+                </p>
+              </div>
+            )}
+
+            {/* Cartão de crédito */}
+            {evento.asaas_link_pagamento && (
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full gap-2 border-2 h-12 text-sm font-semibold"
+                onClick={() => window.open(evento.asaas_link_pagamento, "_blank", "noopener,noreferrer")}
+              >
+                <CreditCard className="h-4 w-4" />
+                Pagar no Crédito
+                <ExternalLink className="h-3.5 w-3.5 ml-auto opacity-50" />
+              </Button>
+            )}
           </div>
         )}
       </div>

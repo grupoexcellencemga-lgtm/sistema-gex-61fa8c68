@@ -25,13 +25,14 @@ export interface EventoForm {
   checklist_template_id: string;
   pergunta_inscricao: string;
   asaas_link_pagamento: string;
+  pix_chave: string;
 }
 
 export const emptyForm: EventoForm = {
   nome: "", data: "", local: "", tipo: "", responsavelIds: [],
   limite_participantes: "", descricao: "", pago: false, valor: "",
   comunidade: false, vincular_turma: false, produto_id: "", turma_id: "",
-  checklist_template_id: "", pergunta_inscricao: "", asaas_link_pagamento: "",
+  checklist_template_id: "", pergunta_inscricao: "", asaas_link_pagamento: "", pix_chave: "",
 };
 
 interface Props {
@@ -206,14 +207,25 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
                   <Input type="number" step="0.01" min="0" value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Link de pagamento ASAAS (opcional)</Label>
+                  <Label>Chave PIX (opcional)</Label>
+                  <Input
+                    value={form.pix_chave}
+                    onChange={(e) => u("pix_chave", e.target.value)}
+                    placeholder="CNPJ, CPF, e-mail ou chave aleatória"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Aparecerá como opção de pagamento via PIX na página de inscrição.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Link de pagamento ASAAS — Cartão (opcional)</Label>
                   <Input
                     value={form.asaas_link_pagamento}
                     onChange={(e) => u("asaas_link_pagamento", e.target.value)}
                     placeholder="https://www.asaas.com/c/..."
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Cole aqui o link de checkout gerado no ASAAS. Ele aparecerá como botão "Pagar agora" após a inscrição.
+                    Link de checkout do ASAAS. Aparecerá como botão "Pagar no Crédito" após a inscrição.
                   </p>
                 </div>
               </div>
