@@ -47,7 +47,7 @@ export function UTMLinksDialog({ open, onOpenChange, evento }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Links de inscrição com rastreamento</DialogTitle>
           <DialogDescription>
@@ -57,11 +57,11 @@ export function UTMLinksDialog({ open, onOpenChange, evento }: Props) {
 
         <div className="mt-2 space-y-2">
           {/* Link simples sem UTM */}
-          <div className="flex items-center gap-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-2.5">
+          <div className="flex items-start gap-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-2.5">
             <Link className="h-5 w-5 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">Link simples</p>
-              <p className="text-xs text-muted-foreground truncate">{base}</p>
+              <p className="text-xs text-muted-foreground break-all">{base}</p>
             </div>
             <Button
               variant={copied === "__base__" ? "default" : "outline"}
@@ -85,11 +85,11 @@ export function UTMLinksDialog({ open, onOpenChange, evento }: Props) {
             const url = buildUrl(source, medium);
             const isCopied = copied === source;
             return (
-              <div key={source} className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+              <div key={source} className="flex items-start gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
                 <span className="text-lg shrink-0">{emoji}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{url}</p>
+                  <p className="text-xs text-muted-foreground break-all">{url}</p>
                 </div>
                 <Button
                   variant={isCopied ? "default" : "outline"}
