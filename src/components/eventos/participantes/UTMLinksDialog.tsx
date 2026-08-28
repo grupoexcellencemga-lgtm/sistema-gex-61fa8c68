@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Link } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -56,6 +56,31 @@ export function UTMLinksDialog({ open, onOpenChange, evento }: Props) {
         </DialogHeader>
 
         <div className="mt-2 space-y-2">
+          {/* Link simples sem UTM */}
+          <div className="flex items-center gap-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-2.5">
+            <Link className="h-5 w-5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Link simples</p>
+              <p className="text-xs text-muted-foreground truncate">{base}</p>
+            </div>
+            <Button
+              variant={copied === "__base__" ? "default" : "outline"}
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                navigator.clipboard.writeText(base).then(() => {
+                  setCopied("__base__");
+                  toast.success("Link copiado!");
+                  setTimeout(() => setCopied(null), 2000);
+                });
+              }}
+            >
+              {copied === "__base__" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground pt-1">Com rastreamento de origem:</p>
+
           {CANAIS.map(({ label, source, medium, emoji }) => {
             const url = buildUrl(source, medium);
             const isCopied = copied === source;
