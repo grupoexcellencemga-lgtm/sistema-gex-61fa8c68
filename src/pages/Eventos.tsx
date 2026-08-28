@@ -73,7 +73,9 @@ const Eventos = () => {
     return new Date(h.getFullYear(), h.getMonth(), 1);
   });
   const refMesStr = `${mesRef.getFullYear()}-${String(mesRef.getMonth() + 1).padStart(2, "0")}`;
-  const eventosCancelados = eventos.filter((e: any) => e.status === "cancelado");
+  const eventosCancelados = eventos.filter((e: any) =>
+    e.status === "cancelado" && (verTodos || !e.data || e.data.slice(0, 7) === refMesStr)
+  );
   const eventosAtivos = eventos.filter((e: any) => e.status !== "cancelado");
   const eventosDoMes = verTodos
     ? eventosAtivos
