@@ -24,13 +24,14 @@ export interface EventoForm {
   turma_id: string;
   checklist_template_id: string;
   pergunta_inscricao: string;
+  asaas_link_pagamento: string;
 }
 
 export const emptyForm: EventoForm = {
   nome: "", data: "", local: "", tipo: "", responsavelIds: [],
   limite_participantes: "", descricao: "", pago: false, valor: "",
   comunidade: false, vincular_turma: false, produto_id: "", turma_id: "",
-  checklist_template_id: "", pergunta_inscricao: "",
+  checklist_template_id: "", pergunta_inscricao: "", asaas_link_pagamento: "",
 };
 
 interface Props {
@@ -199,9 +200,22 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
               <Switch checked={form.pago} onCheckedChange={(v) => u("pago", v)} />
             </div>
             {form.pago && (
-              <div className="mt-4 space-y-2">
-                <Label>Valor por participante (R$)</Label>
-                <Input type="number" step="0.01" min="0" value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" />
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label>Valor por participante (R$)</Label>
+                  <Input type="number" step="0.01" min="0" value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Link de pagamento ASAAS (opcional)</Label>
+                  <Input
+                    value={form.asaas_link_pagamento}
+                    onChange={(e) => u("asaas_link_pagamento", e.target.value)}
+                    placeholder="https://www.asaas.com/c/..."
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Cole aqui o link de checkout gerado no ASAAS. Ele aparecerá como botão "Pagar agora" após a inscrição.
+                  </p>
+                </div>
               </div>
             )}
           </div>

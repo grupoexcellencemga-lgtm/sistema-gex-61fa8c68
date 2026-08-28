@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarDays, MapPin, CheckCircle2 } from "lucide-react";
+import { Loader2, CalendarDays, MapPin, CheckCircle2, ExternalLink } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 
@@ -22,7 +22,7 @@ const Inscricao = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("eventos")
-        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status, pergunta_inscricao")
+        .select("id, nome, data, local, descricao, pago, valor, limite_participantes, tipo, status, pergunta_inscricao, asaas_link_pagamento")
         .eq("id", eventoId)
         .is("deleted_at", null)
         .single();
@@ -95,7 +95,7 @@ const Inscricao = () => {
         <h1 className="text-2xl font-bold">Inscrição confirmada!</h1>
         <p className="text-muted-foreground">
           Você está inscrito em <strong>{evento.nome}</strong>.
-          {evento.pago && " Em breve entraremos em contato com as informações de pagamento."}
+          {evento.pago && !evento.asaas_link_pagamento && " Em breve entraremos em contato com as informações de pagamento."}
         </p>
         {evento.data && (
           <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
@@ -106,6 +106,20 @@ const Inscricao = () => {
           <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
             <MapPin className="h-4 w-4" /> {evento.local}
           </p>
+        )}
+        {evento.pago && evento.asaas_link_pagamento && (
+          <div className="pt-2 space-y-2">
+            <p className="text-sm font-medium">Agora realize o pagamento para garantir sua vaga:</p>
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={() => window.open(evento.asaas_link_pagamento, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Pagar agora
+            </Button>
+            <p className="text-xs text-muted-foreground">Você será redirecionado para o ambiente seguro de pagamento.</p>
+          </div>
         )}
       </div>
     </div>
