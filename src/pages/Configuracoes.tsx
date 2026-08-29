@@ -55,6 +55,7 @@ interface DadosEmpresa {
   whatsapp_url?: string;
   whatsapp_token?: string;
   whatsapp_instancia?: string;
+  whatsapp_notificacao_numero?: string;
 }
 
 interface ConfigRow {
@@ -153,6 +154,7 @@ const Configuracoes = () => {
     whatsapp_url: "",
     whatsapp_token: "",
     whatsapp_instancia: "",
+    whatsapp_notificacao_numero: "",
   });
 
   useEffect(() => {
@@ -188,6 +190,7 @@ const Configuracoes = () => {
       whatsapp_url: de.whatsapp_url || "",
       whatsapp_token: de.whatsapp_token || "",
       whatsapp_instancia: de.whatsapp_instancia || "",
+      whatsapp_notificacao_numero: de.whatsapp_notificacao_numero || "",
     });
 
     setTheme(config.tema || "system");
@@ -545,6 +548,23 @@ const Configuracoes = () => {
                   }
                   placeholder="nome-da-instancia"
                 />
+              </div>
+
+              <div>
+                <Label>Número para receber notificações de inscrição</Label>
+                <Input
+                  value={empresa.whatsapp_notificacao_numero || ""}
+                  onChange={(e) =>
+                    setEmpresa((p) => ({
+                      ...p,
+                      whatsapp_notificacao_numero: e.target.value,
+                    }))
+                  }
+                  placeholder="67999999999 (com DDD, sem +55)"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Quando alguém se inscrever em um evento, você receberá uma mensagem neste número.
+                </p>
               </div>
 
               <Button onClick={saveEmpresa} disabled={upsertConfig.isPending}>
