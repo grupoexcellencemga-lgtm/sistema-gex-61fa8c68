@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UTMLinksDialog } from "./UTMLinksDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,13 +18,10 @@ import {
   Pencil,
   Upload,
   Download,
-  BarChart3,
-  UserPlus,
   DollarSign,
   MapPin,
   CheckCircle2,
   Package,
-  Link2,
   XCircle,
 } from "lucide-react";
 import {
@@ -43,8 +39,6 @@ interface Props {
   onCancelarEvento: () => void;
   onImportFile: (file: File) => void;
   onExport: () => void;
-  onOpenMetrics: () => void;
-  onOpenAdd: () => void;
 }
 
 export function ParticipantesHeader({
@@ -57,11 +51,8 @@ export function ParticipantesHeader({
   onCancelarEvento,
   onImportFile,
   onExport,
-  onOpenMetrics,
-  onOpenAdd,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [utmOpen, setUtmOpen] = useState(false);
   const [confirmCancelar, setConfirmCancelar] = useState(false);
   const jaCancelado = evento.status === "cancelado";
 
@@ -192,16 +183,6 @@ export function ParticipantesHeader({
           </Button>
           <Button variant="outline" size="sm" onClick={onExport}>
             <Download className="h-4 w-4 mr-1" /> Exportar
-          </Button>
-          <Button variant="outline" size="sm" onClick={onOpenMetrics}>
-            <BarChart3 className="h-4 w-4 mr-1" /> Métricas
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setUtmOpen(true)}>
-            <Link2 className="h-4 w-4 mr-1" /> Links de inscrição
-          </Button>
-          <UTMLinksDialog open={utmOpen} onOpenChange={setUtmOpen} evento={evento} />
-          <Button size="sm" onClick={onOpenAdd}>
-            <UserPlus className="h-4 w-4 mr-1" /> Adicionar
           </Button>
         </div>
       </div>

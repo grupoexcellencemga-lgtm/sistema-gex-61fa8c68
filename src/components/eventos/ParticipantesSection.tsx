@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Receipt, ListChecks } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Receipt, ListChecks, BarChart3, Link2, UserPlus } from "lucide-react";
+import { UTMLinksDialog } from "./participantes/UTMLinksDialog";
 import { EventoDetailSheet } from "./EventoDetailSheet";
 import { formatPhone } from "@/lib/formatters";
 import { toast } from "sonner";
@@ -97,6 +99,7 @@ export function ParticipantesSection({
   const [isEditingParticipante, setIsEditingParticipante] = useState(false);
 
   const [metricsOpen, setMetricsOpen] = useState(false);
+  const [utmOpen, setUtmOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
 
   // Queries
@@ -349,8 +352,6 @@ export function ParticipantesSection({
         onExport={() =>
           exportParticipantes(participantes, evento, formasPagamento)
         }
-        onOpenMetrics={() => setMetricsOpen(true)}
-        onOpenAdd={openAdd}
       />
 
       {importFile && (
@@ -366,18 +367,34 @@ export function ParticipantesSection({
       )}
 
       {/* Tabs */}
+      <UTMLinksDialog open={utmOpen} onOpenChange={setUtmOpen} evento={evento} />
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList>
-          <TabsTrigger value="participantes" className="gap-1">
-            <Users className="h-4 w-4" /> Participantes
-          </TabsTrigger>
-          <TabsTrigger value="despesas" className="gap-1">
-            <Receipt className="h-4 w-4" /> Despesas
-          </TabsTrigger>
-          <TabsTrigger value="operacao" className="gap-1">
-            <ListChecks className="h-4 w-4" /> Operação
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap">
+            <TabsList>
+              <TabsTrigger value="participantes" className="gap-1">
+                <Users className="h-4 w-4" /> Participantes
+              </TabsTrigger>
+              <TabsTrigger value="despesas" className="gap-1">
+                <Receipt className="h-4 w-4" /> Despesas
+              </TabsTrigger>
+            </TabsList>
+            <Button variant="outline" size="sm" onClick={() => setMetricsOpen(true)}>
+              <BarChart3 className="h-4 w-4 mr-1" /> Métricas
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setUtmOpen(true)}>
+              <Link2 className="h-4 w-4 mr-1" /> Links
+            </Button>
+            <TabsList>
+              <TabsTrigger value="operacao" className="gap-1">
+                <ListChecks className="h-4 w-4" /> Operação
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <Button size="sm" onClick={openAdd}>
+            <UserPlus className="h-4 w-4 mr-1" /> Adicionar
+          </Button>
+        </div>
 
         <TabsContent value="participantes">
           {podeMatricular && (
