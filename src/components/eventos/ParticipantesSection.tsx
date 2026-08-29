@@ -379,17 +379,20 @@ export function ParticipantesSection({
                 <Receipt className="h-4 w-4" /> Despesas
               </TabsTrigger>
             </TabsList>
-            <Button variant="outline" size="sm" onClick={() => setMetricsOpen(true)}>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setMetricsOpen(true)}>
               <BarChart3 className="h-4 w-4 mr-1" /> Métricas
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setUtmOpen(true)}>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setUtmOpen(true)}>
               <Link2 className="h-4 w-4 mr-1" /> Links
             </Button>
-            <TabsList>
-              <TabsTrigger value="operacao" className="gap-1">
-                <ListChecks className="h-4 w-4" /> Operação
-              </TabsTrigger>
-            </TabsList>
+            <Button
+              variant={activeTab === "operacao" ? "default" : "outline"}
+              size="sm"
+              className="h-9 gap-1"
+              onClick={() => handleTabChange("operacao")}
+            >
+              <ListChecks className="h-4 w-4" /> Operação
+            </Button>
           </div>
           <Button size="sm" onClick={openAdd}>
             <UserPlus className="h-4 w-4 mr-1" /> Adicionar
