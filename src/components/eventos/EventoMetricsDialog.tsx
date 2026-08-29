@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Users, DollarSign, TrendingUp, UserCheck, Receipt, TrendingDown, GraduationCap } from "lucide-react";
+import { Users, DollarSign, TrendingUp, UserCheck, Receipt, GraduationCap, Antenna } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -12,6 +12,7 @@ interface Participante {
   valor: number | null;
   forma_pagamento: string | null;
   convidado_por: string | null;
+  utm_source: string | null;
 }
 
 interface Conversao {
@@ -59,6 +60,34 @@ const FORMA_LABELS: Record<string, string> = {
   transferencia: "Transferência",
   boleto: "Boleto",
 };
+
+const UTM_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  email: "E-mail",
+  google: "Google",
+  indicacao: "Indicação",
+  site: "Site",
+  stories: "Stories",
+  reels: "Reels",
+  direto: "Direto",
+};
+
+const UTM_COLORS = [
+  "#25D366", // WhatsApp verde
+  "#E1306C", // Instagram rosa
+  "#1877F2", // Facebook azul
+  "#FF0000", // YouTube vermelho
+  "#010101", // TikTok
+  "hsl(var(--primary))",
+  "hsl(270 60% 50%)",
+  "hsl(200 70% 50%)",
+  "hsl(45 93% 47%)",
+  "hsl(var(--muted-foreground))",
+];
 
 import { formatCurrency } from "@/lib/formatters";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -155,6 +184,20 @@ export function EventoMetricsDialog({ open, onOpenChange, participantes, evento,
   const topConvidadores = Object.entries(convidadoPorMap)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
+
+  // Origem UTM
+  const utmMap: Record<string, number> = {};
+  let semUtm = 0;
+  participantes.forEach(p => {
+    if (p.utm_source) {
+      utmMap[p.utm_source] = (utmMap[p.utm_source] || 0) + 1;
+    } else {
+      semUtm++;
+    }
+  });
+  const utmEntries = Object.entries(utmMap).sort((a, b) => b[1] - a[1]);
+  const utmTotal = participantes.length;
+  const temUtm = utmEntries.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -308,6 +351,57 @@ export function EventoMetricsDialog({ open, onOpenChange, participantes, evento,
                 )}
               </div>
             )}
+
+            {/* Origem das inscrições (UTM) */}
+            <div className="rounded-lg border bg-card p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-card-foreground flex items-center gap-2">
+                <Antenna className="h-4 w-4" /> Origem das Inscrições
+              </h4>
+              {!temUtm && semUtm === utmTotal ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma inscrição online rastreada ainda. Use os links com UTM para saber de onde cada pessoa veio.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {utmEntries.map(([source, count], i) => {
+                    const label = UTM_LABELS[source.toLowerCase()] || source;
+                    const pct = utmTotal > 0 ? Math.round((count / utmTotal) * 100) : 0;
+                    const color = UTM_COLORS[i % UTM_COLORS.length];
+                    return (
+                      <div key={source} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-card-foreground">{label}</span>
+                          <span className="text-muted-foreground">{count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: color }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {semUtm > 0 && (
+                    <div className="space-y-0.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-muted-foreground">Sem rastreamento</span>
+                        <span className="text-muted-foreground">{semUtm} ({utmTotal > 0 ? Math.round((semUtm / utmTotal) * 100) : 0}%)</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-muted-foreground/40 transition-all"
+                          style={{ width: `${Math.max(utmTotal > 0 ? Math.round((semUtm / utmTotal) * 100) : 0, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    {temUtm ? `${utmTotal - semUtm} de ${utmTotal} inscrições rastreadas via link com UTM` : ""}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Top convidadores */}
             {isComunidade && topConvidadores.length > 0 && (
