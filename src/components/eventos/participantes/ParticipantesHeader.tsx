@@ -18,6 +18,7 @@ import {
   Pencil,
   Upload,
   Download,
+  BarChart3,
   DollarSign,
   MapPin,
   CheckCircle2,
