@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,8 @@ const Alunos = () => {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+  const navigateAlunos = useNavigate();
+  const returnToRef = useRef<string | null>(null);
   const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [selectedAluno, setSelectedAluno] = useState<any>(null);
@@ -175,6 +177,8 @@ const Alunos = () => {
     const alunoId = searchParams.get("aluno");
     const tab = searchParams.get("tab") || "dados";
     if (!alunoId) return;
+    const returnTo = searchParams.get("returnTo");
+    if (returnTo) returnToRef.current = decodeURIComponent(returnTo);
     let cancelado = false;
     (async () => {
       const { data: aluno } = await supabase
@@ -189,6 +193,7 @@ const Alunos = () => {
       const next = new URLSearchParams(searchParams);
       next.delete("aluno");
       next.delete("tab");
+      next.delete("returnTo");
       setSearchParams(next, { replace: true });
     })();
     return () => { cancelado = true; };
@@ -1590,7 +1595,14 @@ const Alunos = () => {
 
       <AlunoDetailSheet
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={(v) => {
+          setSheetOpen(v);
+          if (!v && returnToRef.current) {
+            const dest = returnToRef.current;
+            returnToRef.current = null;
+            navigateAlunos(dest);
+          }
+        }}
         selectedAluno={selectedAluno}
         initialTab={initialTab}
         matriculas={matriculas}

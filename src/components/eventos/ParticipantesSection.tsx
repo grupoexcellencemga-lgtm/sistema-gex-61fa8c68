@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -216,6 +216,7 @@ export function ParticipantesSection({
   // "Matricular na turma": vira aluno (acha ou cria) e leva para a tela de
   // Alunos com a matrícula já aberta e pré-preenchida (produto + turma do evento).
   const navigate = useNavigate();
+  const location = useLocation();
   const [matriculandoId, setMatriculandoId] = useState<string | null>(null);
   const podeMatricular = !!evento?.turma_id && !evento?.comunidade;
 
@@ -257,6 +258,7 @@ export function ParticipantesSection({
         matricular_aluno: aluno.id,
         produto: evento.produto_id || "",
         turma: evento.turma_id || "",
+        returnTo: encodeURIComponent(location.pathname + location.search),
       });
       navigate(`/alunos?${params.toString()}`);
     } catch {

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,6 +41,7 @@ function SituacaoBadge({ s }: { s: SituacaoAluno }) {
 
 export function TurmaFinanceiroTab({ turma }: { turma: any }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const { data: matriculas = [], isLoading: loadingMat } = useQuery({
@@ -296,7 +297,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                     <button
                       type="button"
                       className="text-left hover:underline hover:text-primary transition-colors"
-                      onClick={() => navigate(`/alunos?aluno=${a.alunoId}&tab=financeiro`)}
+                      onClick={() => navigate(`/alunos?aluno=${a.alunoId}&tab=financeiro&returnTo=${encodeURIComponent(location.pathname + location.search)}`)}
                     >
                       {a.nome}
                     </button>
