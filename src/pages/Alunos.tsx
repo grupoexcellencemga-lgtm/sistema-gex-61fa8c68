@@ -478,7 +478,7 @@ const Alunos = () => {
         throw new Error("Selecione um produto ou uma turma vinculada a um produto.");
       }
 
-      if (valorFinal <= 0) {
+      if (valorFinal <= 0 && matriculaForm.forma_pagamento !== "permuta") {
         throw new Error("O produto selecionado está sem valor. Verifique o cadastro do produto.");
       }
 
@@ -504,7 +504,7 @@ const Alunos = () => {
 
       await salvarComprovantesMatricula(mat.id);
 
-      if (valorFinal > 0) {
+      if (valorFinal > 0 || matriculaForm.forma_pagamento === "permuta") {
         const isCartao = ["credito", "cartao_credito", "cartao"].includes(
           matriculaForm.forma_pagamento
         );
