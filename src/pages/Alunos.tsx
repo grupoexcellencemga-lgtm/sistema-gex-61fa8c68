@@ -715,7 +715,7 @@ const Alunos = () => {
 
       const valor = parseFloat(editPagForm.valor) || 0;
 
-      if (valor <= 0) {
+      if (valor <= 0 && editPagForm.forma_pagamento !== "permuta") {
         throw new Error("Valor deve ser maior que zero");
       }
 
@@ -771,7 +771,7 @@ const Alunos = () => {
 
       const valor = parseFloat(novoPagForm.valor) || 0;
 
-      if (valor <= 0) throw new Error("Valor deve ser maior que zero");
+      if (valor <= 0 && novoPagForm.forma_pagamento !== "permuta") throw new Error("Valor deve ser maior que zero");
       if (!novoPagForm.data_vencimento) throw new Error("Data de vencimento é obrigatória");
 
       const isCartao = ["credito", "cartao_credito", "cartao", "recorrencia_cartao"].includes(novoPagForm.forma_pagamento);

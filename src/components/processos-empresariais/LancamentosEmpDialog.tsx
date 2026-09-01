@@ -87,7 +87,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
   const addMutation = useMutation({
     mutationFn: async () => {
       const valor = parseCurrencyToNumber(novoValor);
-      if (valor <= 0) throw new Error("Valor inválido");
+      if (valor <= 0 && novoForma !== "permuta") throw new Error("Valor inválido");
       const parcelasInfo = calc.showParcelas && novoParcelas > 1 ? `${novoParcelas}x` : "";
       const taxaInfo = calc.showTaxa && calc.taxaPercentual > 0
         ? `Taxa ${calc.taxaPercentual.toFixed(2)}%${novoRepassar ? " (repassada)" : ""}`
