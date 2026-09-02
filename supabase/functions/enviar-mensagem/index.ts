@@ -41,6 +41,15 @@ Deno.serve(async (req) => {
     const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
     if (!apiKey) throw new Error("API key da Evolution não configurada");
     const evoUrl = `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`;
+    // Salva no DB antes de chamar a Evolution API
+    await supabase.from("mensagens_crm").insert({
+      lead_id: lead.id,
+      empresa_id: lead.empresa_id,
+      conteudo: mensagem.trim(),
+      direcao: "saida",
+      canal: "whatsapp",
+    });
+
     const evoRes = await fetch(evoUrl, {
       method: "POST",
       headers: {
@@ -57,14 +66,6 @@ Deno.serve(async (req) => {
       const evoErr = await evoRes.text();
       throw new Error(`Evolution API: ${evoErr}`);
     }
-
-    await supabase.from("mensagens_crm").insert({
-      lead_id: lead.id,
-      empresa_id: lead.empresa_id,
-      conteudo: mensagem.trim(),
-      direcao: "saida",
-      canal: "whatsapp",
-    });
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

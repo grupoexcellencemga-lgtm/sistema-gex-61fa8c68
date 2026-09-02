@@ -217,7 +217,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     const tempId = `temp-${Date.now()}`;
     queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
       ...old,
-      { id: tempId, lead_id: selectedLeadId, empresa_id: empresaId!, conteudo: texto, direcao: "saida", canal: "whatsapp", created_at: new Date().toISOString() } as Mensagem,
+      { id: tempId, conteudo: texto, direcao: "saida" as const, canal: "whatsapp", lido: null, created_at: new Date().toISOString() },
     ]);
 
     try {
