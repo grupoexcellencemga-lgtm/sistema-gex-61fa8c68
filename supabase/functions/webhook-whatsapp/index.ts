@@ -66,11 +66,23 @@ Deno.serve(async (req) => {
 
       console.log("[webhook] processando msg de:", telefone, "fromMe:", fromMe, "texto:", texto.substring(0, 50));
 
-      // Busca ou cria lead
-      const { data: lead, error: errLead } = await supabase
+      // Busca lead existente primeiro (evita conflito com índice parcial)
+      let leadId: string | undefined;
+      const { data: existingLead } = await supabase
         .from("leads")
-        .upsert(
-          {
+        .select("id")
+        .eq("contato_id", telefone)
+        .eq("canal_id", canal.id)
+        .eq("empresa_id", empresaId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (existingLead) {
+        leadId = existingLead.id;
+      } else {
+        const { data: newLead, error: insertErr } = await supabase
+          .from("leads")
+          .insert({
             nome: nomeContato,
             telefone: telefone,
             origem: "whatsapp",
@@ -78,24 +90,20 @@ Deno.serve(async (req) => {
             canal_id: canal.id,
             contato_id: telefone,
             etapa_id: ETAPA_WHATSAPP_ID,
-          },
-          { onConflict: "empresa_id,canal_id,contato_id", ignoreDuplicates: true }
-        )
-        .select("id")
-        .maybeSingle();
-
-      const leadId = lead?.id ?? (await supabase
-        .from("leads")
-        .select("id")
-        .eq("contato_id", telefone)
-        .eq("canal_id", canal.id)
-        .eq("empresa_id", empresaId)
-        .is("deleted_at", null)
-        .maybeSingle()
-      ).data?.id;
-
-      if (!leadId) { console.error("lead_id não encontrado para", telefone); continue; }
-      if (errLead) { console.error("errLead:", errLead); continue; }
+          })
+          .select("id")
+          .maybeSingle();
+        if (insertErr || !newLead) {
+          // Pode ser race condition — tenta buscar novamente
+          const { data: retry } = await supabase.from("leads").select("id")
+            .eq("contato_id", telefone).eq("canal_id", canal.id).eq("empresa_id", empresaId)
+            .is("deleted_at", null).maybeSingle();
+          leadId = retry?.id;
+          if (!leadId) { console.error("Erro ao criar lead:", insertErr); continue; }
+        } else {
+          leadId = newLead.id;
+        }
+      }
 
       await supabase.from("mensagens_crm").insert({
         lead_id: leadId,
