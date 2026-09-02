@@ -159,21 +159,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       return data as Mensagem[];
     },
     enabled: !!selectedLeadId,
+    refetchInterval: 5000,
   });
 
-  // Realtime subscription for new messages
+  // Realtime subscription for new messages (sem filtro — filtro no servidor tem limitações)
   useEffect(() => {
     if (!selectedLeadId) return;
     const channel = supabase
-      .channel(`mensagens-crm-${selectedLeadId}`)
+      .channel("mensagens-crm-global")
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "mensagens_crm",
-          filter: `lead_id=eq.${selectedLeadId}`,
-        },
+        { event: "INSERT", schema: "public", table: "mensagens_crm" },
         () => {
           queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
         }
