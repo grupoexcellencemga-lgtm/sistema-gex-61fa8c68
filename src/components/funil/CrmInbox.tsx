@@ -201,6 +201,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     return () => { supabase.removeChannel(channel); };
   }, [empresaId, quadroId, queryClient]);
 
+  async function marcarComoLido(leadId: string) {
+    await (supabase as any)
+      .from("leads")
+      .update({ tem_mensagem_nova: false })
+      .eq("id", leadId);
+    queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+  }
+
   async function handleSend() {
     if (!replyText.trim() || !selectedLeadId) return;
     setSending(true);
@@ -211,6 +219,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (error) throw error;
       setReplyText("");
       queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
+      // Ao responder, marca como lido
+      marcarComoLido(selectedLeadId);
     } catch (err: any) {
       toast.error("Erro ao enviar: " + (err.message ?? String(err)));
     } finally {
@@ -294,18 +304,26 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               {leadsFiltered.map((lead) => (
                 <button
                   key={lead.id}
-                  onClick={() => setSelectedLeadId(lead.id)}
+                  onClick={() => {
+                    setSelectedLeadId(lead.id);
+                    if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
+                  }}
                   className={cn(
                     "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
                     selectedLeadId === lead.id && "bg-primary/10"
                   )}
                 >
-                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <User className="h-4 w-4 text-muted-foreground" />
+                  <div className="relative shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    {(lead as any).tem_mensagem_nova && (
+                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background animate-pulse" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="text-sm font-medium truncate">{lead.nome}</p>
+                      <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>{lead.nome}</p>
                       {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
                         <span
                           className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
