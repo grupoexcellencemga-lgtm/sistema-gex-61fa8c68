@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -69,7 +69,29 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [moving, setMoving] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const [listWidth, setListWidth] = useState(288);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isResizing = useRef(false);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = listWidth;
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!isResizing.current) return;
+      const newWidth = Math.max(200, Math.min(520, startWidth + ev.clientX - startX));
+      setListWidth(newWidth);
+    }
+    function onMouseUp() {
+      isResizing.current = false;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [listWidth]);
 
   const etapaIds = etapas.map((e) => e.id);
 
@@ -440,7 +462,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   return (
     <div className="flex h-full" style={{ height: "calc(100svh - 18rem)", minHeight: "400px" }}>
       {/* Lista lateral */}
-      <div className="w-72 shrink-0 border-r flex flex-col bg-card">
+      <div style={{ width: listWidth, minWidth: 200, maxWidth: 520 }} className="shrink-0 flex flex-col bg-card">
 
         {/* Abas de atendimento */}
         <div className="border-b">
@@ -647,6 +669,15 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             )
           )}
         </ScrollArea>
+      </div>
+
+      {/* Handle de resize */}
+      <div
+        onMouseDown={startResize}
+        className="w-1.5 shrink-0 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors bg-border/60 group relative"
+        title="Arraste para redimensionar"
+      >
+        <div className="absolute inset-y-0 -left-1 -right-1" />
       </div>
 
       {/* Painel de chat */}
