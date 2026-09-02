@@ -7,7 +7,7 @@ import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, PointerSensor, T
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Loader2, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Check, Edit2, Trash2, X, ChevronDown, ChevronRight, Users } from "lucide-react";
+import { Plus, Loader2, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Check, Edit2, Trash2, X, ChevronDown, ChevronRight, Users, MessageSquare, Instagram } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/components/ActivityTimeline";
 import { cn } from "@/lib/utils";
@@ -21,11 +21,14 @@ import { FunilColumn } from "@/components/funil/FunilColumn";
 import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
 import { LeadFormDialog } from "@/components/funil/LeadFormDialog";
 import { LeadDetailSheet } from "@/components/funil/LeadDetailSheet";
+import { CrmInbox } from "@/components/funil/CrmInbox";
 
 type FunilQuadro = {
   id: string;
   nome: string;
   ordem: number;
+  fixo?: boolean;
+  canal?: string | null;
   created_at?: string | null;
 };
 
@@ -706,66 +709,96 @@ const Funil = () => {
             <div className="flex-1 overflow-auto p-2 space-y-1">
               {quadrosLoading ? (
                 <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
-              ) : quadros.length === 0 ? (
-                <div className="text-center p-6 space-y-2">
-                  <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/30" />
-                  <p className="text-xs text-muted-foreground">Crie o primeiro quadro de funil.</p>
-                </div>
               ) : (
-                quadros.map((quadro) => (
-                  <div
-                    key={quadro.id}
-                    className={cn(
-                      "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
-                      selectedQuadroId === quadro.id
-                        ? "bg-primary/15 text-primary font-medium"
-                        : "hover:bg-muted text-foreground"
-                    )}
-                  >
-                    {editingQuadroId === quadro.id ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
-                        }}
-                        className="flex items-center gap-1 flex-1"
-                      >
-                        <Input
-                          value={editingQuadroName}
-                          onChange={(e) => setEditingQuadroName(e.target.value)}
-                          className="h-7 text-xs"
-                          autoFocus
-                        />
-                        <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </form>
-                    ) : (
-                      <>
-                        <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
-                          {quadro.nome}
-                        </span>
-                        <Button
-                          size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                          onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }}
-                          title="Renomear"
+                <>
+                  {/* Fixed CRM boards */}
+                  {quadros.filter((q) => q.fixo).map((quadro) => (
+                    <div
+                      key={quadro.id}
+                      onClick={() => setSelectedQuadroId(quadro.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors",
+                        selectedQuadroId === quadro.id
+                          ? "bg-primary/15 text-primary font-medium"
+                          : "hover:bg-muted text-foreground"
+                      )}
+                    >
+                      {quadro.canal === "whatsapp" ? (
+                        <MessageSquare className="h-4 w-4 text-green-600 shrink-0" />
+                      ) : (
+                        <Instagram className="h-4 w-4 text-pink-600 shrink-0" />
+                      )}
+                      <span className="flex-1 truncate">{quadro.nome}</span>
+                    </div>
+                  ))}
+
+                  {/* Separator if there are both fixed and normal */}
+                  {quadros.some((q) => q.fixo) && quadros.some((q) => !q.fixo) && (
+                    <div className="border-t my-1" />
+                  )}
+
+                  {/* Normal boards */}
+                  {quadros.filter((q) => !q.fixo).length === 0 && !quadros.some((q) => q.fixo) && (
+                    <div className="text-center p-6 space-y-2">
+                      <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/30" />
+                      <p className="text-xs text-muted-foreground">Crie o primeiro quadro de funil.</p>
+                    </div>
+                  )}
+                  {quadros.filter((q) => !q.fixo).map((quadro) => (
+                    <div
+                      key={quadro.id}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
+                        selectedQuadroId === quadro.id
+                          ? "bg-primary/15 text-primary font-medium"
+                          : "hover:bg-muted text-foreground"
+                      )}
+                    >
+                      {editingQuadroId === quadro.id ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
+                          }}
+                          className="flex items-center gap-1 flex-1"
                         >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                          onClick={() => deleteQuadroMutation.mutate(quadro)}
-                          title="Excluir"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                ))
+                          <Input
+                            value={editingQuadroName}
+                            onChange={(e) => setEditingQuadroName(e.target.value)}
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                          <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
+                            {quadro.nome}
+                          </span>
+                          <Button
+                            size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                            onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }}
+                            title="Renomear"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                            onClick={() => deleteQuadroMutation.mutate(quadro)}
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </aside>
@@ -776,13 +809,13 @@ const Funil = () => {
           <div className="p-6 space-y-6 min-h-full">
             <PageHeader
               title={selectedQuadro?.nome || "Funil Comercial"}
-              description="Pipeline de leads e conversão"
+              description={selectedQuadro?.fixo ? "Mensagens recebidas e conversas ativas" : "Pipeline de leads e conversão"}
             >
               <Button variant="outline" size="sm" onClick={() => setQuadrosVisible((v) => !v)} className="gap-1">
                 {quadrosVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                 {quadrosVisible ? "Ocultar" : "Quadros"}
               </Button>
-              {selectedQuadroId && (
+              {selectedQuadroId && !selectedQuadro?.fixo && (
                 <>
                   <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />Nova Coluna
@@ -803,6 +836,13 @@ const Funil = () => {
                 <LayoutDashboard className="h-12 w-12 opacity-20" />
                 <p className="text-sm">Selecione ou crie um quadro de funil na barra lateral.</p>
               </div>
+            ) : selectedQuadro?.fixo ? (
+              <CrmInbox
+                quadroId={selectedQuadroId}
+                etapas={etapas}
+                canal={(selectedQuadro.canal as "whatsapp" | "instagram") ?? "whatsapp"}
+                onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
+              />
             ) : (
               <>
                 {!loading && <FunilMetrics leads={quadroLeads} produtos={produtos} etapas={etapas} dataFiltro={filters.data || undefined} />}
