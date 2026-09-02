@@ -48,13 +48,13 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const etapaIds = etapas.map((e) => e.id);
 
-  type Canal = { id: string; nome: string };
+  type Canal = { id: string; nome: string; cor: string };
   const { data: canais = [] } = useQuery<Canal[]>({
     queryKey: ["canais-crm-list", empresaId, canal],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("canais_crm")
-        .select("id, nome")
+        .select("id, nome, cor")
         .eq("empresa_id", empresaId!)
         .eq("tipo", canal)
         .eq("ativo", true)
@@ -65,7 +65,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     enabled: !!empresaId,
   });
 
-  const canaisMap = Object.fromEntries(canais.map((c) => [c.id, c.nome]));
+  const canaisMap = Object.fromEntries(canais.map((c) => [c.id, { nome: c.nome, cor: c.cor || "#6366f1" }]));
 
   type Quadro = { id: string; nome: string };
   const { data: quadrosDestino = [] } = useQuery<Quadro[]>({
@@ -251,16 +251,16 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </button>
               {canais.map((c) => {
                 const count = leads.filter((l) => (l as any).canal_id === c.id).length;
+                const active = filtroCanal === c.id;
                 return (
                   <button
                     key={c.id}
                     onClick={() => { setFiltroCanal(c.id); setSelectedLeadId(null); }}
-                    className={cn(
-                      "px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors",
-                      filtroCanal === c.id
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    )}
+                    className="px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors"
+                    style={{
+                      borderBottomColor: active ? c.cor : "transparent",
+                      color: active ? c.cor : undefined,
+                    }}
                   >
                     {c.nome} ({count})
                   </button>
@@ -307,8 +307,15 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     <div className="flex items-center gap-1.5 min-w-0">
                       <p className="text-sm font-medium truncate">{lead.nome}</p>
                       {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
-                        <span className="shrink-0 inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-medium text-muted-foreground whitespace-nowrap">
-                          {canaisMap[(lead as any).canal_id]}
+                        <span
+                          className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
+                          style={{
+                            backgroundColor: canaisMap[(lead as any).canal_id].cor + "22",
+                            color: canaisMap[(lead as any).canal_id].cor,
+                            border: `1px solid ${canaisMap[(lead as any).canal_id].cor}44`,
+                          }}
+                        >
+                          {canaisMap[(lead as any).canal_id].nome}
                         </span>
                       )}
                     </div>

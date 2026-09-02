@@ -19,6 +19,11 @@ import {
 import { Plus, Pencil, Trash2, MessageSquare, Instagram, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+const CORES = [
+  "#6366f1", "#3b82f6", "#06b6d4", "#10b981", "#22c55e",
+  "#eab308", "#f97316", "#ef4444", "#ec4899", "#a855f7",
+];
+
 type Canal = {
   id: string;
   tipo: "whatsapp" | "instagram";
@@ -28,6 +33,7 @@ type Canal = {
   evolution_token: string | null;
   evolution_instancia: string | null;
   ativo: boolean;
+  cor: string;
 };
 
 const emptyWhatsapp: Omit<Canal, "id"> = {
@@ -38,6 +44,7 @@ const emptyWhatsapp: Omit<Canal, "id"> = {
   evolution_token: "",
   evolution_instancia: "",
   ativo: true,
+  cor: "#6366f1",
 };
 
 const emptyInstagram: Omit<Canal, "id"> = {
@@ -48,6 +55,7 @@ const emptyInstagram: Omit<Canal, "id"> = {
   evolution_token: null,
   evolution_instancia: null,
   ativo: true,
+  cor: "#ec4899",
 };
 
 export function CanaisCrmSection() {
@@ -120,6 +128,7 @@ export function CanaisCrmSection() {
           evolution_token: canal.evolution_token,
           evolution_instancia: canal.evolution_instancia,
           ativo: canal.ativo,
+          cor: canal.cor,
         }).eq("id", canal.id);
         if (error) throw error;
       } else {
@@ -132,6 +141,7 @@ export function CanaisCrmSection() {
           evolution_token: canal.evolution_token,
           evolution_instancia: canal.evolution_instancia,
           ativo: canal.ativo,
+          cor: canal.cor,
         }).select("id").single();
         if (error) throw error;
         savedId = inserted.id;
@@ -198,6 +208,10 @@ export function CanaisCrmSection() {
                   checked={canal.ativo}
                   onCheckedChange={(v) => toggleMutation.mutate({ id: canal.id, ativo: v })}
                 />
+                <div
+                  className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: canal.cor || "#6366f1" }}
+                />
                 <div>
                   <p className="font-medium text-sm">{canal.nome}</p>
                   <p className="text-xs text-muted-foreground">{canal.identificador}</p>
@@ -248,6 +262,10 @@ export function CanaisCrmSection() {
                   checked={canal.ativo}
                   onCheckedChange={(v) => toggleMutation.mutate({ id: canal.id, ativo: v })}
                 />
+                <div
+                  className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: canal.cor || "#ec4899" }}
+                />
                 <div>
                   <p className="font-medium text-sm">{canal.nome}</p>
                   <p className="text-xs text-muted-foreground">@{canal.identificador}</p>
@@ -280,6 +298,26 @@ export function CanaisCrmSection() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
+              <div>
+                <Label>Cor de identificação</Label>
+                <div className="flex gap-2 mt-1.5 flex-wrap">
+                  {CORES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setField("cor", c)}
+                      className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
+                      style={{
+                        backgroundColor: c,
+                        borderColor: dialog?.canal.cor === c ? "#000" : "transparent",
+                        outline: dialog?.canal.cor === c ? "2px solid white" : "none",
+                        outlineOffset: "-3px",
+                      }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              </div>
               <div>
                 <Label>Nome amigável</Label>
                 <Input
