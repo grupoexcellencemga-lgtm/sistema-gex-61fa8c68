@@ -603,7 +603,7 @@ const Funil = () => {
         }}
       />
 
-      <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
+      <div className="flex rounded-lg overflow-hidden border bg-card" style={{ height: 'calc(100dvh - 8rem)' }}>
         {/* Sidebar — lista de quadros */}
         <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[240px]" : "w-0")}>
           {/* Toggle handle — always visible on the right edge */}
