@@ -320,7 +320,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   useEffect(() => {
     if (mensagens.length > 0) {
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "instant" });
+        requestAnimationFrame(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        });
       });
     }
   }, [mensagens, selectedLeadId, selectedProtocolo?.id]);
