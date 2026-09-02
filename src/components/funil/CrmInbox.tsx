@@ -209,21 +209,35 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   async function handleSend() {
     if (!replyText.trim() || !selectedLeadId) return;
+    const texto = replyText.trim();
     setSending(true);
+    setReplyText("");
+
+    // Otimista: adiciona a mensagem na tela imediatamente
+    const tempId = `temp-${Date.now()}`;
+    queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
+      ...old,
+      { id: tempId, lead_id: selectedLeadId, empresa_id: empresaId!, conteudo: texto, direcao: "saida", canal: "whatsapp", created_at: new Date().toISOString() } as Mensagem,
+    ]);
+
     try {
       const { error } = await supabase.functions.invoke("enviar-mensagem", {
-        body: { lead_id: selectedLeadId, mensagem: replyText.trim() },
+        body: { lead_id: selectedLeadId, mensagem: texto },
       });
       if (error) throw error;
-      setReplyText("");
       queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
-      // Ao responder, marca como lido e atualiza timestamp
       await (supabase as any).from("leads").update({
         tem_mensagem_nova: false,
+        mensagens_nao_lidas: 0,
         ultima_mensagem_em: new Date().toISOString(),
       }).eq("id", selectedLeadId);
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
     } catch (err: any) {
+      // Reverte a mensagem otimista em caso de erro
+      queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) =>
+        old.filter((m) => m.id !== tempId)
+      );
+      setReplyText(texto);
       toast.error("Erro ao enviar: " + (err.message ?? String(err)));
     } finally {
       setSending(false);
