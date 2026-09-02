@@ -71,6 +71,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [finalizando, setFinalizando] = useState(false);
   const [listWidth, setListWidth] = useState(288);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
   const startResize = useCallback((e: React.MouseEvent) => {
@@ -315,12 +316,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     return () => { supabase.removeChannel(ch); };
   }, [empresaId, quadroId, queryClient]);
 
-  // Scroll to bottom
+  // Scroll to bottom — usa anchor div para garantir que funciona após qualquer mudança de layout
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (mensagens.length > 0) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      });
     }
-  }, [mensagens]);
+  }, [mensagens, selectedLeadId, selectedProtocolo?.id]);
 
   async function marcarComoLido(leadId: string) {
     await (supabase as any)
@@ -833,6 +836,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 </div>
               ))
             )}
+            <div ref={bottomRef} />
           </div>
 
           {/* Caixa de resposta */}
