@@ -139,8 +139,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       return data as Canal[];
     },
     enabled: !!empresaId,
+    refetchInterval: 15000,
   });
   const canaisMap = Object.fromEntries(canais.map((c) => [c.id, { nome: c.nome, cor: c.cor || "#6366f1" }]));
+
+  // Quando um canal é desativado/excluído, volta para "todos" se o filtro apontava para ele
+  useEffect(() => {
+    if (filtroCanal !== "todos" && !canais.find((c) => c.id === filtroCanal)) {
+      setFiltroCanal("todos");
+      setSelectedLeadId(null);
+    }
+  }, [canais, filtroCanal]);
 
   type Quadro = { id: string; nome: string };
   const { data: quadrosDestino = [] } = useQuery<Quadro[]>({
@@ -280,6 +289,18 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [selectedLeadId, aba, queryClient]);
+
+  // Realtime: canais_crm (ativação/desativação/exclusão de números)
+  useEffect(() => {
+    if (!empresaId) return;
+    const ch = supabase
+      .channel(`canais-crm-${empresaId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "canais_crm" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["canais-crm-list", empresaId, canal] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [empresaId, canal, queryClient]);
 
   // Realtime: atualização de leads
   useEffect(() => {
