@@ -36,24 +36,29 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [filtroCanal, setFiltroCanal] = useState<string>("todos");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const etapaIds = etapas.map((e) => e.id);
 
-  const { data: canaisMap = {} } = useQuery<Record<string, string>>({
-    queryKey: ["canais-crm-map", empresaId],
+  type Canal = { id: string; nome: string };
+  const { data: canais = [] } = useQuery<Canal[]>({
+    queryKey: ["canais-crm-list", empresaId, canal],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("canais_crm")
         .select("id, nome")
-        .eq("empresa_id", empresaId!);
+        .eq("empresa_id", empresaId!)
+        .eq("tipo", canal)
+        .eq("ativo", true)
+        .order("nome");
       if (error) throw error;
-      const map: Record<string, string> = {};
-      for (const c of data ?? []) map[c.id] = c.nome;
-      return map;
+      return data as Canal[];
     },
     enabled: !!empresaId,
   });
+
+  const canaisMap = Object.fromEntries(canais.map((c) => [c.id, c.nome]));
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRow[]>({
     queryKey: ["crm-leads", quadroId, empresaId],
@@ -71,6 +76,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     },
     enabled: !!empresaId && etapaIds.length > 0,
   });
+
+  const leadsFiltered = filtroCanal === "todos"
+    ? leads
+    : leads.filter((l) => (l as any).canal_id === filtroCanal);
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) ?? null;
 
@@ -164,9 +173,44 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     <div className="flex h-full" style={{ height: "calc(100svh - 18rem)", minHeight: "400px" }}>
       {/* Lead list */}
       <div className="w-72 shrink-0 border-r flex flex-col bg-card">
+        {/* Canal tabs */}
+        {canais.length > 1 && (
+          <div className="border-b overflow-x-auto">
+            <div className="flex min-w-max">
+              <button
+                onClick={() => { setFiltroCanal("todos"); setSelectedLeadId(null); }}
+                className={cn(
+                  "px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors",
+                  filtroCanal === "todos"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Todos ({leads.length})
+              </button>
+              {canais.map((c) => {
+                const count = leads.filter((l) => (l as any).canal_id === c.id).length;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => { setFiltroCanal(c.id); setSelectedLeadId(null); }}
+                    className={cn(
+                      "px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors",
+                      filtroCanal === c.id
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {c.nome} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="p-3 border-b">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {leads.length} conversa{leads.length !== 1 ? "s" : ""}
+            {leadsFiltered.length} conversa{leadsFiltered.length !== 1 ? "s" : ""}
           </p>
         </div>
         <ScrollArea className="flex-1">
@@ -174,7 +218,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             <div className="flex justify-center p-6">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : leads.length === 0 ? (
+          ) : leadsFiltered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
               <MessageSquare className="h-8 w-8 opacity-20" />
               <p className="text-xs">Nenhuma mensagem recebida ainda.</p>
@@ -186,7 +230,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             </div>
           ) : (
             <div className="divide-y">
-              {leads.map((lead) => (
+              {leadsFiltered.map((lead) => (
                 <button
                   key={lead.id}
                   onClick={() => setSelectedLeadId(lead.id)}
