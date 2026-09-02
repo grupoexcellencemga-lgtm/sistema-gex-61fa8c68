@@ -131,6 +131,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         .eq("empresa_id", empresaId!)
         .in("etapa_id", etapaIds)
         .is("deleted_at", null)
+        .order("tem_mensagem_nova", { ascending: false })
+        .order("ultima_mensagem_em", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as LeadRow[];
@@ -219,8 +221,12 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (error) throw error;
       setReplyText("");
       queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
-      // Ao responder, marca como lido
-      marcarComoLido(selectedLeadId);
+      // Ao responder, marca como lido e atualiza timestamp
+      await (supabase as any).from("leads").update({
+        tem_mensagem_nova: false,
+        ultima_mensagem_em: new Date().toISOString(),
+      }).eq("id", selectedLeadId);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
     } catch (err: any) {
       toast.error("Erro ao enviar: " + (err.message ?? String(err)));
     } finally {

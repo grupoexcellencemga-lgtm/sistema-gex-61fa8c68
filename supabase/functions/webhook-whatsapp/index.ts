@@ -95,10 +95,11 @@ Deno.serve(async (req) => {
       canal: "whatsapp",
     });
 
-    // Mensagem recebida → acende sinal de não lida
-    if (!fromMe) {
-      await supabase.from("leads").update({ tem_mensagem_nova: true }).eq("id", leadId);
-    }
+    // Atualiza timestamp da última mensagem e sinal de não lida
+    await supabase.from("leads").update({
+      ultima_mensagem_em: new Date().toISOString(),
+      ...(fromMe ? {} : { tem_mensagem_nova: true }),
+    }).eq("id", leadId);
 
     return new Response(JSON.stringify({ ok: true, lead_id: leadId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
