@@ -822,8 +822,8 @@ const Funil = () => {
         </div>
 
         {/* Área principal */}
-        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
-          <div className="p-6 space-y-6 min-h-full">
+        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-hidden">
+          <div className={selectedQuadro?.fixo ? "flex flex-col flex-1 min-h-0 p-4 gap-4" : "p-6 space-y-6 min-h-full"}>
             <PageHeader
               title={selectedQuadro?.nome || "Funil Comercial"}
               description={selectedQuadro?.fixo ? "Mensagens recebidas e conversas ativas" : "Pipeline de leads e conversão"}

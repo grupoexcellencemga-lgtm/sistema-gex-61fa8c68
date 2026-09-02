@@ -481,7 +481,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const showChatPanel = aba === "finalizadas" ? !!selectedProtocolo : !!selectedLead;
 
   return (
-    <div className="flex overflow-hidden w-full border rounded-lg" style={{ height: "calc(100svh - 18rem)", minHeight: "400px" }}>
+    <div className="flex overflow-hidden w-full flex-1 min-h-0">
       {/* Lista lateral */}
       <div style={{ width: listWidth, minWidth: 200, maxWidth: 520 }} className="shrink-0 flex flex-col bg-card">
 
