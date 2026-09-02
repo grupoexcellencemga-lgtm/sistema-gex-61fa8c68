@@ -160,7 +160,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     },
     enabled: !!selectedLeadId,
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 1000,
   });
 
   // Realtime subscription for new messages (sem filtro — filtro no servidor tem limitações)
