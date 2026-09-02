@@ -605,8 +605,24 @@ const Funil = () => {
 
       <div className="flex h-full min-h-[calc(100vh-7rem)] rounded-lg overflow-hidden border bg-card">
         {/* Sidebar — lista de quadros */}
-        {quadrosVisible && (
-          <aside className="w-[240px] shrink-0 border-r bg-card flex flex-col">
+        <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[240px]" : "w-0")}>
+          {/* Toggle handle — always visible on the right edge */}
+          <button
+            onClick={() => setQuadrosVisible((v) => !v)}
+            title={quadrosVisible ? "Retrair quadros" : "Expandir quadros"}
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 z-10 flex items-center justify-center",
+              "h-12 w-4 rounded-r-md border border-l-0 bg-card hover:bg-muted transition-colors shadow-sm",
+              quadrosVisible ? "right-[-16px]" : "right-[-16px]"
+            )}
+          >
+            {quadrosVisible
+              ? <PanelLeftClose className="h-3 w-3 text-muted-foreground" />
+              : <PanelLeftOpen className="h-3 w-3 text-muted-foreground" />}
+          </button>
+
+          {quadrosVisible && (
+          <aside className="w-[240px] shrink-0 border-r bg-card flex flex-col overflow-hidden">
             <div className="p-4 border-b flex items-center gap-2">
               <LayoutDashboard className="h-5 w-5 text-primary" />
               <div>
@@ -802,7 +818,8 @@ const Funil = () => {
               )}
             </div>
           </aside>
-        )}
+          )}
+        </div>
 
         {/* Área principal */}
         <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
@@ -811,10 +828,6 @@ const Funil = () => {
               title={selectedQuadro?.nome || "Funil Comercial"}
               description={selectedQuadro?.fixo ? "Mensagens recebidas e conversas ativas" : "Pipeline de leads e conversão"}
             >
-              <Button variant="outline" size="sm" onClick={() => setQuadrosVisible((v) => !v)} className="gap-1">
-                {quadrosVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-                {quadrosVisible ? "Ocultar" : "Quadros"}
-              </Button>
               {selectedQuadroId && !selectedQuadro?.fixo && (
                 <>
                   <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
