@@ -22,11 +22,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { event, instance, data } = body;
 
-    // Só processa mensagens recebidas (não enviadas pelo próprio número)
     if (event !== "messages.upsert") return new Response("ignored", { status: 200 });
-    if (!data || data.key?.fromMe) return new Response("ignored", { status: 200 });
+    if (!data) return new Response("ignored", { status: 200 });
 
-    // Extrai o número do remetente (remove @s.whatsapp.net ou @g.us para grupos)
+    const fromMe: boolean = data.key?.fromMe === true;
+
+    // Extrai o número da conversa
     const remoteJid: string = data.key?.remoteJid ?? "";
     if (remoteJid.includes("@g.us")) return new Response("group ignored", { status: 200 });
 
@@ -83,12 +84,12 @@ Deno.serve(async (req) => {
       lead = novoLead;
     }
 
-    // Salva a mensagem
+    // Salva a mensagem (fromMe = enviada pelo número da empresa)
     await supabase.from("mensagens_crm").insert({
       lead_id: lead.id,
       empresa_id: empresaId,
       conteudo: texto,
-      direcao: "entrada",
+      direcao: fromMe ? "saida" : "entrada",
       canal: "whatsapp",
     });
 
