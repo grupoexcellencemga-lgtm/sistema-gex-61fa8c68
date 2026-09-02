@@ -202,7 +202,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   async function marcarComoLido(leadId: string) {
     await (supabase as any)
       .from("leads")
-      .update({ tem_mensagem_nova: false })
+      .update({ tem_mensagem_nova: false, mensagens_nao_lidas: 0 })
       .eq("id", leadId);
     queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
   }
@@ -320,7 +320,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       <User className="h-4 w-4 text-muted-foreground" />
                     </div>
                     {(lead as any).tem_mensagem_nova && (
-                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background animate-pulse" />
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
+                        <span className="text-[10px] font-bold text-white leading-none">
+                          {(lead as any).mensagens_nao_lidas > 0 ? (lead as any).mensagens_nao_lidas : ""}
+                        </span>
+                      </span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

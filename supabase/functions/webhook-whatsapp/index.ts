@@ -113,10 +113,13 @@ Deno.serve(async (req) => {
         canal: "whatsapp",
       });
 
-      await supabase.from("leads").update({
-        ultima_mensagem_em: new Date().toISOString(),
-        ...(fromMe ? {} : { tem_mensagem_nova: true }),
-      }).eq("id", leadId);
+      if (fromMe) {
+        await supabase.from("leads").update({
+          ultima_mensagem_em: new Date().toISOString(),
+        }).eq("id", leadId);
+      } else {
+        await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
