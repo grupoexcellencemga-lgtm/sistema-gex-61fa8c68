@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type Instance = {
-  instance: { instanceName: string; status: string };
+  instanceName: string;
+  status: string;
 };
 
 type SaveDialog = {
@@ -42,12 +43,25 @@ export function WhatsAppManagerSection() {
         body: { action: "list" },
       });
       if (error) throw error;
-      const list: Instance[] = Array.isArray(data.data) ? data.data : [];
+      // Normalize: Evolution API v2 may return flat objects or nested {instance:{...}}
+      const raw: unknown[] = Array.isArray(data.data) ? data.data : [];
+      const list: Instance[] = raw
+        .filter(Boolean)
+        .map((item: any) => {
+          if (item?.instance?.instanceName) {
+            return { instanceName: item.instance.instanceName, status: item.instance.status ?? item.state ?? "disconnected" };
+          }
+          if (item?.instanceName) {
+            return { instanceName: item.instanceName, status: item.status ?? item.state ?? "disconnected" };
+          }
+          return null;
+        })
+        .filter(Boolean) as Instance[];
       setInstances(list);
       // Fetch QR for disconnected instances
       list.forEach(async (inst) => {
-        const name = inst.instance.instanceName;
-        const status = inst.instance.status;
+        const name = inst.instanceName;
+        const status = inst.status;
         if (status === "open" || status === "connected") {
           setQrMap(prev => { const n = { ...prev }; delete n[name]; return n; });
           return;
@@ -99,7 +113,7 @@ export function WhatsAppManagerSection() {
       });
       if (error) throw error;
       toast.success("Instância removida");
-      setInstances(prev => prev.filter(i => i.instance.instanceName !== instancia));
+      setInstances(prev => prev.filter(i => i.instanceName !== instancia));
     } catch (err: any) {
       toast.error("Erro ao remover: " + err.message);
     }
@@ -212,8 +226,8 @@ export function WhatsAppManagerSection() {
         ) : (
           <div className="space-y-3">
             {instances.map((inst) => {
-              const name = inst.instance.instanceName;
-              const status = inst.instance.status;
+              const name = inst.instanceName;
+              const status = inst.status;
               const info = statusInfo(status);
               const isConnected = status === "open" || status === "connected";
               const qr = qrMap[name];
