@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Send, Loader2, MessageSquare, Phone, User } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -37,6 +39,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveQuadroId, setMoveQuadroId] = useState("");
+  const [moveEtapaId, setMoveEtapaId] = useState("");
+  const [moving, setMoving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const etapaIds = etapas.map((e) => e.id);
@@ -59,6 +65,60 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   });
 
   const canaisMap = Object.fromEntries(canais.map((c) => [c.id, c.nome]));
+
+  type Quadro = { id: string; nome: string };
+  const { data: quadrosDestino = [] } = useQuery<Quadro[]>({
+    queryKey: ["quadros-destino", empresaId, quadroId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_quadros")
+        .select("id, nome")
+        .eq("empresa_id", empresaId!)
+        .neq("id", quadroId)
+        .neq("fixo", true)
+        .order("nome");
+      if (error) throw error;
+      return data as Quadro[];
+    },
+    enabled: !!empresaId,
+  });
+
+  type Etapa = { id: string; nome: string; ordem: number };
+  const { data: etapasDestino = [] } = useQuery<Etapa[]>({
+    queryKey: ["etapas-destino", moveQuadroId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("id, nome, ordem")
+        .eq("quadro_id", moveQuadroId)
+        .order("ordem");
+      if (error) throw error;
+      return data as Etapa[];
+    },
+    enabled: !!moveQuadroId,
+  });
+
+  async function handleMover() {
+    if (!moveEtapaId || !selectedLeadId) return;
+    setMoving(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ etapa_id: moveEtapaId })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+      toast.success("Lead movido para o quadro!");
+      setMoveOpen(false);
+      setMoveQuadroId("");
+      setMoveEtapaId("");
+      setSelectedLeadId(null);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+    } catch (err: any) {
+      toast.error("Erro ao mover: " + err.message);
+    } finally {
+      setMoving(false);
+    }
+  }
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRow[]>({
     queryKey: ["crm-leads", quadroId, empresaId],
@@ -281,12 +341,21 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               {onLeadClick && (
                 <Button size="sm" variant="outline" onClick={() => onLeadClick(selectedLead)}>
                   Ver lead
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-primary border-primary/40 hover:bg-primary/5"
+                onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}
+              >
+                <ArrowRightFromLine className="h-3.5 w-3.5 mr-1" />
+                Mover para quadro
+              </Button>
               <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
             </div>
           </div>
@@ -367,6 +436,69 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           <p className="text-sm">Selecione uma conversa para visualizar</p>
         </div>
       )}
+
+      {/* Dialog — Mover para quadro */}
+      <Dialog open={moveOpen} onOpenChange={(v) => { setMoveOpen(v); if (!v) { setMoveQuadroId(""); setMoveEtapaId(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightFromLine className="h-4 w-4 text-primary" />
+              Mover para quadro
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Lead: <strong>{selectedLead?.nome}</strong> sairá da entrada e entrará no quadro selecionado.
+            </p>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium">Quadro de destino</p>
+              <Select value={moveQuadroId} onValueChange={(v) => { setMoveQuadroId(v); setMoveEtapaId(""); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o quadro..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {quadrosDestino.length === 0 ? (
+                    <SelectItem value="__none" disabled>Nenhum quadro disponível</SelectItem>
+                  ) : (
+                    quadrosDestino.map((q) => (
+                      <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {moveQuadroId && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium">Etapa de entrada</p>
+                <Select value={moveEtapaId} onValueChange={setMoveEtapaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a etapa..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {etapasDestino.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleMover}
+              disabled={moving || !moveQuadroId || !moveEtapaId}
+            >
+              {moving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Mover lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
