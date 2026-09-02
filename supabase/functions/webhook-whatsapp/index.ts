@@ -27,8 +27,13 @@ Deno.serve(async (req) => {
     if (event !== "messages.upsert") return new Response("ignored", { status: 200 });
     if (!data) return new Response("ignored", { status: 200 });
 
-    // Evolution API v2 pode mandar data como array de mensagens
-    const mensagens = Array.isArray(data) ? data : [data];
+    // Evolution API v2: data = { messages: [...], type: "notify" }
+    // Versões anteriores: data = array ou objeto direto
+    const mensagens = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.messages)
+      ? data.messages
+      : [data];
 
     // Busca canal pelo nome da instância (uma vez, fora do loop)
     const { data: canal } = await supabase
