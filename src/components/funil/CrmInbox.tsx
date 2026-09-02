@@ -40,6 +40,21 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const etapaIds = etapas.map((e) => e.id);
 
+  const { data: canaisMap = {} } = useQuery<Record<string, string>>({
+    queryKey: ["canais-crm-map", empresaId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("canais_crm")
+        .select("id, nome")
+        .eq("empresa_id", empresaId!);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const c of data ?? []) map[c.id] = c.nome;
+      return map;
+    },
+    enabled: !!empresaId,
+  });
+
   const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRow[]>({
     queryKey: ["crm-leads", quadroId, empresaId],
     queryFn: async () => {
@@ -184,7 +199,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     <User className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{lead.nome}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{lead.nome}</p>
+                      {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
+                        <span className="shrink-0 inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+                          {canaisMap[(lead as any).canal_id]}
+                        </span>
+                      )}
+                    </div>
                     {(lead as any).contato_id && (
                       <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                         <Phone className="h-2.5 w-2.5" />
