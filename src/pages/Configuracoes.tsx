@@ -6,6 +6,7 @@ import { CategoriasSection } from "@/components/configuracoes/CategoriasSection"
 import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistTemplatesSection";
 import { ChecklistAreaResponsaveisSection } from "@/components/configuracoes/ChecklistAreaResponsaveisSection";
 import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSection";
+import { CanaisCrmSection } from "@/components/configuracoes/CanaisCrmSection";
 import { EmpresaIdentidadeSection } from "@/components/configuracoes/EmpresaIdentidadeSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +46,7 @@ import {
   ListChecks,
   CalendarClock,
   Paintbrush,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -385,6 +387,11 @@ const Configuracoes = () => {
               <CalendarClock className="h-4 w-4" />
               Google Agenda
             </TabsTrigger>
+
+            <TabsTrigger value="canais-crm" className="gap-1.5 shrink-0">
+              <Radio className="h-4 w-4" />
+              Canais & CRM
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -680,6 +687,10 @@ const Configuracoes = () => {
 
         <TabsContent value="identidade" className="max-w-2xl space-y-6">
           <EmpresaIdentidadeSection />
+        </TabsContent>
+
+        <TabsContent value="canais-crm" className="max-w-3xl space-y-6">
+          <CanaisCrmSection />
         </TabsContent>
       </Tabs>
     </div>
