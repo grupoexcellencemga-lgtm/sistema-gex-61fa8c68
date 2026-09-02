@@ -137,6 +137,21 @@ Deno.serve(async (req) => {
           ultima_mensagem_em: new Date().toISOString(),
         }).eq("id", leadId);
       } else {
+        // Se a conversa estava finalizada, volta para fila
+        const { data: leadAtual } = await supabase
+          .from("leads")
+          .select("status_atendimento")
+          .eq("id", leadId)
+          .maybeSingle();
+
+        if ((leadAtual as any)?.status_atendimento === "finalizado") {
+          await supabase.from("leads").update({
+            status_atendimento: "fila",
+            atendente_id: null,
+            atribuido_em: null,
+          }).eq("id", leadId);
+        }
+
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
       }
     }

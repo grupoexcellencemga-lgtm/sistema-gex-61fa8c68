@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2, ExternalLink, ChevronDown, RefreshCw } from "lucide-react";
+import {
+  Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
+  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -24,6 +29,8 @@ type Mensagem = {
   created_at: string;
 };
 
+type AbaAtendimento = "fila" | "minhas" | "finalizadas";
+
 interface CrmInboxProps {
   quadroId: string;
   etapas: FunilEtapa[];
@@ -35,18 +42,48 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { isAdmin } = usePermissions();
+  const userId = user?.id;
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
+  const [aba, setAba] = useState<AbaAtendimento>("fila");
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveQuadroId, setMoveQuadroId] = useState("");
   const [moveEtapaId, setMoveEtapaId] = useState("");
   const [moving, setMoving] = useState(false);
+  const [atribuindo, setAtribuindo] = useState(false);
+  const [finalizando, setFinalizando] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const etapaIds = etapas.map((e) => e.id);
+
+  // Usuários da empresa (para dropdown "Atribuir para...")
+  type UsuarioEmpresa = { user_id: string; nome: string };
+  const { data: usuarios = [] } = useQuery<UsuarioEmpresa[]>({
+    queryKey: ["usuarios-empresa", empresaId],
+    queryFn: async () => {
+      const { data: membros } = await (supabase as any)
+        .from("user_empresa")
+        .select("user_id")
+        .eq("empresa_id", empresaId!);
+      const userIds = (membros ?? []).map((m: any) => m.user_id);
+      if (userIds.length === 0) return [];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, nome")
+        .in("user_id", userIds);
+      return (profiles ?? []).map((p: any) => ({
+        user_id: p.user_id,
+        nome: p.nome ?? "Sem nome",
+      }));
+    },
+    enabled: !!empresaId,
+  });
+  const usuariosMap = Object.fromEntries(usuarios.map((u) => [u.user_id, u.nome]));
 
   type Canal = { id: string; nome: string; cor: string };
   const { data: canais = [] } = useQuery<Canal[]>({
@@ -64,7 +101,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     },
     enabled: !!empresaId,
   });
-
   const canaisMap = Object.fromEntries(canais.map((c) => [c.id, { nome: c.nome, cor: c.cor || "#6366f1" }]));
 
   type Quadro = { id: string; nome: string };
@@ -99,45 +135,36 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     enabled: !!moveQuadroId,
   });
 
-  async function handleMover() {
-    if (!moveEtapaId || !selectedLeadId) return;
-    setMoving(true);
-    try {
-      const { error } = await (supabase as any)
-        .from("leads")
-        .update({ etapa_id: moveEtapaId })
-        .eq("id", selectedLeadId);
-      if (error) throw error;
-      toast.success("Lead movido para o quadro!");
-      setMoveOpen(false);
-      setMoveQuadroId("");
-      setMoveEtapaId("");
-      setSelectedLeadId(null);
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
-    } catch (err: any) {
-      toast.error("Erro ao mover: " + err.message);
-    } finally {
-      setMoving(false);
-    }
-  }
-
+  // Leads: filtrados por aba de atendimento
   const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRow[]>({
-    queryKey: ["crm-leads", quadroId, empresaId],
+    queryKey: ["crm-leads", quadroId, empresaId, aba, userId, isAdmin],
     queryFn: async () => {
-      if (etapaIds.length === 0) return [];
-      const { data, error } = await (supabase as any)
+      if (etapaIds.length === 0 || !userId) return [];
+      let query = (supabase as any)
         .from("leads")
         .select("*")
         .eq("empresa_id", empresaId!)
         .in("etapa_id", etapaIds)
-        .is("deleted_at", null)
+        .is("deleted_at", null);
+
+      if (aba === "fila") {
+        query = query.eq("status_atendimento", "fila");
+      } else if (aba === "minhas") {
+        query = query.eq("status_atendimento", "ativo");
+        if (!isAdmin) query = query.eq("atendente_id", userId);
+      } else {
+        query = query.eq("status_atendimento", "finalizado");
+        if (!isAdmin) query = query.eq("atendente_id", userId);
+      }
+
+      const { data, error } = await query
         .order("tem_mensagem_nova", { ascending: false })
         .order("ultima_mensagem_em", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as LeadRow[];
     },
-    enabled: !!empresaId && etapaIds.length > 0,
+    enabled: !!empresaId && !!userId && etapaIds.length > 0,
     refetchInterval: 15000,
   });
 
@@ -146,6 +173,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     : leads.filter((l) => (l as any).canal_id === filtroCanal);
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) ?? null;
+  const selectedStatus: string = (selectedLead as any)?.status_atendimento ?? "fila";
+  const selectedAtendente: string | null = (selectedLead as any)?.atendente_id ?? null;
+  const isMyLead = selectedAtendente === userId;
+  const canReply = canal === "whatsapp" && (selectedStatus === "ativo") && (isMyLead || isAdmin);
 
   const { data: mensagens = [], isLoading: msgsLoading } = useQuery<Mensagem[]>({
     queryKey: ["mensagens-crm", selectedLeadId],
@@ -163,48 +194,115 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     refetchInterval: 1000,
   });
 
-  // Realtime subscription for new messages (sem filtro — filtro no servidor tem limitações)
+  // Realtime: novas mensagens
   useEffect(() => {
     if (!selectedLeadId) return;
-    const channel = supabase
+    const ch = supabase
       .channel("mensagens-crm-global")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "mensagens_crm" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensagens_crm" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
+      })
       .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(ch); };
   }, [selectedLeadId, queryClient]);
 
-  // Scroll to bottom when messages change
+  // Realtime: atualização de leads (todas as abas)
+  useEffect(() => {
+    if (!empresaId || etapaIds.length === 0) return;
+    const invalidate = () =>
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    const ch = supabase
+      .channel(`crm-leads-${quadroId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, invalidate)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "leads" }, invalidate)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [empresaId, quadroId, queryClient]);
+
+  // Scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensagens]);
 
-  // Subscribe to lead INSERT and UPDATE so the list updates in real-time
-  useEffect(() => {
-    if (!empresaId || etapaIds.length === 0) return;
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
-    const channel = supabase
-      .channel(`crm-leads-${quadroId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, invalidate)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "leads" }, invalidate)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [empresaId, quadroId, queryClient]);
-
   async function marcarComoLido(leadId: string) {
     await (supabase as any)
       .from("leads")
       .update({ tem_mensagem_nova: false, mensagens_nao_lidas: 0 })
       .eq("id", leadId);
-    queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+    queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+  }
+
+  async function assumir(leadId: string) {
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ atendente_id: userId, status_atendimento: "ativo", atribuido_em: new Date().toISOString() })
+        .eq("id", leadId);
+      if (error) throw error;
+      toast.success("Conversa assumida!");
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao assumir: " + err.message);
+    }
+  }
+
+  async function atribuir(leadId: string, paraUserId: string) {
+    setAtribuindo(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ atendente_id: paraUserId, status_atendimento: "ativo", atribuido_em: new Date().toISOString() })
+        .eq("id", leadId);
+      if (error) throw error;
+      toast.success("Conversa atribuída para " + (usuariosMap[paraUserId] ?? "usuário") + "!");
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao atribuir: " + err.message);
+    } finally {
+      setAtribuindo(false);
+    }
+  }
+
+  async function finalizar(leadId: string) {
+    setFinalizando(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ status_atendimento: "finalizado" })
+        .eq("id", leadId);
+      if (error) throw error;
+      toast.success("Conversa finalizada!");
+      setSelectedLeadId(null);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao finalizar: " + err.message);
+    } finally {
+      setFinalizando(false);
+    }
+  }
+
+  async function handleMover() {
+    if (!moveEtapaId || !selectedLeadId) return;
+    setMoving(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ etapa_id: moveEtapaId })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+      toast.success("Lead movido para o quadro!");
+      setMoveOpen(false);
+      setMoveQuadroId("");
+      setMoveEtapaId("");
+      setSelectedLeadId(null);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao mover: " + err.message);
+    } finally {
+      setMoving(false);
+    }
   }
 
   async function handleSend() {
@@ -213,7 +311,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     setSending(true);
     setReplyText("");
 
-    // Otimista: adiciona a mensagem na tela imediatamente
     const tempId = `temp-${Date.now()}`;
     queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
       ...old,
@@ -231,9 +328,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         mensagens_nao_lidas: 0,
         ultima_mensagem_em: new Date().toISOString(),
       }).eq("id", selectedLeadId);
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
     } catch (err: any) {
-      // Reverte a mensagem otimista em caso de erro
       queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) =>
         old.filter((m) => m.id !== tempId)
       );
@@ -254,12 +350,38 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
-  const isWhatsApp = canal === "whatsapp";
+  const abaConfig: { key: AbaAtendimento; label: string; icon: React.ReactNode }[] = [
+    { key: "fila", label: "Fila", icon: <Clock className="h-3.5 w-3.5" /> },
+    { key: "minhas", label: isAdmin ? "Em andamento" : "Minhas", icon: <UserCheck className="h-3.5 w-3.5" /> },
+    { key: "finalizadas", label: "Finalizadas", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  ];
 
   return (
     <div className="flex h-full" style={{ height: "calc(100svh - 18rem)", minHeight: "400px" }}>
       {/* Lead list */}
       <div className="w-72 shrink-0 border-r flex flex-col bg-card">
+
+        {/* Abas de atendimento */}
+        <div className="border-b">
+          <div className="flex">
+            {abaConfig.map((a) => (
+              <button
+                key={a.key}
+                onClick={() => { setAba(a.key); setSelectedLeadId(null); setFiltroCanal("todos"); }}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-medium border-b-2 transition-colors",
+                  aba === a.key
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {a.icon}
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Canal tabs */}
         {canais.length > 1 && (
           <div className="border-b overflow-x-auto">
@@ -295,6 +417,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             </div>
           </div>
         )}
+
         <div className="p-3 border-b flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {leadsFiltered.length} conversa{leadsFiltered.length !== 1 ? "s" : ""}
@@ -304,18 +427,20 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={async () => {
               const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
-              console.log("[fotos] resposta:", JSON.stringify(data), "erro:", error);
-              queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+              queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
               if (error) toast.error("Erro ao buscar fotos: " + error.message);
               else {
                 const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
-                toast.success(ok > 0 ? `${ok} foto${ok !== 1 ? "s" : ""} de perfil atualizada${ok !== 1 ? "s" : ""}` : "Nenhuma foto nova encontrada");
+                toast.success(ok > 0
+                  ? `${ok} foto${ok !== 1 ? "s" : ""} de perfil atualizada${ok !== 1 ? "s" : ""}`
+                  : "Nenhuma foto nova encontrada");
               }
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
         </div>
+
         <ScrollArea className="flex-1">
           {leadsLoading ? (
             <div className="flex justify-center p-6">
@@ -324,68 +449,79 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           ) : leadsFiltered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
               <MessageSquare className="h-8 w-8 opacity-20" />
-              <p className="text-xs">Nenhuma mensagem recebida ainda.</p>
-              {isWhatsApp && (
-                <p className="text-xs opacity-70">
-                  Quando alguém enviar mensagem para o WhatsApp conectado, aparecerá aqui.
-                </p>
-              )}
+              <p className="text-xs">
+                {aba === "fila" && "Nenhuma conversa na fila."}
+                {aba === "minhas" && (isAdmin ? "Nenhuma conversa em andamento." : "Você não tem conversas ativas.")}
+                {aba === "finalizadas" && "Nenhuma conversa finalizada."}
+              </p>
             </div>
           ) : (
             <div className="divide-y">
-              {leadsFiltered.map((lead) => (
-                <button
-                  key={lead.id}
-                  onClick={() => {
-                    setSelectedLeadId(lead.id);
-                    if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
-                  }}
-                  className={cn(
-                    "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
-                    selectedLeadId === lead.id && "bg-primary/10"
-                  )}
-                >
-                  <div className="relative shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                      {(lead as any).foto_perfil ? (
-                        <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
-                      ) : (
-                        <User className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    {(lead as any).tem_mensagem_nova && (
-                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
-                        <span className="text-[10px] font-bold text-white leading-none">
-                          {(lead as any).mensagens_nao_lidas > 0 ? (lead as any).mensagens_nao_lidas : ""}
-                        </span>
-                      </span>
+              {leadsFiltered.map((lead) => {
+                const status: string = (lead as any).status_atendimento ?? "fila";
+                const atendente: string | null = (lead as any).atendente_id ?? null;
+                return (
+                  <button
+                    key={lead.id}
+                    onClick={() => {
+                      setSelectedLeadId(lead.id);
+                      if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
+                    }}
+                    className={cn(
+                      "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
+                      selectedLeadId === lead.id && "bg-primary/10"
                     )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>{lead.nome}</p>
-                      {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
-                        <span
-                          className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
-                          style={{
-                            backgroundColor: canaisMap[(lead as any).canal_id].cor + "22",
-                            color: canaisMap[(lead as any).canal_id].cor,
-                            border: `1px solid ${canaisMap[(lead as any).canal_id].cor}44`,
-                          }}
-                        >
-                          {canaisMap[(lead as any).canal_id].nome}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                        {(lead as any).foto_perfil ? (
+                          <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
+                        ) : (
+                          <User className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      {(lead as any).tem_mensagem_nova && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
+                          <span className="text-[10px] font-bold text-white leading-none">
+                            {(lead as any).mensagens_nao_lidas > 0 ? (lead as any).mensagens_nao_lidas : ""}
+                          </span>
                         </span>
                       )}
                     </div>
-                    {(lead as any).contato_id && (
-                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                        <Phone className="h-2.5 w-2.5" />
-                        {(lead as any).contato_id}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>
+                          {lead.nome}
+                        </p>
+                        {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
+                          <span
+                            className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
+                            style={{
+                              backgroundColor: canaisMap[(lead as any).canal_id].cor + "22",
+                              color: canaisMap[(lead as any).canal_id].cor,
+                              border: `1px solid ${canaisMap[(lead as any).canal_id].cor}44`,
+                            }}
+                          >
+                            {canaisMap[(lead as any).canal_id].nome}
+                          </span>
+                        )}
+                      </div>
+                      {(lead as any).contato_id && (
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                          <Phone className="h-2.5 w-2.5" />
+                          {(lead as any).contato_id}
+                        </p>
+                      )}
+                      {atendente && usuariosMap[atendente] && (
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                          <Users className="h-2.5 w-2.5" />
+                          {usuariosMap[atendente]}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </ScrollArea>
@@ -406,17 +542,76 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
               <div>
                 <p className="text-sm font-semibold">{selectedLead.nome}</p>
-                {(selectedLead as any).contato_id && (
-                  <p className="text-xs text-muted-foreground">{(selectedLead as any).contato_id}</p>
-                )}
+                <div className="flex items-center gap-2">
+                  {(selectedLead as any).contato_id && (
+                    <p className="text-xs text-muted-foreground">{(selectedLead as any).contato_id}</p>
+                  )}
+                  {selectedAtendente && usuariosMap[selectedAtendente] && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-0.5">
+                      <UserCheck className="h-3 w-3" />
+                      {usuariosMap[selectedAtendente]}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-2 items-center">
+              {/* Ações de atendimento */}
+              {selectedStatus === "fila" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="gap-1.5"
+                    onClick={() => assumir(selectedLead.id)}
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Assumir
+                  </Button>
+                  {isAdmin && usuarios.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-1" disabled={atribuindo}>
+                          <Users className="h-3.5 w-3.5" />
+                          Atribuir
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        {usuarios.map((u) => (
+                          <DropdownMenuItem
+                            key={u.user_id}
+                            onClick={() => atribuir(selectedLead.id, u.user_id)}
+                          >
+                            <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                            {u.nome}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </>
+              )}
+
+              {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                  onClick={() => finalizar(selectedLead.id)}
+                  disabled={finalizando}
+                >
+                  {finalizando
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Finalizar
+                </Button>
+              )}
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="gap-1.5">
                     <Settings2 className="h-3.5 w-3.5" />
-                    Configuração
                     <ChevronDown className="h-3 w-3 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -441,10 +636,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
 
           {/* Messages */}
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20"
-          >
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
             {msgsLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -453,18 +645,13 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem ainda.</p>
             ) : (
               mensagens.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn("flex", msg.direcao === "saida" ? "justify-end" : "justify-start")}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                      msg.direcao === "saida"
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "bg-card border rounded-bl-sm"
-                    )}
-                  >
+                <div key={msg.id} className={cn("flex", msg.direcao === "saida" ? "justify-end" : "justify-start")}>
+                  <div className={cn(
+                    "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                    msg.direcao === "saida"
+                      ? "bg-primary text-primary-foreground rounded-br-sm"
+                      : "bg-card border rounded-bl-sm"
+                  )}>
                     <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
                     <p className={cn(
                       "text-[10px] mt-1",
@@ -479,29 +666,37 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
 
           {/* Reply box */}
-          {isWhatsApp ? (
-            <div className="p-3 border-t bg-card flex gap-2">
-              <Input
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Digite uma mensagem..."
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={sending}
-              />
-              <Button
-                size="icon"
-                onClick={handleSend}
-                disabled={sending || !replyText.trim()}
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
+          {canal === "whatsapp" ? (
+            canReply ? (
+              <div className="p-3 border-t bg-card flex gap-2">
+                <Input
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Digite uma mensagem..."
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  disabled={sending}
+                />
+                <Button size="icon" onClick={handleSend} disabled={sending || !replyText.trim()}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            ) : (
+              <div className="p-3 border-t bg-card">
+                <p className="text-xs text-muted-foreground text-center">
+                  {selectedStatus === "fila"
+                    ? "Assuma esta conversa para poder responder."
+                    : selectedStatus === "finalizado"
+                    ? "Conversa finalizada. Não é possível responder."
+                    : "Você não é o responsável por esta conversa."}
+                </p>
+              </div>
+            )
           ) : (
             <div className="p-3 border-t bg-card">
               <p className="text-xs text-muted-foreground text-center">
@@ -526,12 +721,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               Mover para quadro
             </DialogTitle>
           </DialogHeader>
-
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
               Lead: <strong>{selectedLead?.nome}</strong> sairá da entrada e entrará no quadro selecionado.
             </p>
-
             <div className="space-y-1.5">
               <p className="text-xs font-medium">Quadro de destino</p>
               <Select value={moveQuadroId} onValueChange={(v) => { setMoveQuadroId(v); setMoveEtapaId(""); }}>
@@ -549,7 +742,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 </SelectContent>
               </Select>
             </div>
-
             {moveQuadroId && (
               <div className="space-y-1.5">
                 <p className="text-xs font-medium">Etapa de entrada</p>
@@ -566,13 +758,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
             )}
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancelar</Button>
-            <Button
-              onClick={handleMover}
-              disabled={moving || !moveQuadroId || !moveEtapaId}
-            >
+            <Button onClick={handleMover} disabled={moving || !moveQuadroId || !moveEtapaId}>
               {moving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Mover lead
             </Button>
