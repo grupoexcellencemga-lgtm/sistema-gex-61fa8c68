@@ -306,8 +306,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
               console.log("[fotos] resposta:", JSON.stringify(data), "erro:", error);
               queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
-              if (error) toast.error("Erro: " + error.message);
-              else toast.success(`Fotos: ${data?.resultados?.filter((r: any) => r.ok).length ?? 0} atualizadas. Debug: ${JSON.stringify(data?.debugInfo)}`);
+              if (error) toast.error("Erro ao buscar fotos: " + error.message);
+              else {
+                const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
+                toast.success(ok > 0 ? `${ok} foto${ok !== 1 ? "s" : ""} de perfil atualizada${ok !== 1 ? "s" : ""}` : "Nenhuma foto nova encontrada");
+              }
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />

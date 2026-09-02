@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, total: leads?.length ?? 0, debugInfo, resultados }), {
+    return new Response(JSON.stringify({ ok: true, total: leads?.length ?? 0, resultados }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
