@@ -30,6 +30,7 @@ export function WhatsAppManagerSection() {
 
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -39,12 +40,14 @@ export function WhatsAppManagerSection() {
 
   const fetchInstances = useCallback(async () => {
     try {
+      setFetchError(null);
       const { data, error } = await supabase.functions.invoke("gerenciar-instancia", {
         body: { action: "list" },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       // Normalize: Evolution API v2 may return flat objects or nested {instance:{...}}
-      const raw: unknown[] = Array.isArray(data.data) ? data.data : [];
+      const raw: unknown[] = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
       const list: Instance[] = raw
         .filter(Boolean)
         .map((item: any) => {
@@ -75,7 +78,9 @@ export function WhatsAppManagerSection() {
         } catch {}
       });
     } catch (err: any) {
-      toast.error("Erro ao listar instâncias: " + (err.message ?? String(err)));
+      const msg = err.message ?? String(err);
+      setFetchError(msg);
+      toast.error("Erro ao listar instâncias: " + msg);
     } finally {
       setLoading(false);
     }
@@ -218,6 +223,11 @@ export function WhatsAppManagerSection() {
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : fetchError ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p className="font-medium mb-1">Erro ao conectar com a Evolution API</p>
+            <p className="font-mono text-xs break-all">{fetchError}</p>
           </div>
         ) : instances.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
