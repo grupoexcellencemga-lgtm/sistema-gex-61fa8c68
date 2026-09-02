@@ -111,6 +111,7 @@ export function CanaisCrmSection() {
     }
     setSaving(true);
     try {
+      let savedId = canal.id;
       if (canal.id) {
         const { error } = await supabase.from("canais_crm").update({
           nome: canal.nome,
@@ -122,7 +123,7 @@ export function CanaisCrmSection() {
         }).eq("id", canal.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("canais_crm").insert({
+        const { data: inserted, error } = await supabase.from("canais_crm").insert({
           empresa_id: empresaId,
           tipo: canal.tipo,
           nome: canal.nome,
@@ -131,14 +132,29 @@ export function CanaisCrmSection() {
           evolution_token: canal.evolution_token,
           evolution_instancia: canal.evolution_instancia,
           ativo: canal.ativo,
-        });
+        }).select("id").single();
         if (error) throw error;
+        savedId = inserted.id;
       }
       queryClient.invalidateQueries({ queryKey: ["canais_crm"] });
-      toast.success(canal.id ? "Canal atualizado" : "Canal adicionado");
+
+      // Para WhatsApp, configura o webhook automaticamente na Evolution API
+      if (canal.tipo === "whatsapp" && canal.evolution_instancia && savedId) {
+        const { error: webhookErr } = await supabase.functions.invoke("configurar-webhook", {
+          body: { canal_id: savedId },
+        });
+        if (webhookErr) {
+          toast.warning("Canal salvo, mas falha ao configurar webhook: " + webhookErr.message);
+        } else {
+          toast.success((canal.id ? "Canal atualizado" : "Canal adicionado") + " — webhook configurado");
+        }
+      } else {
+        toast.success(canal.id ? "Canal atualizado" : "Canal adicionado");
+      }
+
       setDialog(null);
-    } catch {
-      toast.error("Erro ao salvar");
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + (err.message ?? "tente novamente"));
     } finally {
       setSaving(false);
     }

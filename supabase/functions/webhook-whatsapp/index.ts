@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
         .insert({
           nome: nomeContato,
           telefone: telefone,
-          origem: "WhatsApp",
+          origem: "whatsapp",
           empresa_id: empresaId,
           canal_id: canal.id,
           contato_id: telefone,
