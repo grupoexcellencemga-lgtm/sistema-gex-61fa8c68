@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 type Instance = {
   instanceName: string;
   status: string;
+  ownerJid: string | null;
+  profileName: string | null;
 };
 
 type SaveDialog = {
@@ -51,11 +53,18 @@ export function WhatsAppManagerSection() {
       const list: Instance[] = raw
         .filter(Boolean)
         .map((item: any) => {
-          if (item?.instance?.instanceName) {
-            return { instanceName: item.instance.instanceName, status: item.instance.status ?? item.state ?? "disconnected" };
+          // Evolution API v2 flat format: { name, connectionStatus, ownerJid, ... }
+          if (item?.name) {
+            return {
+              instanceName: item.name,
+              status: item.connectionStatus ?? item.status ?? item.state ?? "disconnected",
+              ownerJid: item.ownerJid ?? null,
+              profileName: item.profileName ?? null,
+            };
           }
-          if (item?.instanceName) {
-            return { instanceName: item.instanceName, status: item.status ?? item.state ?? "disconnected" };
+          // Evolution API v1 nested format: { instance: { instanceName, status } }
+          if (item?.instance?.instanceName) {
+            return { instanceName: item.instance.instanceName, status: item.instance.status ?? "disconnected", ownerJid: null, profileName: null };
           }
           return null;
         })
@@ -246,7 +255,15 @@ export function WhatsAppManagerSection() {
                 <div key={name} className="border rounded-lg p-4 space-y-3 bg-card">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <p className="font-medium text-sm">{name}</p>
+                      <div>
+                        <p className="font-medium text-sm">{name}</p>
+                        {inst.ownerJid && (
+                          <p className="text-xs text-muted-foreground">
+                            {inst.ownerJid.replace("@s.whatsapp.net", "")}
+                            {inst.profileName ? ` · ${inst.profileName}` : ""}
+                          </p>
+                        )}
+                      </div>
                       <span className={cn("inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium", info.cls)}>
                         {info.icon}
                         {info.label}
