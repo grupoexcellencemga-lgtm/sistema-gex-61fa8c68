@@ -54,21 +54,11 @@ Deno.serve(async (req) => {
 
     const empresaId = canal.empresa_id;
 
-    // Busca lead existente pelo telefone + canal
-    let { data: lead } = await supabase
+    // Busca ou cria lead — upsert evita race condition com o índice único
+    const { data: lead, error: errLead } = await supabase
       .from("leads")
-      .select("id")
-      .eq("contato_id", telefone)
-      .eq("canal_id", canal.id)
-      .eq("empresa_id", empresaId)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    // Cria lead se não existir
-    if (!lead) {
-      const { data: novoLead, error: errLead } = await supabase
-        .from("leads")
-        .insert({
+      .upsert(
+        {
           nome: nomeContato,
           telefone: telefone,
           origem: "whatsapp",
@@ -76,24 +66,36 @@ Deno.serve(async (req) => {
           canal_id: canal.id,
           contato_id: telefone,
           etapa_id: ETAPA_WHATSAPP_ID,
-        })
-        .select("id")
-        .single();
+        },
+        { onConflict: "empresa_id,canal_id,contato_id", ignoreDuplicates: true }
+      )
+      .select("id")
+      .maybeSingle();
 
-      if (errLead) throw errLead;
-      lead = novoLead;
-    }
+    // Se ignoreDuplicates pulou o insert, busca o existente
+    const leadId = lead?.id ?? (await supabase
+      .from("leads")
+      .select("id")
+      .eq("contato_id", telefone)
+      .eq("canal_id", canal.id)
+      .eq("empresa_id", empresaId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    ).data?.id;
+
+    if (!leadId) throw new Error("Não foi possível obter lead_id");
+    if (errLead) throw errLead;
 
     // Salva a mensagem (fromMe = enviada pelo número da empresa)
     await supabase.from("mensagens_crm").insert({
-      lead_id: lead.id,
+      lead_id: leadId,
       empresa_id: empresaId,
       conteudo: texto,
       direcao: fromMe ? "saida" : "entrada",
       canal: "whatsapp",
     });
 
-    return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), {
+    return new Response(JSON.stringify({ ok: true, lead_id: leadId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
