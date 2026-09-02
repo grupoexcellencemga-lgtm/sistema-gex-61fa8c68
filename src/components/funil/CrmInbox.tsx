@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
-  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users,
+  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,17 @@ type Mensagem = {
   canal: string;
   lido: boolean | null;
   created_at: string;
+};
+
+type Protocolo = {
+  id: string;
+  numero_protocolo: string;
+  lead_id: string;
+  atendente_id: string | null;
+  status: string;
+  iniciado_em: string;
+  finalizado_em: string | null;
+  leads: { nome: string; foto_perfil: string | null; contato_id: string | null } | null;
 };
 
 type AbaAtendimento = "fila" | "minhas" | "finalizadas";
@@ -47,6 +58,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const userId = user?.id;
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedProtocolo, setSelectedProtocolo] = useState<Protocolo | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
@@ -61,7 +73,15 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const etapaIds = etapas.map((e) => e.id);
 
-  // Usuários da empresa (para dropdown "Atribuir para...")
+  function mudarAba(novaAba: AbaAtendimento) {
+    setAba(novaAba);
+    setSelectedLeadId(null);
+    setSelectedProtocolo(null);
+    setFiltroCanal("todos");
+    setReplyText("");
+  }
+
+  // Usuários da empresa (dropdown de atribuição)
   type UsuarioEmpresa = { user_id: string; nome: string };
   const { data: usuarios = [] } = useQuery<UsuarioEmpresa[]>({
     queryKey: ["usuarios-empresa", empresaId],
@@ -76,10 +96,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         .from("profiles")
         .select("user_id, nome")
         .in("user_id", userIds);
-      return (profiles ?? []).map((p: any) => ({
-        user_id: p.user_id,
-        nome: p.nome ?? "Sem nome",
-      }));
+      return (profiles ?? []).map((p: any) => ({ user_id: p.user_id, nome: p.nome ?? "Sem nome" }));
     },
     enabled: !!empresaId,
   });
@@ -135,7 +152,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     enabled: !!moveQuadroId,
   });
 
-  // Leads: filtrados por aba de atendimento
+  // Leads: fila e minhas abas
   const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRow[]>({
     queryKey: ["crm-leads", quadroId, empresaId, aba, userId, isAdmin],
     queryFn: async () => {
@@ -149,11 +166,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
       if (aba === "fila") {
         query = query.eq("status_atendimento", "fila");
-      } else if (aba === "minhas") {
-        query = query.eq("status_atendimento", "ativo");
-        if (!isAdmin) query = query.eq("atendente_id", userId);
       } else {
-        query = query.eq("status_atendimento", "finalizado");
+        query = query.eq("status_atendimento", "ativo");
         if (!isAdmin) query = query.eq("atendente_id", userId);
       }
 
@@ -164,8 +178,27 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (error) throw error;
       return data as LeadRow[];
     },
-    enabled: !!empresaId && !!userId && etapaIds.length > 0,
+    enabled: !!empresaId && !!userId && etapaIds.length > 0 && aba !== "finalizadas",
     refetchInterval: 15000,
+  });
+
+  // Protocolos finalizados
+  const { data: protocolos = [], isLoading: protocolosLoading } = useQuery<Protocolo[]>({
+    queryKey: ["protocolos-finalizados", empresaId, userId, isAdmin],
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from("protocolos_atendimento")
+        .select("*, leads(nome, foto_perfil, contato_id)")
+        .eq("empresa_id", empresaId!)
+        .eq("status", "finalizado");
+      if (!isAdmin) query = query.eq("atendente_id", userId!);
+      const { data, error } = await query
+        .order("finalizado_em", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return data as Protocolo[];
+    },
+    enabled: !!empresaId && !!userId && aba === "finalizadas",
+    refetchInterval: 30000,
   });
 
   const leadsFiltered = filtroCanal === "todos"
@@ -176,9 +209,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const selectedStatus: string = (selectedLead as any)?.status_atendimento ?? "fila";
   const selectedAtendente: string | null = (selectedLead as any)?.atendente_id ?? null;
   const isMyLead = selectedAtendente === userId;
-  const canReply = canal === "whatsapp" && (selectedStatus === "ativo") && (isMyLead || isAdmin);
+  const canReply = canal === "whatsapp" && selectedStatus === "ativo" && (isMyLead || isAdmin);
 
-  const { data: mensagens = [], isLoading: msgsLoading } = useQuery<Mensagem[]>({
+  // Mensagens da conversa ativa (fila/minhas)
+  const { data: mensagensLead = [], isLoading: msgsLeadLoading } = useQuery<Mensagem[]>({
     queryKey: ["mensagens-crm", selectedLeadId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -189,14 +223,33 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (error) throw error;
       return data as Mensagem[];
     },
-    enabled: !!selectedLeadId,
+    enabled: !!selectedLeadId && aba !== "finalizadas",
     staleTime: 0,
     refetchInterval: 1000,
   });
 
+  // Mensagens de um protocolo finalizado
+  const { data: mensagensProtocolo = [], isLoading: msgsProtoLoading } = useQuery<Mensagem[]>({
+    queryKey: ["mensagens-protocolo", selectedProtocolo?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("mensagens_crm")
+        .select("*")
+        .eq("protocolo_id", selectedProtocolo!.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as Mensagem[];
+    },
+    enabled: !!selectedProtocolo?.id && aba === "finalizadas",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const mensagens = aba === "finalizadas" ? mensagensProtocolo : mensagensLead;
+  const msgsLoading = aba === "finalizadas" ? msgsProtoLoading : msgsLeadLoading;
+
   // Realtime: novas mensagens
   useEffect(() => {
-    if (!selectedLeadId) return;
+    if (!selectedLeadId || aba === "finalizadas") return;
     const ch = supabase
       .channel("mensagens-crm-global")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensagens_crm" }, () => {
@@ -204,9 +257,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [selectedLeadId, queryClient]);
+  }, [selectedLeadId, aba, queryClient]);
 
-  // Realtime: atualização de leads (todas as abas)
+  // Realtime: atualização de leads
   useEffect(() => {
     if (!empresaId || etapaIds.length === 0) return;
     const invalidate = () =>
@@ -219,7 +272,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     return () => { supabase.removeChannel(ch); };
   }, [empresaId, quadroId, queryClient]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -234,32 +287,31 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
   }
 
-  async function assumir(leadId: string) {
-    try {
-      const { error } = await (supabase as any)
-        .from("leads")
-        .update({ atendente_id: userId, status_atendimento: "ativo", atribuido_em: new Date().toISOString() })
-        .eq("id", leadId);
-      if (error) throw error;
-      toast.success("Conversa assumida!");
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
-    } catch (err: any) {
-      toast.error("Erro ao assumir: " + err.message);
-    }
-  }
-
-  async function atribuir(leadId: string, paraUserId: string) {
+  async function assumirOuAtribuir(leadId: string, paraUserId: string) {
     setAtribuindo(true);
     try {
+      // Cria protocolo
+      const { data: protoData, error: protoErr } = await supabase.rpc("criar_protocolo", {
+        p_empresa_id: empresaId,
+        p_lead_id: leadId,
+        p_atendente_id: paraUserId,
+      });
+      if (protoErr) throw protoErr;
+
+      const numero = (protoData as any)?.numero_protocolo ?? "";
+
+      // Atualiza lead
       const { error } = await (supabase as any)
         .from("leads")
         .update({ atendente_id: paraUserId, status_atendimento: "ativo", atribuido_em: new Date().toISOString() })
         .eq("id", leadId);
       if (error) throw error;
-      toast.success("Conversa atribuída para " + (usuariosMap[paraUserId] ?? "usuário") + "!");
+
+      const nomeAgente = paraUserId === userId ? "você" : (usuariosMap[paraUserId] ?? "usuário");
+      toast.success(`Protocolo ${numero} aberto — atribuído para ${nomeAgente}`);
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
     } catch (err: any) {
-      toast.error("Erro ao atribuir: " + err.message);
+      toast.error("Erro: " + err.message);
     } finally {
       setAtribuindo(false);
     }
@@ -268,14 +320,21 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   async function finalizar(leadId: string) {
     setFinalizando(true);
     try {
+      // Fecha o protocolo ativo
+      const { error: protoErr } = await supabase.rpc("finalizar_protocolo", { p_lead_id: leadId });
+      if (protoErr) throw protoErr;
+
+      // Atualiza lead
       const { error } = await (supabase as any)
         .from("leads")
         .update({ status_atendimento: "finalizado" })
         .eq("id", leadId);
       if (error) throw error;
-      toast.success("Conversa finalizada!");
+
+      toast.success("Conversa finalizada! Protocolo encerrado.");
       setSelectedLeadId(null);
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["protocolos-finalizados", empresaId], exact: false });
     } catch (err: any) {
       toast.error("Erro ao finalizar: " + err.message);
     } finally {
@@ -350,15 +409,37 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  function formatDate(iso: string | null) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " +
+      d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
   const abaConfig: { key: AbaAtendimento; label: string; icon: React.ReactNode }[] = [
     { key: "fila", label: "Fila", icon: <Clock className="h-3.5 w-3.5" /> },
     { key: "minhas", label: isAdmin ? "Em andamento" : "Minhas", icon: <UserCheck className="h-3.5 w-3.5" /> },
     { key: "finalizadas", label: "Finalizadas", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   ];
 
+  // Painel de chat: conteúdo e header variam por aba
+  const chatHeaderName = aba === "finalizadas"
+    ? selectedProtocolo?.leads?.nome ?? "—"
+    : selectedLead?.nome ?? "—";
+
+  const chatHeaderSub = aba === "finalizadas"
+    ? selectedProtocolo?.leads?.contato_id
+    : (selectedLead as any)?.contato_id;
+
+  const chatHeaderFoto = aba === "finalizadas"
+    ? selectedProtocolo?.leads?.foto_perfil
+    : (selectedLead as any)?.foto_perfil;
+
+  const showChatPanel = aba === "finalizadas" ? !!selectedProtocolo : !!selectedLead;
+
   return (
     <div className="flex h-full" style={{ height: "calc(100svh - 18rem)", minHeight: "400px" }}>
-      {/* Lead list */}
+      {/* Lista lateral */}
       <div className="w-72 shrink-0 border-r flex flex-col bg-card">
 
         {/* Abas de atendimento */}
@@ -367,7 +448,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             {abaConfig.map((a) => (
               <button
                 key={a.key}
-                onClick={() => { setAba(a.key); setSelectedLeadId(null); setFiltroCanal("todos"); }}
+                onClick={() => mudarAba(a.key)}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-medium border-b-2 transition-colors",
                   aba === a.key
@@ -382,8 +463,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
         </div>
 
-        {/* Canal tabs */}
-        {canais.length > 1 && (
+        {/* Canal tabs (só nas abas de leads ativos) */}
+        {aba !== "finalizadas" && canais.length > 1 && (
           <div className="border-b overflow-x-auto">
             <div className="flex min-w-max">
               <button
@@ -405,10 +486,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     key={c.id}
                     onClick={() => { setFiltroCanal(c.id); setSelectedLeadId(null); }}
                     className="px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors"
-                    style={{
-                      borderBottomColor: active ? c.cor : "transparent",
-                      color: active ? c.cor : undefined,
-                    }}
+                    style={{ borderBottomColor: active ? c.cor : "transparent", color: active ? c.cor : undefined }}
                   >
                     {c.nome} ({count})
                   </button>
@@ -420,229 +498,272 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
         <div className="p-3 border-b flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {leadsFiltered.length} conversa{leadsFiltered.length !== 1 ? "s" : ""}
+            {aba === "finalizadas"
+              ? `${protocolos.length} protocolo${protocolos.length !== 1 ? "s" : ""}`
+              : `${leadsFiltered.length} conversa${leadsFiltered.length !== 1 ? "s" : ""}`}
           </p>
-          <button
-            title="Atualizar fotos de perfil"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            onClick={async () => {
-              const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
-              queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
-              if (error) toast.error("Erro ao buscar fotos: " + error.message);
-              else {
-                const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
-                toast.success(ok > 0
-                  ? `${ok} foto${ok !== 1 ? "s" : ""} de perfil atualizada${ok !== 1 ? "s" : ""}`
-                  : "Nenhuma foto nova encontrada");
-              }
-            }}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
+          {aba !== "finalizadas" && (
+            <button
+              title="Atualizar fotos de perfil"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={async () => {
+                const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
+                queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+                if (error) toast.error("Erro ao buscar fotos: " + error.message);
+                else {
+                  const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
+                  toast.success(ok > 0 ? `${ok} foto${ok !== 1 ? "s" : ""} atualizada${ok !== 1 ? "s" : ""}` : "Nenhuma foto nova encontrada");
+                }
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <ScrollArea className="flex-1">
-          {leadsLoading ? (
-            <div className="flex justify-center p-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : leadsFiltered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
-              <MessageSquare className="h-8 w-8 opacity-20" />
-              <p className="text-xs">
-                {aba === "fila" && "Nenhuma conversa na fila."}
-                {aba === "minhas" && (isAdmin ? "Nenhuma conversa em andamento." : "Você não tem conversas ativas.")}
-                {aba === "finalizadas" && "Nenhuma conversa finalizada."}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {leadsFiltered.map((lead) => {
-                const status: string = (lead as any).status_atendimento ?? "fila";
-                const atendente: string | null = (lead as any).atendente_id ?? null;
-                return (
+          {/* Lista de leads (fila/minhas) */}
+          {aba !== "finalizadas" && (
+            leadsLoading ? (
+              <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : leadsFiltered.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
+                <MessageSquare className="h-8 w-8 opacity-20" />
+                <p className="text-xs">
+                  {aba === "fila" ? "Nenhuma conversa na fila." : isAdmin ? "Nenhuma conversa em andamento." : "Você não tem conversas ativas."}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {leadsFiltered.map((lead) => {
+                  const atendente: string | null = (lead as any).atendente_id ?? null;
+                  return (
+                    <button
+                      key={lead.id}
+                      onClick={() => {
+                        setSelectedLeadId(lead.id);
+                        if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
+                      }}
+                      className={cn(
+                        "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
+                        selectedLeadId === lead.id && "bg-primary/10"
+                      )}
+                    >
+                      <div className="relative shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                          {(lead as any).foto_perfil
+                            ? <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
+                            : <User className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                        {(lead as any).tem_mensagem_nova && (
+                          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
+                            <span className="text-[10px] font-bold text-white leading-none">
+                              {(lead as any).mensagens_nao_lidas > 0 ? (lead as any).mensagens_nao_lidas : ""}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>{lead.nome}</p>
+                          {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
+                            <span
+                              className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
+                              style={{
+                                backgroundColor: canaisMap[(lead as any).canal_id].cor + "22",
+                                color: canaisMap[(lead as any).canal_id].cor,
+                                border: `1px solid ${canaisMap[(lead as any).canal_id].cor}44`,
+                              }}
+                            >
+                              {canaisMap[(lead as any).canal_id].nome}
+                            </span>
+                          )}
+                        </div>
+                        {(lead as any).contato_id && (
+                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                            <Phone className="h-2.5 w-2.5" />{(lead as any).contato_id}
+                          </p>
+                        )}
+                        {atendente && usuariosMap[atendente] && (
+                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                            <Users className="h-2.5 w-2.5" />{usuariosMap[atendente]}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* Lista de protocolos finalizados */}
+          {aba === "finalizadas" && (
+            protocolosLoading ? (
+              <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : protocolos.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 opacity-20" />
+                <p className="text-xs">Nenhum protocolo finalizado.</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {protocolos.map((proto) => (
                   <button
-                    key={lead.id}
-                    onClick={() => {
-                      setSelectedLeadId(lead.id);
-                      if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
-                    }}
+                    key={proto.id}
+                    onClick={() => setSelectedProtocolo(proto)}
                     className={cn(
                       "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
-                      selectedLeadId === lead.id && "bg-primary/10"
+                      selectedProtocolo?.id === proto.id && "bg-primary/10"
                     )}
                   >
-                    <div className="relative shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                        {(lead as any).foto_perfil ? (
-                          <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
-                        ) : (
-                          <User className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      {(lead as any).tem_mensagem_nova && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
-                          <span className="text-[10px] font-bold text-white leading-none">
-                            {(lead as any).mensagens_nao_lidas > 0 ? (lead as any).mensagens_nao_lidas : ""}
-                          </span>
-                        </span>
-                      )}
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                      {proto.leads?.foto_perfil
+                        ? <img src={proto.leads.foto_perfil} alt={proto.leads?.nome} className="h-full w-full object-cover" />
+                        : <User className="h-4 w-4 text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>
-                          {lead.nome}
-                        </p>
-                        {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
-                          <span
-                            className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
-                            style={{
-                              backgroundColor: canaisMap[(lead as any).canal_id].cor + "22",
-                              color: canaisMap[(lead as any).canal_id].cor,
-                              border: `1px solid ${canaisMap[(lead as any).canal_id].cor}44`,
-                            }}
-                          >
-                            {canaisMap[(lead as any).canal_id].nome}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{proto.leads?.nome ?? "—"}</p>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 flex items-center gap-0.5">
+                          <Hash className="h-2.5 w-2.5" />{proto.numero_protocolo}
+                        </Badge>
                       </div>
-                      {(lead as any).contato_id && (
+                      {proto.leads?.contato_id && (
                         <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                          <Phone className="h-2.5 w-2.5" />
-                          {(lead as any).contato_id}
+                          <Phone className="h-2.5 w-2.5" />{proto.leads.contato_id}
                         </p>
                       )}
-                      {atendente && usuariosMap[atendente] && (
-                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                          <Users className="h-2.5 w-2.5" />
-                          {usuariosMap[atendente]}
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                        {proto.atendente_id && usuariosMap[proto.atendente_id]
+                          ? <><Users className="h-2.5 w-2.5" />{usuariosMap[proto.atendente_id]}</>
+                          : null}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(proto.finalizado_em)}</p>
                     </div>
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )
           )}
         </ScrollArea>
       </div>
 
-      {/* Chat panel */}
-      {selectedLead ? (
+      {/* Painel de chat */}
+      {showChatPanel ? (
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
           <div className="p-3 border-b flex items-center justify-between bg-card">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
-                {(selectedLead as any).foto_perfil ? (
-                  <img src={(selectedLead as any).foto_perfil} alt={selectedLead.nome} className="h-full w-full object-cover" />
-                ) : (
-                  <User className="h-4 w-4 text-muted-foreground" />
-                )}
+                {chatHeaderFoto
+                  ? <img src={chatHeaderFoto} alt={chatHeaderName} className="h-full w-full object-cover" />
+                  : <User className="h-4 w-4 text-muted-foreground" />}
               </div>
               <div>
-                <p className="text-sm font-semibold">{selectedLead.nome}</p>
                 <div className="flex items-center gap-2">
-                  {(selectedLead as any).contato_id && (
-                    <p className="text-xs text-muted-foreground">{(selectedLead as any).contato_id}</p>
+                  <p className="text-sm font-semibold">{chatHeaderName}</p>
+                  {aba === "finalizadas" && selectedProtocolo && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5">
+                      <Hash className="h-2.5 w-2.5" />{selectedProtocolo.numero_protocolo}
+                    </Badge>
                   )}
-                  {selectedAtendente && usuariosMap[selectedAtendente] && (
+                </div>
+                <div className="flex items-center gap-2">
+                  {chatHeaderSub && (
+                    <p className="text-xs text-muted-foreground">{chatHeaderSub}</p>
+                  )}
+                  {aba !== "finalizadas" && selectedAtendente && usuariosMap[selectedAtendente] && (
                     <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-0.5">
-                      <UserCheck className="h-3 w-3" />
-                      {usuariosMap[selectedAtendente]}
+                      <UserCheck className="h-3 w-3" />{usuariosMap[selectedAtendente]}
+                    </p>
+                  )}
+                  {aba === "finalizadas" && selectedProtocolo?.atendente_id && usuariosMap[selectedProtocolo.atendente_id] && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-0.5">
+                      <UserCheck className="h-3 w-3" />{usuariosMap[selectedProtocolo.atendente_id]}
+                      {selectedProtocolo.finalizado_em && <> · {formatDate(selectedProtocolo.finalizado_em)}</>}
                     </p>
                   )}
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 items-center">
-              {/* Ações de atendimento */}
-              {selectedStatus === "fila" && (
-                <>
+
+            {/* Ações (só em fila/minhas) */}
+            {aba !== "finalizadas" && (
+              <div className="flex gap-2 items-center">
+                {selectedStatus === "fila" && (
+                  <>
+                    <Button size="sm" variant="default" className="gap-1.5" onClick={() => assumirOuAtribuir(selectedLead!.id, userId!)} disabled={atribuindo}>
+                      {atribuindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
+                      Assumir
+                    </Button>
+                    {isAdmin && usuarios.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1" disabled={atribuindo}>
+                            <Users className="h-3.5 w-3.5" />Atribuir<ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          {usuarios.map((u) => (
+                            <DropdownMenuItem key={u.user_id} onClick={() => assumirOuAtribuir(selectedLead!.id, u.user_id)}>
+                              <User className="h-4 w-4 mr-2 text-muted-foreground" />{u.nome}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </>
+                )}
+
+                {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
                   <Button
                     size="sm"
-                    variant="default"
-                    className="gap-1.5"
-                    onClick={() => assumir(selectedLead.id)}
+                    variant="outline"
+                    className="gap-1.5 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                    onClick={() => finalizar(selectedLead!.id)}
+                    disabled={finalizando}
                   >
-                    <UserCheck className="h-3.5 w-3.5" />
-                    Assumir
+                    {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Finalizar
                   </Button>
-                  {isAdmin && usuarios.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline" className="gap-1" disabled={atribuindo}>
-                          <Users className="h-3.5 w-3.5" />
-                          Atribuir
-                          <ChevronDown className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        {usuarios.map((u) => (
-                          <DropdownMenuItem
-                            key={u.user_id}
-                            onClick={() => atribuir(selectedLead.id, u.user_id)}
-                          >
-                            <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                            {u.nome}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </>
-              )}
+                )}
 
-              {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                  onClick={() => finalizar(selectedLead.id)}
-                  disabled={finalizando}
-                >
-                  {finalizando
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Finalizar
-                </Button>
-              )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <Settings2 className="h-3.5 w-3.5" /><ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {onLeadClick && selectedLead && (
+                      <>
+                        <DropdownMenuItem onClick={() => onLeadClick(selectedLead)}>
+                          <ExternalLink className="h-4 w-4 mr-2 text-muted-foreground" />Ver lead
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
+                      <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />Mover para quadro
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
+              </div>
+            )}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <Settings2 className="h-3.5 w-3.5" />
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {onLeadClick && (
-                    <>
-                      <DropdownMenuItem onClick={() => onLeadClick(selectedLead)}>
-                        <ExternalLink className="h-4 w-4 mr-2 text-muted-foreground" />
-                        Ver lead
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
-                    <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />
-                    Mover para quadro
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {aba === "finalizadas" && (
               <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
-            </div>
+            )}
           </div>
 
-          {/* Messages */}
+          {/* Mensagens */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
             {msgsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
             ) : mensagens.length === 0 ? (
-              <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem ainda.</p>
+              <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem neste protocolo.</p>
             ) : (
               mensagens.map((msg) => (
                 <div key={msg.id} className={cn("flex", msg.direcao === "saida" ? "justify-end" : "justify-start")}>
@@ -653,10 +774,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       : "bg-card border rounded-bl-sm"
                   )}>
                     <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
-                    <p className={cn(
-                      "text-[10px] mt-1",
-                      msg.direcao === "saida" ? "text-primary-foreground/70 text-right" : "text-muted-foreground"
-                    )}>
+                    <p className={cn("text-[10px] mt-1", msg.direcao === "saida" ? "text-primary-foreground/70 text-right" : "text-muted-foreground")}>
                       {formatTime(msg.created_at)}
                     </p>
                   </div>
@@ -665,8 +783,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             )}
           </div>
 
-          {/* Reply box */}
-          {canal === "whatsapp" ? (
+          {/* Caixa de resposta */}
+          {canal === "whatsapp" && aba !== "finalizadas" ? (
             canReply ? (
               <div className="p-3 border-t bg-card flex gap-2">
                 <Input
@@ -674,12 +792,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   onChange={(e) => setReplyText(e.target.value)}
                   placeholder="Digite uma mensagem..."
                   className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   disabled={sending}
                 />
                 <Button size="icon" onClick={handleSend} disabled={sending || !replyText.trim()}>
@@ -691,16 +804,20 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 <p className="text-xs text-muted-foreground text-center">
                   {selectedStatus === "fila"
                     ? "Assuma esta conversa para poder responder."
-                    : selectedStatus === "finalizado"
-                    ? "Conversa finalizada. Não é possível responder."
                     : "Você não é o responsável por esta conversa."}
                 </p>
               </div>
             )
+          ) : aba === "finalizadas" ? (
+            <div className="p-3 border-t bg-muted/30">
+              <p className="text-xs text-muted-foreground text-center">
+                Histórico do protocolo {selectedProtocolo?.numero_protocolo} — somente leitura.
+              </p>
+            </div>
           ) : (
             <div className="p-3 border-t bg-card">
               <p className="text-xs text-muted-foreground text-center">
-                Resposta direta pelo Instagram não disponível. Acesse o Instagram para responder.
+                Resposta direta pelo Instagram não disponível.
               </p>
             </div>
           )}
@@ -708,7 +825,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <MessageSquare className="h-10 w-10 opacity-20" />
-          <p className="text-sm">Selecione uma conversa para visualizar</p>
+          <p className="text-sm">
+            {aba === "finalizadas" ? "Selecione um protocolo para ver o histórico" : "Selecione uma conversa para visualizar"}
+          </p>
         </div>
       )}
 
@@ -717,8 +836,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ArrowRightFromLine className="h-4 w-4 text-primary" />
-              Mover para quadro
+              <ArrowRightFromLine className="h-4 w-4 text-primary" />Mover para quadro
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -728,17 +846,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             <div className="space-y-1.5">
               <p className="text-xs font-medium">Quadro de destino</p>
               <Select value={moveQuadroId} onValueChange={(v) => { setMoveQuadroId(v); setMoveEtapaId(""); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o quadro..." />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione o quadro..." /></SelectTrigger>
                 <SelectContent>
-                  {quadrosDestino.length === 0 ? (
-                    <SelectItem value="__none" disabled>Nenhum quadro disponível</SelectItem>
-                  ) : (
-                    quadrosDestino.map((q) => (
-                      <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>
-                    ))
-                  )}
+                  {quadrosDestino.length === 0
+                    ? <SelectItem value="__none" disabled>Nenhum quadro disponível</SelectItem>
+                    : quadrosDestino.map((q) => <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -746,13 +858,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               <div className="space-y-1.5">
                 <p className="text-xs font-medium">Etapa de entrada</p>
                 <Select value={moveEtapaId} onValueChange={setMoveEtapaId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a etapa..." />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione a etapa..." /></SelectTrigger>
                   <SelectContent>
-                    {etapasDestino.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                    ))}
+                    {etapasDestino.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -761,8 +869,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancelar</Button>
             <Button onClick={handleMover} disabled={moving || !moveQuadroId || !moveEtapaId}>
-              {moving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Mover lead
+              {moving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Mover lead
             </Button>
           </DialogFooter>
         </DialogContent>

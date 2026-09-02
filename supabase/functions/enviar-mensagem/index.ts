@@ -40,7 +40,15 @@ Deno.serve(async (req) => {
 
     const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
     if (!apiKey) throw new Error("API key da Evolution não configurada");
-    const evoUrl = `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`;
+
+    // Busca protocolo ativo para linkar a mensagem
+    const { data: protocolo } = await supabase
+      .from("protocolos_atendimento")
+      .select("id")
+      .eq("lead_id", lead.id)
+      .eq("status", "ativo")
+      .maybeSingle();
+
     // Salva no DB antes de chamar a Evolution API
     await supabase.from("mensagens_crm").insert({
       lead_id: lead.id,
@@ -48,18 +56,14 @@ Deno.serve(async (req) => {
       conteudo: mensagem.trim(),
       direcao: "saida",
       canal: "whatsapp",
+      protocolo_id: protocolo?.id ?? null,
     });
 
+    const evoUrl = `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`;
     const evoRes = await fetch(evoUrl, {
       method: "POST",
-      headers: {
-        "apikey": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        number: lead.contato_id,
-        text: mensagem.trim(),
-      }),
+      headers: { "apikey": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: lead.contato_id, text: mensagem.trim() }),
     });
 
     if (!evoRes.ok) {

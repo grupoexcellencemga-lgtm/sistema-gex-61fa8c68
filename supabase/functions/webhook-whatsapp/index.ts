@@ -5,10 +5,7 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const QUADRO_WHATSAPP_ID = "aaaaaaaa-0001-0001-0001-000000000001";
-const ETAPA_WHATSAPP_ID  = "aaaaaaaa-0002-0002-0002-000000000002";
-const QUADRO_INSTAGRAM_ID = "aaaaaaaa-0003-0003-0003-000000000003";
-const ETAPA_INSTAGRAM_ID  = "aaaaaaaa-0004-0004-0004-000000000004";
+const ETAPA_WHATSAPP_ID = "aaaaaaaa-0002-0002-0002-000000000002";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,20 +19,17 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { event, instance, data } = body;
 
-    console.log("[webhook] event:", event, "instance:", instance, "data_type:", Array.isArray(data) ? "array" : typeof data);
+    console.log("[webhook] event:", event, "instance:", instance);
 
     if (event !== "messages.upsert") return new Response("ignored", { status: 200 });
     if (!data) return new Response("ignored", { status: 200 });
 
-    // Evolution API v2: data = { messages: [...], type: "notify" }
-    // Versões anteriores: data = array ou objeto direto
     const mensagens = Array.isArray(data)
       ? data
       : Array.isArray(data?.messages)
       ? data.messages
       : [data];
 
-    // Busca canal pelo nome da instância (uma vez, fora do loop)
     const { data: canal } = await supabase
       .from("canais_crm")
       .select("id, empresa_id")
@@ -52,7 +46,6 @@ Deno.serve(async (req) => {
 
     for (const msg of mensagens) {
       const fromMe: boolean = msg.key?.fromMe === true;
-
       const remoteJid: string = msg.key?.remoteJid ?? "";
       if (!remoteJid || remoteJid.includes("@g.us")) continue;
 
@@ -64,13 +57,13 @@ Deno.serve(async (req) => {
         msg.message?.imageMessage?.caption ||
         "[Mídia]";
 
-      console.log("[webhook] processando msg de:", telefone, "fromMe:", fromMe, "texto:", texto.substring(0, 50));
+      console.log("[webhook] msg de:", telefone, "fromMe:", fromMe, "texto:", texto.substring(0, 50));
 
-      // Busca lead existente primeiro (evita conflito com índice parcial)
+      // Busca ou cria lead
       let leadId: string | undefined;
       const { data: existingLead } = await supabase
         .from("leads")
-        .select("id")
+        .select("id, status_atendimento")
         .eq("contato_id", telefone)
         .eq("canal_id", canal.id)
         .eq("empresa_id", empresaId)
@@ -84,36 +77,46 @@ Deno.serve(async (req) => {
           .from("leads")
           .insert({
             nome: nomeContato,
-            telefone: telefone,
+            telefone,
             origem: "whatsapp",
             empresa_id: empresaId,
             canal_id: canal.id,
             contato_id: telefone,
             etapa_id: ETAPA_WHATSAPP_ID,
+            status_atendimento: "fila",
           })
-          .select("id")
+          .select("id, status_atendimento")
           .maybeSingle();
         if (insertErr || !newLead) {
-          // Pode ser race condition — tenta buscar novamente
-          const { data: retry } = await supabase.from("leads").select("id")
+          const { data: retry } = await supabase.from("leads").select("id, status_atendimento")
             .eq("contato_id", telefone).eq("canal_id", canal.id).eq("empresa_id", empresaId)
             .is("deleted_at", null).maybeSingle();
-          leadId = retry?.id;
-          if (!leadId) { console.error("Erro ao criar lead:", insertErr); continue; }
+          if (!retry?.id) { console.error("Erro ao criar lead:", insertErr); continue; }
+          leadId = retry.id;
         } else {
           leadId = newLead.id;
         }
       }
 
+      // Busca protocolo ativo para linkar a mensagem
+      const { data: protocolo } = await supabase
+        .from("protocolos_atendimento")
+        .select("id")
+        .eq("lead_id", leadId)
+        .eq("status", "ativo")
+        .maybeSingle();
+
+      // Insere mensagem
       await supabase.from("mensagens_crm").insert({
         lead_id: leadId,
         empresa_id: empresaId,
         conteudo: texto,
         direcao: fromMe ? "saida" : "entrada",
         canal: "whatsapp",
+        protocolo_id: protocolo?.id ?? null,
       });
 
-      // Busca foto de perfil (best-effort, não falha se der erro)
+      // Foto de perfil (best-effort)
       try {
         const EVOLUTION_URL = "http://2.25.125.70:8080";
         const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
@@ -125,31 +128,23 @@ Deno.serve(async (req) => {
           if (picRes.ok) {
             const picData = await picRes.json();
             const picUrl: string | undefined = picData?.profilePictureUrl ?? picData?.picture ?? picData?.imgUrl ?? picData?.url;
-            if (picUrl) {
-              await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
-            }
+            if (picUrl) await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
           }
         }
-      } catch (_) { /* ignora erro de foto */ }
+      } catch (_) { /* ignora */ }
 
       if (fromMe) {
-        await supabase.from("leads").update({
-          ultima_mensagem_em: new Date().toISOString(),
-        }).eq("id", leadId);
+        await supabase.from("leads").update({ ultima_mensagem_em: new Date().toISOString() }).eq("id", leadId);
       } else {
-        // Se a conversa estava finalizada, volta para fila
-        const { data: leadAtual } = await supabase
-          .from("leads")
-          .select("status_atendimento")
-          .eq("id", leadId)
-          .maybeSingle();
-
-        if ((leadAtual as any)?.status_atendimento === "finalizado") {
+        // Mensagem de entrada: se estava finalizado, volta para fila
+        const statusAtual = existingLead?.status_atendimento;
+        if (statusAtual === "finalizado") {
           await supabase.from("leads").update({
             status_atendimento: "fila",
             atendente_id: null,
             atribuido_em: null,
           }).eq("id", leadId);
+          console.log("[webhook] lead", leadId, "voltou para fila (era finalizado)");
         }
 
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
