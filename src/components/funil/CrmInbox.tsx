@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2, ExternalLink, ChevronDown } from "lucide-react";
+import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2, ExternalLink, ChevronDown, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -295,10 +295,21 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             </div>
           </div>
         )}
-        <div className="p-3 border-b">
+        <div className="p-3 border-b flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {leadsFiltered.length} conversa{leadsFiltered.length !== 1 ? "s" : ""}
           </p>
+          <button
+            title="Atualizar fotos de perfil"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={async () => {
+              await supabase.functions.invoke("buscar-fotos-perfil", {});
+              queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
+              toast.success("Fotos atualizadas");
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
         </div>
         <ScrollArea className="flex-1">
           {leadsLoading ? (

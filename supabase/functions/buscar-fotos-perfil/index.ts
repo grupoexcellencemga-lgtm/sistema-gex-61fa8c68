@@ -1,0 +1,72 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+const EVOLUTION_URL = "http://2.25.125.70:8080";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  try {
+    const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+    if (!globalKey) throw new Error("EVOLUTION_GLOBAL_API_KEY não configurada");
+
+    // Busca leads com telefone mas sem foto, junto com a instância do canal
+    const { data: leads, error } = await supabase
+      .from("leads")
+      .select("id, contato_id, canal_id, canais_crm!canal_id(evolution_instancia)")
+      .is("deleted_at", null)
+      .not("contato_id", "is", null)
+      .is("foto_perfil", null)
+      .limit(50);
+
+    if (error) throw error;
+
+    const resultados: { id: string; ok: boolean; url?: string }[] = [];
+
+    for (const lead of leads ?? []) {
+      const instancia = (lead as any).canais_crm?.evolution_instancia;
+      if (!instancia || !lead.contato_id) continue;
+
+      try {
+        const jid = lead.contato_id.includes("@") ? lead.contato_id : `${lead.contato_id}@s.whatsapp.net`;
+        const res = await fetch(
+          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}?number=${jid}`,
+          { headers: { "apikey": globalKey } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const picUrl: string | undefined = data?.profilePictureUrl;
+          if (picUrl) {
+            await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", lead.id);
+            resultados.push({ id: lead.id, ok: true, url: picUrl });
+          } else {
+            resultados.push({ id: lead.id, ok: false });
+          }
+        } else {
+          resultados.push({ id: lead.id, ok: false });
+        }
+      } catch (_) {
+        resultados.push({ id: lead.id, ok: false });
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, total: leads?.length ?? 0, resultados }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error(err);
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
