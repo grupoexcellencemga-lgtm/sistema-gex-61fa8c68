@@ -159,6 +159,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       return data as Mensagem[];
     },
     enabled: !!selectedLeadId,
+    staleTime: 0,
     refetchInterval: 5000,
   });
 
