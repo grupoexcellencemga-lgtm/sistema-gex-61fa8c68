@@ -119,12 +119,12 @@ Deno.serve(async (req) => {
         const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
         if (globalKey) {
           const picRes = await fetch(
-            `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}?number=${remoteJid}`,
-            { headers: { "apikey": globalKey } }
+            `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}`,
+            { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: remoteJid }) }
           );
           if (picRes.ok) {
             const picData = await picRes.json();
-            const picUrl: string | undefined = picData?.profilePictureUrl;
+            const picUrl: string | undefined = picData?.profilePictureUrl ?? picData?.picture ?? picData?.imgUrl ?? picData?.url;
             if (picUrl) {
               await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
             }

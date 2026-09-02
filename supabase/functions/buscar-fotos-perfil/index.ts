@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
       if (instancia && testLead.contato_id) {
         const jid = `${testLead.contato_id}@s.whatsapp.net`;
         const testRes = await fetch(
-          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}?number=${jid}`,
-          { headers: { "apikey": globalKey } }
+          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}`,
+          { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: jid }) }
         );
         const testBody = await testRes.text();
         debugInfo = { status: testRes.status, body: testBody, jid, instancia };
@@ -56,8 +56,8 @@ Deno.serve(async (req) => {
       try {
         const jid = `${lead.contato_id}@s.whatsapp.net`;
         const res = await fetch(
-          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}?number=${jid}`,
-          { headers: { "apikey": globalKey } }
+          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}`,
+          { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: jid }) }
         );
         if (res.ok) {
           const data = await res.json();
