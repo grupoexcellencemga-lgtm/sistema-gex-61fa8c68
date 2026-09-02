@@ -189,16 +189,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     }
   }, [mensagens]);
 
-  // Also subscribe to new leads so the list updates in real-time
+  // Subscribe to lead INSERT and UPDATE so the list updates in real-time
   useEffect(() => {
     if (!empresaId || etapaIds.length === 0) return;
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
     const channel = supabase
       .channel(`crm-leads-${quadroId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "leads" },
-        () => queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] })
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, invalidate)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "leads" }, invalidate)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [empresaId, quadroId, queryClient]);
