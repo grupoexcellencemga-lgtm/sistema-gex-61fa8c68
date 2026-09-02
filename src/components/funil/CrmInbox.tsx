@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2, ExternalLink, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -342,20 +343,30 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
             </div>
             <div className="flex gap-2 items-center">
-              {onLeadClick && (
-                <Button size="sm" variant="outline" onClick={() => onLeadClick(selectedLead)}>
-                  Ver lead
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-primary border-primary/40 hover:bg-primary/5"
-                onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}
-              >
-                <ArrowRightFromLine className="h-3.5 w-3.5 mr-1" />
-                Mover para quadro
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Configuração
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {onLeadClick && (
+                    <>
+                      <DropdownMenuItem onClick={() => onLeadClick(selectedLead)}>
+                        <ExternalLink className="h-4 w-4 mr-2 text-muted-foreground" />
+                        Ver lead
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
+                    <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />
+                    Mover para quadro
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
             </div>
           </div>
