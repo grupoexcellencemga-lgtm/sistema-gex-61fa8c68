@@ -22,24 +22,15 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { event, instance, data } = body;
 
+    console.log("[webhook] event:", event, "instance:", instance, "data_type:", Array.isArray(data) ? "array" : typeof data);
+
     if (event !== "messages.upsert") return new Response("ignored", { status: 200 });
     if (!data) return new Response("ignored", { status: 200 });
 
-    const fromMe: boolean = data.key?.fromMe === true;
+    // Evolution API v2 pode mandar data como array de mensagens
+    const mensagens = Array.isArray(data) ? data : [data];
 
-    // Extrai o número da conversa
-    const remoteJid: string = data.key?.remoteJid ?? "";
-    if (remoteJid.includes("@g.us")) return new Response("group ignored", { status: 200 });
-
-    const telefone = remoteJid.replace("@s.whatsapp.net", "");
-    const nomeContato: string = data.pushName || telefone;
-    const texto: string =
-      data.message?.conversation ||
-      data.message?.extendedTextMessage?.text ||
-      data.message?.imageMessage?.caption ||
-      "[Mídia]";
-
-    // Busca canal pelo nome da instância
+    // Busca canal pelo nome da instância (uma vez, fora do loop)
     const { data: canal } = await supabase
       .from("canais_crm")
       .select("id, empresa_id")
@@ -54,54 +45,68 @@ Deno.serve(async (req) => {
 
     const empresaId = canal.empresa_id;
 
-    // Busca ou cria lead — upsert evita race condition com o índice único
-    const { data: lead, error: errLead } = await supabase
-      .from("leads")
-      .upsert(
-        {
-          nome: nomeContato,
-          telefone: telefone,
-          origem: "whatsapp",
-          empresa_id: empresaId,
-          canal_id: canal.id,
-          contato_id: telefone,
-          etapa_id: ETAPA_WHATSAPP_ID,
-        },
-        { onConflict: "empresa_id,canal_id,contato_id", ignoreDuplicates: true }
-      )
-      .select("id")
-      .maybeSingle();
+    for (const msg of mensagens) {
+      const fromMe: boolean = msg.key?.fromMe === true;
 
-    // Se ignoreDuplicates pulou o insert, busca o existente
-    const leadId = lead?.id ?? (await supabase
-      .from("leads")
-      .select("id")
-      .eq("contato_id", telefone)
-      .eq("canal_id", canal.id)
-      .eq("empresa_id", empresaId)
-      .is("deleted_at", null)
-      .maybeSingle()
-    ).data?.id;
+      const remoteJid: string = msg.key?.remoteJid ?? "";
+      if (!remoteJid || remoteJid.includes("@g.us")) continue;
 
-    if (!leadId) throw new Error("Não foi possível obter lead_id");
-    if (errLead) throw errLead;
+      const telefone = remoteJid.replace("@s.whatsapp.net", "");
+      const nomeContato: string = msg.pushName || telefone;
+      const texto: string =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        "[Mídia]";
 
-    // Salva a mensagem (fromMe = enviada pelo número da empresa)
-    await supabase.from("mensagens_crm").insert({
-      lead_id: leadId,
-      empresa_id: empresaId,
-      conteudo: texto,
-      direcao: fromMe ? "saida" : "entrada",
-      canal: "whatsapp",
-    });
+      console.log("[webhook] processando msg de:", telefone, "fromMe:", fromMe, "texto:", texto.substring(0, 50));
 
-    // Atualiza timestamp da última mensagem e sinal de não lida
-    await supabase.from("leads").update({
-      ultima_mensagem_em: new Date().toISOString(),
-      ...(fromMe ? {} : { tem_mensagem_nova: true }),
-    }).eq("id", leadId);
+      // Busca ou cria lead
+      const { data: lead, error: errLead } = await supabase
+        .from("leads")
+        .upsert(
+          {
+            nome: nomeContato,
+            telefone: telefone,
+            origem: "whatsapp",
+            empresa_id: empresaId,
+            canal_id: canal.id,
+            contato_id: telefone,
+            etapa_id: ETAPA_WHATSAPP_ID,
+          },
+          { onConflict: "empresa_id,canal_id,contato_id", ignoreDuplicates: true }
+        )
+        .select("id")
+        .maybeSingle();
 
-    return new Response(JSON.stringify({ ok: true, lead_id: leadId }), {
+      const leadId = lead?.id ?? (await supabase
+        .from("leads")
+        .select("id")
+        .eq("contato_id", telefone)
+        .eq("canal_id", canal.id)
+        .eq("empresa_id", empresaId)
+        .is("deleted_at", null)
+        .maybeSingle()
+      ).data?.id;
+
+      if (!leadId) { console.error("lead_id não encontrado para", telefone); continue; }
+      if (errLead) { console.error("errLead:", errLead); continue; }
+
+      await supabase.from("mensagens_crm").insert({
+        lead_id: leadId,
+        empresa_id: empresaId,
+        conteudo: texto,
+        direcao: fromMe ? "saida" : "entrada",
+        canal: "whatsapp",
+      });
+
+      await supabase.from("leads").update({
+        ultima_mensagem_em: new Date().toISOString(),
+        ...(fromMe ? {} : { tem_mensagem_nova: true }),
+      }).eq("id", leadId);
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
