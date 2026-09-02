@@ -138,6 +138,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       return data as LeadRow[];
     },
     enabled: !!empresaId && etapaIds.length > 0,
+    refetchInterval: 15000,
   });
 
   const leadsFiltered = filtroCanal === "todos"
