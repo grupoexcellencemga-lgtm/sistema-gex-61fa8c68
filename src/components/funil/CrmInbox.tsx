@@ -330,8 +330,12 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   )}
                 >
                   <div className="relative shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                      {(lead as any).foto_perfil ? (
+                        <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
+                      ) : (
+                        <User className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
                     {(lead as any).tem_mensagem_nova && (
                       <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
@@ -377,8 +381,12 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           {/* Header */}
           <div className="p-3 border-b flex items-center justify-between bg-card">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                <User className="h-4 w-4 text-muted-foreground" />
+              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                {(selectedLead as any).foto_perfil ? (
+                  <img src={(selectedLead as any).foto_perfil} alt={selectedLead.nome} className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-4 w-4 text-muted-foreground" />
+                )}
               </div>
               <div>
                 <p className="text-sm font-semibold">{selectedLead.nome}</p>

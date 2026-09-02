@@ -113,6 +113,25 @@ Deno.serve(async (req) => {
         canal: "whatsapp",
       });
 
+      // Busca foto de perfil (best-effort, não falha se der erro)
+      try {
+        const EVOLUTION_URL = "http://2.25.125.70:8080";
+        const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+        if (globalKey) {
+          const picRes = await fetch(
+            `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}?number=${remoteJid}`,
+            { headers: { "apikey": globalKey } }
+          );
+          if (picRes.ok) {
+            const picData = await picRes.json();
+            const picUrl: string | undefined = picData?.profilePictureUrl;
+            if (picUrl) {
+              await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
+            }
+          }
+        }
+      } catch (_) { /* ignora erro de foto */ }
+
       if (fromMe) {
         await supabase.from("leads").update({
           ultima_mensagem_em: new Date().toISOString(),
