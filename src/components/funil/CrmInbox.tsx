@@ -303,9 +303,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             title="Atualizar fotos de perfil"
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={async () => {
-              await supabase.functions.invoke("buscar-fotos-perfil", {});
+              const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
+              console.log("[fotos] resposta:", JSON.stringify(data), "erro:", error);
               queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] });
-              toast.success("Fotos atualizadas");
+              if (error) toast.error("Erro: " + error.message);
+              else toast.success(`Fotos: ${data?.resultados?.filter((r: any) => r.ok).length ?? 0} atualizadas. Debug: ${JSON.stringify(data?.debugInfo)}`);
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />

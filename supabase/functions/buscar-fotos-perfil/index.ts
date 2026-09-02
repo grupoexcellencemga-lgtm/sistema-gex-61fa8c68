@@ -32,34 +32,53 @@ Deno.serve(async (req) => {
 
     const resultados: { id: string; ok: boolean; url?: string }[] = [];
 
+    // Testa endpoint com o primeiro lead para diagnóstico
+    const testLead = leads?.[0];
+    let debugInfo: any = null;
+    if (testLead) {
+      const instancia = (testLead as any).canais_crm?.evolution_instancia;
+      if (instancia && testLead.contato_id) {
+        const jid = `${testLead.contato_id}@s.whatsapp.net`;
+        const testRes = await fetch(
+          `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}?number=${jid}`,
+          { headers: { "apikey": globalKey } }
+        );
+        const testBody = await testRes.text();
+        debugInfo = { status: testRes.status, body: testBody, jid, instancia };
+        console.log("[fotos] debug:", JSON.stringify(debugInfo));
+      }
+    }
+
     for (const lead of leads ?? []) {
       const instancia = (lead as any).canais_crm?.evolution_instancia;
       if (!instancia || !lead.contato_id) continue;
 
       try {
-        const jid = lead.contato_id.includes("@") ? lead.contato_id : `${lead.contato_id}@s.whatsapp.net`;
+        const jid = `${lead.contato_id}@s.whatsapp.net`;
         const res = await fetch(
           `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instancia}?number=${jid}`,
           { headers: { "apikey": globalKey } }
         );
         if (res.ok) {
           const data = await res.json();
-          const picUrl: string | undefined = data?.profilePictureUrl;
+          // Tenta vários campos possíveis dependendo da versão da API
+          const picUrl: string | undefined = data?.profilePictureUrl ?? data?.picture ?? data?.imgUrl ?? data?.url;
           if (picUrl) {
             await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", lead.id);
             resultados.push({ id: lead.id, ok: true, url: picUrl });
           } else {
-            resultados.push({ id: lead.id, ok: false });
+            resultados.push({ id: lead.id, ok: false, raw: data });
           }
         } else {
-          resultados.push({ id: lead.id, ok: false });
+          const errText = await res.text();
+          resultados.push({ id: lead.id, ok: false, status: res.status, err: errText.substring(0, 100) });
         }
-      } catch (_) {
-        resultados.push({ id: lead.id, ok: false });
+      } catch (e: any) {
+        resultados.push({ id: lead.id, ok: false, err: e.message });
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, total: leads?.length ?? 0, resultados }), {
+    return new Response(JSON.stringify({ ok: true, total: leads?.length ?? 0, debugInfo, resultados }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
