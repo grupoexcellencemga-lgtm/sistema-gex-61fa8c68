@@ -7,6 +7,7 @@ import { ChecklistTemplatesSection } from "@/components/configuracoes/ChecklistT
 import { ChecklistAreaResponsaveisSection } from "@/components/configuracoes/ChecklistAreaResponsaveisSection";
 import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSection";
 import { CanaisCrmSection } from "@/components/configuracoes/CanaisCrmSection";
+import { WhatsAppManagerSection } from "@/components/configuracoes/WhatsAppManagerSection";
 import { EmpresaIdentidadeSection } from "@/components/configuracoes/EmpresaIdentidadeSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -690,6 +691,7 @@ const Configuracoes = () => {
         </TabsContent>
 
         <TabsContent value="canais-crm" className="max-w-3xl space-y-6">
+          <WhatsAppManagerSection />
           <CanaisCrmSection />
         </TabsContent>
       </Tabs>

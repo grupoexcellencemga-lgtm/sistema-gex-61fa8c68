@@ -38,11 +38,13 @@ Deno.serve(async (req) => {
     if (canalErr || !canal) throw new Error("Canal não encontrado");
     if (canal.tipo !== "whatsapp") throw new Error("Envio suportado apenas para WhatsApp");
 
+    const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+    if (!apiKey) throw new Error("API key da Evolution não configurada");
     const evoUrl = `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`;
     const evoRes = await fetch(evoUrl, {
       method: "POST",
       headers: {
-        "apikey": canal.evolution_token!,
+        "apikey": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
