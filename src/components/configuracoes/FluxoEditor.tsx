@@ -324,10 +324,9 @@ type Props = {
   fluxoId: string | null;
   onBack: () => void;
   empresaId: string;
-  canais: { id: string; nome: string }[];
 };
 
-function FluxoEditorInner({ fluxoId, onBack, empresaId, canais }: Props) {
+function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const { screenToFlowPosition } = useReactFlow();
 
   const [nome, setNome] = useState("Novo Fluxo");
@@ -338,6 +337,20 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId, canais }: Props) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const nodeCounter = useRef(1);
+  const [canais, setCanais] = useState<{ id: string; nome: string }[]>([]);
+
+  // Busca canais direto via fetch simples — sem cache para garantir dados frescos
+  useEffect(() => {
+    if (!empresaId) return;
+    supabase
+      .from("canais_crm")
+      .select("id, nome")
+      .eq("empresa_id", empresaId)
+      .order("nome")
+      .then(({ data, error }) => {
+        if (!error && data) setCanais(data as { id: string; nome: string }[]);
+      });
+  }, [empresaId]);
 
   useEffect(() => {
     if (!fluxoId) return;
