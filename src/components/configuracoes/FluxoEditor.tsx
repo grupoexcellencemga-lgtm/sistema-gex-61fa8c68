@@ -403,7 +403,7 @@ function FluxoEditorInner({ fluxoId, onBack }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[200] bg-background flex flex-col">
       {/* Top bar */}
       <div className="h-14 border-b flex items-center gap-3 px-4 shrink-0 bg-card">
         <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={onBack}>
@@ -443,8 +443,8 @@ function FluxoEditorInner({ fluxoId, onBack }: Props) {
         </Button>
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 min-h-0">
+      {/* Body — altura explícita para que h-full dos filhos resolva corretamente */}
+      <div className="flex overflow-hidden" style={{ height: 'calc(100% - 3.5rem)' }}>
         {/* Toolbox */}
         <div className="w-44 shrink-0 border-r bg-card p-3 space-y-1.5 overflow-y-auto">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Arraste os nós</p>
@@ -473,7 +473,8 @@ function FluxoEditorInner({ fluxoId, onBack }: Props) {
 
         {/* Canvas */}
         <div
-          className="flex-1 min-w-0 h-full"
+          className="flex-1 min-w-0"
+          style={{ height: '100%' }}
           onDrop={onDrop}
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
         >
