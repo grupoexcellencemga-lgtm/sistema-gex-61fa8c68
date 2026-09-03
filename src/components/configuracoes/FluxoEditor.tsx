@@ -205,6 +205,9 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Texto da mensagem</Label>
         <Textarea value={d.text ?? ""} onChange={(e) => up({ text: e.target.value })} rows={5} className="text-sm resize-none" placeholder="Olá! Como posso ajudar?" />
+        <p className="text-[11px] text-muted-foreground">
+          Variáveis: <code className="bg-muted px-1 rounded">{"{nome}"}</code> <code className="bg-muted px-1 rounded">{"{telefone}"}</code>
+        </p>
       </div>
     </div>
   );

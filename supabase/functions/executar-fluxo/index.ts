@@ -66,6 +66,10 @@ function evalCondition(data: any, lastMsg: string): boolean {
   }
 }
 
+function interpolate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`);
+}
+
 async function enviar(canal: any, telefone: string, texto: string): Promise<void> {
   const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
   await fetch(`${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`, {
@@ -107,6 +111,17 @@ Deno.serve(async (req) => {
     }
 
     const lastMsg: string = ultimaMensagem ?? "";
+
+    // Dados do lead para interpolação de variáveis
+    const { data: leadData } = await supabase
+      .from("leads")
+      .select("nome, telefone, contato_id")
+      .eq("id", leadId)
+      .maybeSingle();
+    const msgVars: Record<string, string> = {
+      nome: leadData?.nome ?? "",
+      telefone: leadData?.telefone ?? leadData?.contato_id ?? telefone ?? "",
+    };
 
     // 1. Buscar fluxo ativo para o canal
     const { data: fluxo } = await supabase
@@ -214,7 +229,7 @@ Deno.serve(async (req) => {
         }
 
         case "message": {
-          const texto: string = node.data.text ?? "";
+          const texto: string = interpolate(node.data.text ?? "", msgVars);
           if (texto.trim()) {
             await enviar(canal, telefone, texto);
             await salvarMensagem(leadId, empresaId, texto);
@@ -267,7 +282,7 @@ Deno.serve(async (req) => {
           const aiResp = await anthropic.messages.create({
             model: node.data.model ?? "claude-haiku-4-5-20251001",
             max_tokens: 512,
-            system: node.data.prompt ?? "",
+            system: interpolate(node.data.prompt ?? "", msgVars),
             messages,
           });
 
