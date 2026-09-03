@@ -29,6 +29,7 @@ import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, GitBranch, Workflow } f
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
+import { FluxoSessoesPanel } from "./FluxoSessoesPanel";
 
 type Canal = {
   id: string;
@@ -427,6 +428,8 @@ export function AgentesBotSection() {
           )}
         </CardContent>
       </Card>
+
+      <FluxoSessoesPanel />
 
       {/* Modal de seleção de tipo */}
       <Dialog open={typeSelectorOpen} onOpenChange={setTypeSelectorOpen}>
