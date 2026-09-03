@@ -339,18 +339,17 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const nodeCounter = useRef(1);
   const [canais, setCanais] = useState<{ id: string; nome: string }[]>([]);
 
-  // Busca canais direto via fetch simples — sem cache para garantir dados frescos
+  // RLS filtra automaticamente pela empresa do usuário logado — sem depender de empresaId
   useEffect(() => {
-    if (!empresaId) return;
     supabase
       .from("canais_crm")
       .select("id, nome")
-      .eq("empresa_id", empresaId)
       .order("nome")
       .then(({ data, error }) => {
+        console.log("[FluxoEditor] canais fetch →", { data, error, empresaId });
         if (!error && data) setCanais(data as { id: string; nome: string }[]);
       });
-  }, [empresaId]);
+  }, []);
 
   useEffect(() => {
     if (!fluxoId) return;
