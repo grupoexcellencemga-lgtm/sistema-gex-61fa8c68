@@ -25,9 +25,10 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, GitBranch, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { FluxoEditor } from "./FluxoEditor";
 
 type Canal = {
   id: string;
@@ -49,6 +50,14 @@ type AgenteBot = {
   tempo_espera_minutos: number;
   canais_ids: string[];
   max_mensagens_contexto: number;
+};
+
+type FluxoBot = {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  canal_ids: string[];
+  created_at: string;
 };
 
 const MODELOS = [
@@ -83,13 +92,22 @@ const emptyAgente: Omit<AgenteBot, "id"> = {
 export function AgentesBotSection() {
   const { empresaId } = useEmpresa();
   const queryClient = useQueryClient();
+
+  // Agente IA dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgenteBot | null>(null);
   const [form, setForm] = useState<Omit<AgenteBot, "id">>(emptyAgente);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const { data: agentes = [], isLoading } = useQuery<AgenteBot[]>({
+  // Type selector modal
+  const [typeSelectorOpen, setTypeSelectorOpen] = useState(false);
+
+  // Fluxo editor: null = hidden, '' = new, uuid = editing
+  const [editingFluxo, setEditingFluxo] = useState<string | null>(null);
+  const [deleteFluxoId, setDeleteFluxoId] = useState<string | null>(null);
+
+  const { data: agentes = [], isLoading: loadingAgentes } = useQuery<AgenteBot[]>({
     queryKey: ["agentes-bot", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -99,6 +117,20 @@ export function AgentesBotSection() {
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data as AgenteBot[];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: fluxos = [], isLoading: loadingFluxos } = useQuery<FluxoBot[]>({
+    queryKey: ["fluxos-bot", empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("fluxos_bot")
+        .select("id, nome, ativo, canal_ids, created_at")
+        .eq("empresa_id", empresaId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as FluxoBot[];
     },
     enabled: !!empresaId,
   });
@@ -129,6 +161,18 @@ export function AgentesBotSection() {
     onError: () => toast.error("Erro ao atualizar agente"),
   });
 
+  const toggleFluxoAtivo = useMutation({
+    mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
+      const { error } = await supabase
+        .from("fluxos_bot")
+        .update({ ativo, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fluxos-bot", empresaId] }),
+    onError: () => toast.error("Erro ao atualizar fluxo"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("agentes_bot").delete().eq("id", id);
@@ -142,10 +186,21 @@ export function AgentesBotSection() {
     onError: () => toast.error("Erro ao remover agente"),
   });
 
+  const deleteFluxoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("fluxos_bot").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fluxos-bot", empresaId] });
+      toast.success("Fluxo removido");
+      setDeleteFluxoId(null);
+    },
+    onError: () => toast.error("Erro ao remover fluxo"),
+  });
+
   function openNew() {
-    setEditing(null);
-    setForm(emptyAgente);
-    setDialogOpen(true);
+    setTypeSelectorOpen(true);
   }
 
   function openEdit(a: AgenteBot) {
@@ -213,6 +268,22 @@ export function AgentesBotSection() {
     }));
   }
 
+  const isLoading = loadingAgentes || loadingFluxos;
+  const hasItems = agentes.length > 0 || fluxos.length > 0;
+
+  // Full-screen FluxoEditor overlay
+  if (editingFluxo !== null) {
+    return (
+      <FluxoEditor
+        fluxoId={editingFluxo || null}
+        onBack={() => {
+          setEditingFluxo(null);
+          queryClient.invalidateQueries({ queryKey: ["fluxos-bot", empresaId] });
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <Card>
@@ -224,7 +295,7 @@ export function AgentesBotSection() {
                 Agentes IA / BOT
               </CardTitle>
               <CardDescription>
-                Configure bots com IA (Claude) para responder automaticamente conversas no WhatsApp quando nenhum atendente assumir dentro do tempo configurado.
+                Configure bots com IA (Agente IA) ou fluxos visuais condicionais (Bot com Fluxo) para atendimento automático no WhatsApp.
               </CardDescription>
             </div>
             <Button onClick={openNew} size="sm" className="gap-1.5">
@@ -238,14 +309,15 @@ export function AgentesBotSection() {
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : agentes.length === 0 ? (
+          ) : !hasItems ? (
             <div className="text-center py-10 text-muted-foreground space-y-2">
               <Bot className="h-10 w-10 mx-auto opacity-20" />
-              <p className="text-sm">Nenhum agente configurado.</p>
-              <p className="text-xs">Crie um bot para responder automaticamente enquanto nenhum atendente está disponível.</p>
+              <p className="text-sm">Nenhum agente ou fluxo configurado.</p>
+              <p className="text-xs">Crie um agente IA ou um bot com fluxo visual para automatizar o atendimento.</p>
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Agentes IA */}
               {agentes.map((a) => (
                 <div key={a.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
                   <div className={cn(
@@ -260,12 +332,15 @@ export function AgentesBotSection() {
                       <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
                         {a.ativo ? "Ativo" : "Inativo"}
                       </Badge>
+                      <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+                        Agente IA
+                      </Badge>
                       <Badge variant="outline" className="text-[10px]">
                         {MODELOS.find(m => m.value === a.modelo)?.label.split(" ")[1] ?? a.modelo}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.instrucao}</p>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {a.ativo_24h ? "24h" : `${a.horario_inicio}–${a.horario_fim}`}
@@ -298,12 +373,108 @@ export function AgentesBotSection() {
                   </div>
                 </div>
               ))}
+
+              {/* Fluxos Bot */}
+              {fluxos.map((f) => (
+                <div key={f.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
+                  <div className={cn(
+                    "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                    f.ativo ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400" : "bg-muted text-muted-foreground"
+                  )}>
+                    <Workflow className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm">{f.nome}</p>
+                      <Badge variant={f.ativo ? "default" : "secondary"} className="text-[10px]">
+                        {f.ativo ? "Ativo" : "Inativo"}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] border-violet-400 text-violet-600 dark:text-violet-400">
+                        Bot com Fluxo
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {canais.filter(c => (f.canal_ids ?? []).includes(c.id)).map(c => (
+                        <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
+                      ))}
+                      {(f.canal_ids ?? []).length === 0 && (
+                        <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch
+                      checked={f.ativo}
+                      onCheckedChange={(v) => toggleFluxoAtivo.mutate({ id: f.id, ativo: v })}
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingFluxo(f.id)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteFluxoId(f.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog criar/editar */}
+      {/* Modal de seleção de tipo */}
+      <Dialog open={typeSelectorOpen} onOpenChange={setTypeSelectorOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Escolha o tipo de bot</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <button
+              onClick={() => {
+                setTypeSelectorOpen(false);
+                setEditing(null);
+                setForm(emptyAgente);
+                setDialogOpen(true);
+              }}
+              className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 hover:border-primary hover:bg-primary/5 transition-all text-center group"
+            >
+              <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Bot className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Agente IA</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bot com IA (Claude) que responde automaticamente usando linguagem natural
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setTypeSelectorOpen(false);
+                setEditingFluxo("");
+              }}
+              className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-all text-center group"
+            >
+              <div className="h-12 w-12 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <GitBranch className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Bot com Fluxo</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Fluxo visual com condições, mensagens e nós arrastáveis (estilo n8n)
+                </p>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog criar/editar Agente IA */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -311,7 +482,6 @@ export function AgentesBotSection() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            {/* Nome */}
             <div className="space-y-1.5">
               <Label>Nome do agente</Label>
               <Input
@@ -321,7 +491,6 @@ export function AgentesBotSection() {
               />
             </div>
 
-            {/* Instrução */}
             <div className="space-y-1.5">
               <Label>Instrução (prompt do sistema)</Label>
               <Textarea
@@ -334,7 +503,6 @@ export function AgentesBotSection() {
               <p className="text-xs text-muted-foreground">Define o comportamento e personalidade do bot.</p>
             </div>
 
-            {/* Modelo */}
             <div className="space-y-1.5">
               <Label>Modelo de IA</Label>
               <Select value={form.modelo} onValueChange={(v) => setForm((f) => ({ ...f, modelo: v }))}>
@@ -351,7 +519,6 @@ export function AgentesBotSection() {
 
             <Separator />
 
-            {/* Canais */}
             <div className="space-y-2">
               <Label>Canais vinculados</Label>
               <p className="text-xs text-muted-foreground">O bot só atua em conversas dos canais selecionados.</p>
@@ -377,7 +544,6 @@ export function AgentesBotSection() {
 
             <Separator />
 
-            {/* Tempo de espera */}
             <div className="space-y-1.5">
               <Label>Tempo de espera antes de assumir</Label>
               <div className="flex items-center gap-2">
@@ -393,7 +559,6 @@ export function AgentesBotSection() {
               </div>
             </div>
 
-            {/* Horário */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Horário de funcionamento</Label>
@@ -453,7 +618,6 @@ export function AgentesBotSection() {
               )}
             </div>
 
-            {/* Contexto */}
             <div className="space-y-1.5">
               <Label>Mensagens de contexto</Label>
               <div className="flex items-center gap-2">
@@ -480,7 +644,7 @@ export function AgentesBotSection() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmar delete */}
+      {/* Confirmar delete Agente */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -495,6 +659,27 @@ export function AgentesBotSection() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Remover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar delete Fluxo */}
+      <Dialog open={!!deleteFluxoId} onOpenChange={() => setDeleteFluxoId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover fluxo?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteFluxoId(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteFluxoId && deleteFluxoMutation.mutate(deleteFluxoId)}
+              disabled={deleteFluxoMutation.isPending}
+            >
+              {deleteFluxoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Remover
             </Button>
           </DialogFooter>
