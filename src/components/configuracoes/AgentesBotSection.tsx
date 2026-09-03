@@ -90,7 +90,8 @@ const emptyAgente: Omit<AgenteBot, "id"> = {
 };
 
 export function AgentesBotSection() {
-  const { empresaId } = useEmpresa();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const queryClient = useQueryClient();
 
   // Agente IA dialog
