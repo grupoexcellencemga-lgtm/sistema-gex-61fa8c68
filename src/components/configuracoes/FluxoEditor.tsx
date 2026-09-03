@@ -236,8 +236,18 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
         </Select>
       </div>
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Valor</Label>
-        <Input value={d.value ?? ""} onChange={(e) => up({ value: e.target.value })} className="h-8 text-sm" placeholder={d.field === "time" ? "08:00-18:00" : "palavra-chave"} />
+        <Label className="text-xs text-muted-foreground">
+          {d.field === "time" ? "Intervalo (ex: 08:00-18:00)" : "Palavras-chave"}
+        </Label>
+        <Input
+          value={d.value ?? ""}
+          onChange={(e) => up({ value: e.target.value })}
+          className="h-8 text-sm"
+          placeholder={d.field === "time" ? "08:00-18:00" : "preço, quanto custa, valor"}
+        />
+        {d.field === "message" && (
+          <p className="text-[11px] text-muted-foreground">Separe múltiplas palavras com vírgula. Basta uma coincidir.</p>
+        )}
       </div>
       <div className="rounded-md bg-muted p-2.5 text-xs text-muted-foreground space-y-1">
         <p className="font-semibold text-foreground mb-1">Saídas:</p>

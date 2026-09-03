@@ -45,7 +45,8 @@ function checkTrigger(startData: any, lastMsg: string): boolean {
       .map((k: string) => k.trim().toLowerCase())
       .filter(Boolean);
     if (!kws.length) return true;
-    return kws.some(k => lastMsg.toLowerCase().includes(k));
+    const msg = lastMsg.toLowerCase();
+    return kws.some(k => msg.includes(k));
   }
   return true;
 }
@@ -54,11 +55,13 @@ function evalCondition(data: any, lastMsg: string): boolean {
   const { field, operator, value } = data;
   if (field !== "message") return false;
   const subject = lastMsg.toLowerCase();
-  const val = (value ?? "").toLowerCase();
+  // Suporte a múltiplas palavras separadas por vírgula
+  const vals = (value ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+  if (!vals.length) return false;
   switch (operator) {
-    case "contains":     return subject.includes(val);
-    case "not_contains": return !subject.includes(val);
-    case "equals":       return subject.trim() === val.trim();
+    case "contains":     return vals.some(v => subject.includes(v));
+    case "not_contains": return vals.every(v => !subject.includes(v));
+    case "equals":       return vals.some(v => subject.trim() === v);
     default:             return false;
   }
 }
