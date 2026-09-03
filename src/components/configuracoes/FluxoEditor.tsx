@@ -45,7 +45,7 @@ type MessageData  = { label: string; text: string };
 type ConditionData = { label: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value: string };
 type AIData       = { label: string; model: string; prompt: string };
 type AssignData   = { label: string; action: "queue" | "agent" };
-type WaitData     = { label: string; minutes: number };
+type WaitData     = { label: string; value: number; unit: "s" | "min" };
 type EndData      = { label: string };
 
 // ─── Custom Nodes ─────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ function WaitNode({ data, selected }: { data: WaitData; selected?: boolean }) {
     <div className={cn(base, "border-slate-400 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300", selected && "ring-2 ring-slate-400 ring-offset-1")}>
       <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-3 !h-3 !border-2 !border-white" />
       <Clock className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate max-w-[130px]">{data.label || `Aguardar ${data.minutes}min`}</span>
+      <span className="truncate max-w-[130px]">{data.label || `Aguardar ${data.value}${data.unit ?? "s"}`}</span>
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-3 !h-3 !border-2 !border-white" />
     </div>
   );
@@ -159,7 +159,7 @@ function defaultData(type: string): Record<string, unknown> {
     case "condition": return { label: "Condição",    field: "message", operator: "contains", value: "" };
     case "ai":        return { label: "IA (Claude)", model: "claude-haiku-4-5-20251001", prompt: "" };
     case "assign":    return { label: "Atribuir",    action: "queue" };
-    case "wait":      return { label: "Aguardar 5min", minutes: 5 };
+    case "wait":      return { label: "Aguardar 30s", value: 30, unit: "s" };
     case "end":       return { label: "Fim" };
     default:          return { label: type };
   }
@@ -289,8 +289,30 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
     <div className="space-y-3">
       {LabelField}
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Aguardar (minutos)</Label>
-        <Input type="number" min={1} max={1440} value={d.minutes ?? 5} onChange={(e) => up({ minutes: Number(e.target.value), label: `Aguardar ${e.target.value}min` })} className="h-8 text-sm w-28" />
+        <Label className="text-xs text-muted-foreground">Tempo de espera</Label>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            min={1}
+            max={d.unit === "s" ? 3600 : 1440}
+            value={d.value ?? 30}
+            onChange={(e) => {
+              const v = Math.max(1, Number(e.target.value));
+              up({ value: v, label: `Aguardar ${v}${d.unit ?? "s"}` });
+            }}
+            className="h-8 text-sm w-24"
+          />
+          <Select
+            value={d.unit ?? "s"}
+            onValueChange={(u) => up({ unit: u, label: `Aguardar ${d.value ?? 30}${u}` })}
+          >
+            <SelectTrigger className="h-8 text-sm w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="s">Segundos</SelectItem>
+              <SelectItem value="min">Minutos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
