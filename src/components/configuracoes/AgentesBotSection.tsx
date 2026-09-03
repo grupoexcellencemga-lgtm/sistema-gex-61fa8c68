@@ -276,6 +276,7 @@ export function AgentesBotSection() {
     return (
       <FluxoEditor
         fluxoId={editingFluxo || null}
+        empresaId={empresaId!}
         onBack={() => {
           setEditingFluxo(null);
           queryClient.invalidateQueries({ queryKey: ["fluxos-bot", empresaId] });

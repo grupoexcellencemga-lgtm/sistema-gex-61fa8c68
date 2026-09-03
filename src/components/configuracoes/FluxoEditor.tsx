@@ -21,7 +21,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
-import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -322,10 +321,9 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
 
 // ─── Editor Inner ─────────────────────────────────────────────────────────────
 
-type Props = { fluxoId: string | null; onBack: () => void };
+type Props = { fluxoId: string | null; onBack: () => void; empresaId: string };
 
-function FluxoEditorInner({ fluxoId, onBack }: Props) {
-  const { empresaId } = useEmpresa();
+function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const { screenToFlowPosition } = useReactFlow();
   const queryClient = useQueryClient();
 
@@ -343,7 +341,6 @@ function FluxoEditorInner({ fluxoId, onBack }: Props) {
   const { data: canais = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: CANAIS_KEY,
     queryFn: async () => {
-      if (!empresaId) return [];
       const { data } = await supabase
         .from("canais_crm")
         .select("id, nome")
@@ -352,14 +349,12 @@ function FluxoEditorInner({ fluxoId, onBack }: Props) {
         .order("nome");
       return (data ?? []) as { id: string; nome: string }[];
     },
-    enabled: !!empresaId,
     staleTime: 0,
     refetchOnMount: "always",
   });
 
   // Realtime: atualiza lista de canais quando algo mudar na tabela
   useEffect(() => {
-    if (!empresaId) return;
     const ch = supabase
       .channel("canais-crm-realtime-fluxo")
       .on("postgres_changes", {
