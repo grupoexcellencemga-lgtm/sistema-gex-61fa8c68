@@ -9,6 +9,7 @@ import { GoogleAgendaSection } from "@/components/configuracoes/GoogleAgendaSect
 import { CanaisCrmSection } from "@/components/configuracoes/CanaisCrmSection";
 import { WhatsAppManagerSection } from "@/components/configuracoes/WhatsAppManagerSection";
 import { EmpresaIdentidadeSection } from "@/components/configuracoes/EmpresaIdentidadeSection";
+import { AgentesBotSection } from "@/components/configuracoes/AgentesBotSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
@@ -48,6 +49,7 @@ import {
   CalendarClock,
   Paintbrush,
   Radio,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -393,6 +395,11 @@ const Configuracoes = () => {
               <Radio className="h-4 w-4" />
               Canais & CRM
             </TabsTrigger>
+
+            <TabsTrigger value="agentes-bot" className="gap-1.5 shrink-0">
+              <Bot className="h-4 w-4" />
+              Agentes IA
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -693,6 +700,10 @@ const Configuracoes = () => {
         <TabsContent value="canais-crm" className="max-w-3xl space-y-6">
           <WhatsAppManagerSection />
           <CanaisCrmSection />
+        </TabsContent>
+
+        <TabsContent value="agentes-bot" className="max-w-3xl space-y-6">
+          <AgentesBotSection />
         </TabsContent>
       </Tabs>
     </div>
