@@ -21,7 +21,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -321,11 +320,15 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
 
 // ─── Editor Inner ─────────────────────────────────────────────────────────────
 
-type Props = { fluxoId: string | null; onBack: () => void; empresaId: string };
+type Props = {
+  fluxoId: string | null;
+  onBack: () => void;
+  empresaId: string;
+  canais: { id: string; nome: string }[];
+};
 
-function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
+function FluxoEditorInner({ fluxoId, onBack, empresaId, canais }: Props) {
   const { screenToFlowPosition } = useReactFlow();
-  const queryClient = useQueryClient();
 
   const [nome, setNome] = useState("Novo Fluxo");
   const [ativo, setAtivo] = useState(true);
@@ -335,39 +338,6 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const nodeCounter = useRef(1);
-
-  const CANAIS_KEY = ["canais-crm-fluxo-editor", empresaId];
-
-  const { data: canais = [] } = useQuery<{ id: string; nome: string }[]>({
-    queryKey: CANAIS_KEY,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("canais_crm")
-        .select("id, nome")
-        .eq("empresa_id", empresaId)
-        .eq("ativo", true)
-        .order("nome");
-      return (data ?? []) as { id: string; nome: string }[];
-    },
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-
-  // Realtime: atualiza lista de canais quando algo mudar na tabela
-  useEffect(() => {
-    const ch = supabase
-      .channel("canais-crm-realtime-fluxo")
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "canais_crm",
-        filter: `empresa_id=eq.${empresaId}`,
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: CANAIS_KEY });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [empresaId]);
 
   useEffect(() => {
     if (!fluxoId) return;
