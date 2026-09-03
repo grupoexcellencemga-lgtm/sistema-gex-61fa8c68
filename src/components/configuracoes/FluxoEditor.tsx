@@ -339,14 +339,15 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const nodeCounter = useRef(1);
   const [canais, setCanais] = useState<{ id: string; nome: string }[]>([]);
 
-  // RLS filtra automaticamente pela empresa do usuário logado — sem depender de empresaId
+  // RLS filtra pela empresa do usuário; mostra só canais WhatsApp ativos (suporte Evolution API)
   useEffect(() => {
     supabase
       .from("canais_crm")
       .select("id, nome")
+      .eq("tipo", "whatsapp")
+      .eq("ativo", true)
       .order("nome")
       .then(({ data, error }) => {
-        console.log("[FluxoEditor] canais fetch →", { data, error, empresaId });
         if (!error && data) setCanais(data as { id: string; nome: string }[]);
       });
   }, []);

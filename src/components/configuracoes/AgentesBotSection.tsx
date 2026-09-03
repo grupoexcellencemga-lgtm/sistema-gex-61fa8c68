@@ -141,7 +141,8 @@ export function AgentesBotSection() {
       const { data } = await supabase
         .from("canais_crm")
         .select("id, nome, tipo, ativo")
-        .eq("empresa_id", empresaId!)
+        .eq("tipo", "whatsapp")
+        .eq("ativo", true)
         .order("nome");
       return (data ?? []) as Canal[];
     },
