@@ -142,7 +142,6 @@ export function AgentesBotSection() {
         .from("canais_crm")
         .select("id, nome, tipo, ativo")
         .eq("empresa_id", empresaId!)
-        .eq("ativo", true)
         .order("nome");
       return (data ?? []) as Canal[];
     },

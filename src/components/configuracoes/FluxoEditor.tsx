@@ -451,7 +451,7 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId, canais }: Props) {
               )}
             >{c.nome}</button>
           ))}
-          {canais.length === 0 && <span className="text-xs text-muted-foreground italic">Sem canais ativos</span>}
+          {canais.length === 0 && <span className="text-xs text-muted-foreground italic">Nenhum canal encontrado</span>}
         </div>
         <Button size="sm" onClick={salvar} disabled={saving} className="gap-1.5 ml-auto shrink-0">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
