@@ -148,6 +148,18 @@ Deno.serve(async (req) => {
         }
 
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
+
+        // Disparar motor de fluxo (fire-and-forget)
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
+        }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
       }
     }
 
