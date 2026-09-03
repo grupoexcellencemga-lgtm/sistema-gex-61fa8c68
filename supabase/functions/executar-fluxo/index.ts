@@ -261,35 +261,50 @@ Deno.serve(async (req) => {
         }
 
         case "ai": {
-          const { data: historico } = await supabase
-            .from("mensagens_crm")
-            .select("conteudo, direcao")
-            .eq("lead_id", leadId)
-            .order("created_at", { ascending: true })
-            .limit(20);
+          try {
+            const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+            if (!apiKey) throw new Error("ANTHROPIC_API_KEY nao configurada nas secrets da edge function");
 
-          const messages = (historico ?? [])
-            .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
-            .map((m: any) => ({
-              role: m.direcao === "saida" ? "assistant" as const : "user" as const,
-              content: m.conteudo as string,
-            }));
+            const { data: historico } = await supabase
+              .from("mensagens_crm")
+              .select("conteudo, direcao")
+              .eq("lead_id", leadId)
+              .order("created_at", { ascending: true })
+              .limit(20);
 
-          if (!messages.length || messages[0].role !== "user") {
-            messages.unshift({ role: "user" as const, content: lastMsg });
-          }
+            const rawMsgs = (historico ?? [])
+              .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
+              .map((m: any) => ({
+                role: m.direcao === "saida" ? "assistant" as const : "user" as const,
+                content: m.conteudo as string,
+              }));
 
-          const aiResp = await anthropic.messages.create({
-            model: node.data.model ?? "claude-haiku-4-5-20251001",
-            max_tokens: 512,
-            system: interpolate(node.data.prompt ?? "", msgVars),
-            messages,
-          });
+            if (!rawMsgs.length || rawMsgs[0].role !== "user") {
+              rawMsgs.unshift({ role: "user" as const, content: lastMsg || "Olá" });
+            }
 
-          const resposta = aiResp.content[0]?.type === "text" ? aiResp.content[0].text : null;
-          if (resposta) {
-            await enviar(canal, telefone, resposta);
-            await salvarMensagem(leadId, empresaId, resposta);
+            // Remove mensagens consecutivas com o mesmo role (Anthropic não aceita)
+            const messages: { role: "user" | "assistant"; content: string }[] = [];
+            for (const m of rawMsgs) {
+              if (messages.length === 0 || messages[messages.length - 1].role !== m.role) {
+                messages.push(m);
+              }
+            }
+
+            const aiResp = await anthropic.messages.create({
+              model: node.data.model ?? "claude-haiku-4-5-20251001",
+              max_tokens: 512,
+              system: interpolate(node.data.prompt ?? "", msgVars),
+              messages,
+            });
+
+            const resposta = aiResp.content[0]?.type === "text" ? aiResp.content[0].text : null;
+            if (resposta) {
+              await enviar(canal, telefone, resposta);
+              await salvarMensagem(leadId, empresaId, resposta);
+            }
+          } catch (aiErr) {
+            console.error("[executar-fluxo] ERRO no no ai:", String(aiErr));
           }
 
           const next = getNext(fj, node.id);

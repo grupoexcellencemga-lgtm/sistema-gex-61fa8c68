@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
         .select("id, nome, contato_id, canal_id, empresa_id")
         .eq("empresa_id", agente.empresa_id)
         .eq("status_atendimento", "fila")
+        .eq("bot_ativo", true)
         .in("canal_id", agente.canais_ids)
         .lt("ultima_mensagem_em", cutoff)
         .is("deleted_at", null)

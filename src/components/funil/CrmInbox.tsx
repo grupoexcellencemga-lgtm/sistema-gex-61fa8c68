@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
-  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash,
+  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -69,6 +70,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [moving, setMoving] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const [togglingBot, setTogglingBot] = useState(false);
   const [listWidth, setListWidth] = useState(288);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -389,6 +391,23 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       toast.error("Erro ao finalizar: " + err.message);
     } finally {
       setFinalizando(false);
+    }
+  }
+
+  async function toggleBotAtivo(leadId: string, novoValor: boolean) {
+    setTogglingBot(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ bot_ativo: novoValor })
+        .eq("id", leadId);
+      if (error) throw error;
+      toast.success(novoValor ? "Bot ativado para esta conversa" : "Bot desativado para esta conversa");
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao alterar bot: " + err.message);
+    } finally {
+      setTogglingBot(false);
     }
   }
 
@@ -750,6 +769,19 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             {/* Ações (só em fila/minhas) */}
             {aba !== "finalizadas" && (
               <div className="flex gap-2 items-center">
+                {/* Toggle bot */}
+                {selectedLead && (
+                  <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
+                    <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Switch
+                      checked={(selectedLead as any).bot_ativo ?? false}
+                      onCheckedChange={(v) => toggleBotAtivo(selectedLead.id, v)}
+                      disabled={togglingBot}
+                      className="scale-75"
+                    />
+                    <span className="text-xs text-muted-foreground">Bot</span>
+                  </div>
+                )}
                 {selectedStatus === "fila" && (
                   <>
                     <Button size="sm" variant="default" className="gap-1.5" onClick={() => assumirOuAtribuir(selectedLead!.id, userId!)} disabled={atribuindo}>
