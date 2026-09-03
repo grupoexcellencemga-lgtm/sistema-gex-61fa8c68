@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
 import { FluxoSessoesPanel } from "./FluxoSessoesPanel";
+import { FluxoRelatorioCard } from "./FluxoRelatorioCard";
 
 type Canal = {
   id: string;
@@ -430,6 +431,7 @@ export function AgentesBotSection() {
       </Card>
 
       <FluxoSessoesPanel />
+      <FluxoRelatorioCard />
 
       {/* Modal de seleção de tipo */}
       <Dialog open={typeSelectorOpen} onOpenChange={setTypeSelectorOpen}>
