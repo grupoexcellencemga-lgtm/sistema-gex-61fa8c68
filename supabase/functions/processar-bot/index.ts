@@ -120,12 +120,74 @@ Deno.serve(async (req) => {
         if (firstUserIdx === -1) continue;
         const messages = deduped.slice(firstUserIdx);
 
+        // Monta Base de Conhecimento com produtos, turmas e eventos do sistema
+        let baseConhecimento = "";
+        try {
+          const hoje = new Date().toISOString().split("T")[0];
+
+          const [{ data: produtos }, { data: turmas }, { data: eventos }] = await Promise.all([
+            supabase.from("produtos").select("nome, descricao, tipo, valor, parcelas_cartao, valor_parcela, duracao")
+              .eq("empresa_id", agente.empresa_id).is("deleted_at", null).order("nome"),
+            supabase.from("turmas").select("nome, cidade, modalidade, data_inicio, data_fim, status, produtos(nome)")
+              .eq("empresa_id", agente.empresa_id).is("deleted_at", null).gte("data_fim", hoje).order("data_inicio"),
+            supabase.from("eventos").select("nome, tipo, data, local, valor, pago, descricao, status, limite_participantes")
+              .eq("empresa_id", agente.empresa_id).is("deleted_at", null).gte("data", hoje).order("data"),
+          ]);
+
+          const linhas: string[] = ["\n\n---\n# BASE DE CONHECIMENTO ATUAL DO SISTEMA\n"];
+
+          if (produtos?.length) {
+            linhas.push("## PRODUTOS / CURSOS");
+            for (const p of produtos) {
+              let linha = `- **${p.nome}**`;
+              if (p.tipo) linha += ` (${p.tipo})`;
+              if (p.descricao) linha += `: ${p.descricao}`;
+              if (p.valor) linha += ` | Valor: R$ ${Number(p.valor).toFixed(2)}`;
+              if (p.parcelas_cartao && p.valor_parcela) linha += ` ou ${p.parcelas_cartao}x R$ ${Number(p.valor_parcela).toFixed(2)}`;
+              if (p.duracao) linha += ` | Duração: ${p.duracao}`;
+              linhas.push(linha);
+            }
+          }
+
+          if (turmas?.length) {
+            linhas.push("\n## TURMAS ABERTAS");
+            for (const t of turmas as any[]) {
+              let linha = `- **${(t.produtos as any)?.nome ?? t.nome}**`;
+              if (t.cidade) linha += ` — ${t.cidade}`;
+              if (t.modalidade) linha += ` (${t.modalidade})`;
+              if (t.data_inicio) linha += ` | Início: ${t.data_inicio}`;
+              if (t.data_fim) linha += ` | Fim: ${t.data_fim}`;
+              if (t.status) linha += ` | Status: ${t.status}`;
+              linhas.push(linha);
+            }
+          }
+
+          if (eventos?.length) {
+            linhas.push("\n## EVENTOS PRÓXIMOS");
+            for (const e of eventos) {
+              let linha = `- **${e.nome}**`;
+              if (e.tipo) linha += ` (${e.tipo})`;
+              if (e.data) linha += ` | Data: ${e.data}`;
+              if (e.local) linha += ` | Local: ${e.local}`;
+              if (e.pago && e.valor) linha += ` | R$ ${Number(e.valor).toFixed(2)}`;
+              else if (!e.pago) linha += ` | Gratuito`;
+              if (e.descricao) linha += ` | ${e.descricao}`;
+              linhas.push(linha);
+            }
+          }
+
+          linhas.push("\n---\nUtilize estas informações para responder perguntas sobre cursos, turmas, datas e eventos. Não invente dados além dos listados acima.");
+          baseConhecimento = linhas.join("\n");
+        } catch (kbErr) {
+          console.error("[processar-bot] erro ao buscar base de conhecimento:", kbErr);
+        }
+
         // Chama Anthropic
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
         const response = await anthropic.messages.create({
           model: agente.modelo,
           max_tokens: 1024,
-          system: agente.instrucao,
+          system: agente.instrucao + baseConhecimento,
           messages,
         });
 
