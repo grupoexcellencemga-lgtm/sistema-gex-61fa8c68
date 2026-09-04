@@ -129,15 +129,40 @@ Deno.serve(async (req) => {
           .eq("status", "ativo")
           .maybeSingle();
 
-        // Busca as N mensagens MAIS RECENTES dentro do protocolo atual
-        const desde = protocoloAtual?.created_at ?? new Date(0).toISOString();
-        const { data: historicoDesc } = await supabase
-          .from("mensagens_crm")
-          .select("conteudo, direcao, created_at")
-          .eq("lead_id", lead.id)
-          .gte("created_at", desde)
-          .order("created_at", { ascending: false })
-          .limit(agente.max_mensagens_contexto);
+        // Busca as N mensagens MAIS RECENTES do protocolo atual
+        // Filtra por protocolo_id (mensagens inseridas após correção do webhook)
+        // com fallback por created_at para mensagens antigas sem protocolo_id
+        let historicoDesc: any[] | null = null;
+        if (protocoloAtual) {
+          const { data: porId } = await supabase
+            .from("mensagens_crm")
+            .select("conteudo, direcao, created_at")
+            .eq("lead_id", lead.id)
+            .eq("protocolo_id", protocoloAtual.id)
+            .order("created_at", { ascending: false })
+            .limit(agente.max_mensagens_contexto);
+          // Se não encontrou por id, tenta por created_at (mensagens sem protocolo_id)
+          if (!porId?.length) {
+            const { data: porData } = await supabase
+              .from("mensagens_crm")
+              .select("conteudo, direcao, created_at")
+              .eq("lead_id", lead.id)
+              .gte("created_at", protocoloAtual.created_at)
+              .order("created_at", { ascending: false })
+              .limit(agente.max_mensagens_contexto);
+            historicoDesc = porData;
+          } else {
+            historicoDesc = porId;
+          }
+        } else {
+          const { data: semProtocolo } = await supabase
+            .from("mensagens_crm")
+            .select("conteudo, direcao, created_at")
+            .eq("lead_id", lead.id)
+            .order("created_at", { ascending: false })
+            .limit(agente.max_mensagens_contexto);
+          historicoDesc = semProtocolo;
+        }
 
         // Reverte para ordem cronológica
         const historico = (historicoDesc ?? []).reverse();
@@ -267,22 +292,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Busca protocolo ativo para linkar
-        const { data: protocolo } = await supabase
-          .from("protocolos_atendimento")
-          .select("id")
-          .eq("lead_id", lead.id)
-          .eq("status", "ativo")
-          .maybeSingle();
-
-        // Salva mensagem de saída do bot
+        // Salva mensagem de saída do bot (usa o mesmo protocolo já buscado acima)
         await supabase.from("mensagens_crm").insert({
           lead_id: lead.id,
           empresa_id: agente.empresa_id,
           conteudo: resposta,
           direcao: "saida",
           canal: "whatsapp",
-          protocolo_id: protocolo?.id ?? null,
+          protocolo_id: protocoloAtual?.id ?? null,
         });
 
         // Marca a última mensagem de entrada como respondida pelo bot

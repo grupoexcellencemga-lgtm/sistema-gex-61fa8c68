@@ -118,45 +118,30 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Busca protocolo ativo para linkar a mensagem
-      const { data: protocolo } = await supabase
-        .from("protocolos_atendimento")
-        .select("id")
-        .eq("lead_id", leadId)
-        .eq("status", "ativo")
-        .maybeSingle();
-
-      // Insere mensagem
-      await supabase.from("mensagens_crm").insert({
-        lead_id: leadId,
-        empresa_id: empresaId,
-        conteudo: texto,
-        direcao: fromMe ? "saida" : "entrada",
-        canal: "whatsapp",
-        protocolo_id: protocolo?.id ?? null,
-      });
-
-      // Foto de perfil (best-effort)
-      try {
-        const EVOLUTION_URL = "http://2.25.125.70:8080";
-        const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
-        if (globalKey) {
-          const picRes = await fetch(
-            `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}`,
-            { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: remoteJid }) }
-          );
-          if (picRes.ok) {
-            const picData = await picRes.json();
-            const picUrl: string | undefined = picData?.profilePictureUrl ?? picData?.picture ?? picData?.imgUrl ?? picData?.url;
-            if (picUrl) await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
-          }
-        }
-      } catch (_) { /* ignora */ }
-
+      // --- Mensagem de saída (fromMe) ---
       if (fromMe) {
+        // Busca protocolo ativo para linkar
+        const { data: protocoloAtivo } = await supabase
+          .from("protocolos_atendimento")
+          .select("id")
+          .eq("lead_id", leadId)
+          .eq("status", "ativo")
+          .maybeSingle();
+
+        await supabase.from("mensagens_crm").insert({
+          lead_id: leadId,
+          empresa_id: empresaId,
+          conteudo: texto,
+          direcao: "saida",
+          canal: "whatsapp",
+          protocolo_id: protocoloAtivo?.id ?? null,
+        });
         await supabase.from("leads").update({ ultima_mensagem_em: new Date().toISOString() }).eq("id", leadId);
+
       } else {
-        // Mensagem de entrada: se estava finalizado, volta para fila e abre novo protocolo
+        // --- Mensagem de entrada ---
+
+        // 1. Se estava finalizado, volta para fila
         const statusAtual = existingLead?.status_atendimento;
         if (statusAtual === "finalizado") {
           await supabase.from("leads").update({
@@ -167,8 +152,9 @@ Deno.serve(async (req) => {
           console.log("[webhook] lead", leadId, "voltou para fila (era finalizado)");
         }
 
-        // Garante que existe um protocolo ativo para delimitar a conversa atual
-        // (sem protocolo, o bot não sabe onde começa a conversa corrente)
+        // 2. Garante protocolo ativo ANTES de inserir a mensagem
+        //    (mensagem precisa ter protocolo_id correto para o bot filtrar o histórico)
+        let protocoloId: string | null = null;
         const { data: protocoloExistente } = await supabase
           .from("protocolos_atendimento")
           .select("id")
@@ -176,7 +162,9 @@ Deno.serve(async (req) => {
           .eq("status", "ativo")
           .maybeSingle();
 
-        if (!protocoloExistente) {
+        if (protocoloExistente) {
+          protocoloId = protocoloExistente.id;
+        } else {
           const { data: ultimoProtocolo } = await supabase
             .from("protocolos_atendimento")
             .select("numero_protocolo")
@@ -188,46 +176,65 @@ Deno.serve(async (req) => {
             ? parseInt(ultimoProtocolo.numero_protocolo.replace("P", ""), 10) + 1
             : 1;
           const numeroProtocolo = `P${String(proximoNum).padStart(6, "0")}`;
-          await supabase.from("protocolos_atendimento").insert({
-            lead_id: leadId,
-            empresa_id: empresaId,
-            status: "ativo",
-            numero_protocolo: numeroProtocolo,
-          });
+          const { data: novoProtocolo } = await supabase
+            .from("protocolos_atendimento")
+            .insert({ lead_id: leadId, empresa_id: empresaId, status: "ativo", numero_protocolo: numeroProtocolo })
+            .select("id")
+            .maybeSingle();
+          protocoloId = novoProtocolo?.id ?? null;
           console.log("[webhook] protocolo", numeroProtocolo, "criado para lead", leadId);
         }
 
-        // Atualiza nome do lead com pushName real do contato (caso tenha sido criado fromMe com o número)
+        // 3. Insere mensagem já com o protocolo_id correto
+        await supabase.from("mensagens_crm").insert({
+          lead_id: leadId,
+          empresa_id: empresaId,
+          conteudo: texto,
+          direcao: "entrada",
+          canal: "whatsapp",
+          protocolo_id: protocoloId,
+        });
+
+        // 4. Foto de perfil (best-effort)
+        try {
+          const EVOLUTION_URL = "http://2.25.125.70:8080";
+          const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+          if (globalKey) {
+            const picRes = await fetch(
+              `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}`,
+              { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: remoteJid }) }
+            );
+            if (picRes.ok) {
+              const picData = await picRes.json();
+              const picUrl: string | undefined = picData?.profilePictureUrl ?? picData?.picture ?? picData?.imgUrl ?? picData?.url;
+              if (picUrl) await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
+            }
+          }
+        } catch (_) { /* ignora */ }
+
+        // 5. Atualiza nome do lead com pushName real
         if (msg.pushName && leadId) {
           await supabase.from("leads")
             .update({ nome: msg.pushName })
             .eq("id", leadId)
-            .like("nome", telefone); // só atualiza se o nome ainda é o número
+            .like("nome", telefone);
         }
 
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
 
-        // Disparar motor de fluxo (fire-and-forget)
+        // 6. Dispara fluxo e bot
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceKey}`,
-          },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
           body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
         }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
 
-        // Se bot_ativo, dispara processar-bot com delay de 20s para o lead específico
-        // (aguarda a pessoa terminar de digitar antes de responder)
         if (existingLead?.bot_ativo) {
           fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${serviceKey}`,
-            },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
             body: JSON.stringify({ forceLeadId: leadId, delayMs: 8000 }),
           }).catch(e => console.error("[webhook] erro processar-bot:", e));
         }
