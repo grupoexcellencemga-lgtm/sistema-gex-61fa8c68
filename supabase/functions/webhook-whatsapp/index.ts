@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
       if (!remoteJid || remoteJid.includes("@g.us")) continue;
 
       const telefone = remoteJid.replace("@s.whatsapp.net", "");
-      const nomeContato: string = msg.pushName || telefone;
+      // pushName quando fromMe é o nome do próprio número (comercial), não do contato
+      const nomeContato: string = fromMe ? telefone : (msg.pushName || telefone);
       const texto: string =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
@@ -145,6 +146,14 @@ Deno.serve(async (req) => {
             atribuido_em: null,
           }).eq("id", leadId);
           console.log("[webhook] lead", leadId, "voltou para fila (era finalizado)");
+        }
+
+        // Atualiza nome do lead com pushName real do contato (caso tenha sido criado fromMe com o número)
+        if (msg.pushName && leadId) {
+          await supabase.from("leads")
+            .update({ nome: msg.pushName })
+            .eq("id", leadId)
+            .like("nome", telefone); // só atualiza se o nome ainda é o número
         }
 
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
