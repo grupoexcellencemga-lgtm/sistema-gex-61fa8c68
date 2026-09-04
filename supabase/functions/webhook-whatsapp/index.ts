@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
       if (fromMe) {
         await supabase.from("leads").update({ ultima_mensagem_em: new Date().toISOString() }).eq("id", leadId);
       } else {
-        // Mensagem de entrada: se estava finalizado, volta para fila
+        // Mensagem de entrada: se estava finalizado, volta para fila e abre novo protocolo
         const statusAtual = existingLead?.status_atendimento;
         if (statusAtual === "finalizado") {
           await supabase.from("leads").update({
@@ -165,6 +165,36 @@ Deno.serve(async (req) => {
             atribuido_em: null,
           }).eq("id", leadId);
           console.log("[webhook] lead", leadId, "voltou para fila (era finalizado)");
+        }
+
+        // Garante que existe um protocolo ativo para delimitar a conversa atual
+        // (sem protocolo, o bot não sabe onde começa a conversa corrente)
+        const { data: protocoloExistente } = await supabase
+          .from("protocolos_atendimento")
+          .select("id")
+          .eq("lead_id", leadId)
+          .eq("status", "ativo")
+          .maybeSingle();
+
+        if (!protocoloExistente) {
+          const { data: ultimoProtocolo } = await supabase
+            .from("protocolos_atendimento")
+            .select("numero_protocolo")
+            .eq("empresa_id", empresaId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const proximoNum = ultimoProtocolo
+            ? parseInt(ultimoProtocolo.numero_protocolo.replace("P", ""), 10) + 1
+            : 1;
+          const numeroProtocolo = `P${String(proximoNum).padStart(6, "0")}`;
+          await supabase.from("protocolos_atendimento").insert({
+            lead_id: leadId,
+            empresa_id: empresaId,
+            status: "ativo",
+            numero_protocolo: numeroProtocolo,
+          });
+          console.log("[webhook] protocolo", numeroProtocolo, "criado para lead", leadId);
         }
 
         // Atualiza nome do lead com pushName real do contato (caso tenha sido criado fromMe com o número)

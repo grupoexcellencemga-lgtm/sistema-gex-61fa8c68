@@ -120,11 +120,22 @@ Deno.serve(async (req) => {
         if (!ultimaMensagem || ultimaMensagem.direcao !== "entrada") continue;
         if (ultimaMensagem.bot_respondido) continue;
 
-        // Busca as N mensagens MAIS RECENTES para ter contexto relevante
+        // Busca o protocolo ativo para delimitar o histórico da conversa atual
+        // (cada protocolo = uma conversa; ao abrir novo protocolo, bot começa do zero)
+        const { data: protocoloAtual } = await supabase
+          .from("protocolos_atendimento")
+          .select("id, created_at")
+          .eq("lead_id", lead.id)
+          .eq("status", "ativo")
+          .maybeSingle();
+
+        // Busca as N mensagens MAIS RECENTES dentro do protocolo atual
+        const desde = protocoloAtual?.created_at ?? new Date(0).toISOString();
         const { data: historicoDesc } = await supabase
           .from("mensagens_crm")
           .select("conteudo, direcao, created_at")
           .eq("lead_id", lead.id)
+          .gte("created_at", desde)
           .order("created_at", { ascending: false })
           .limit(agente.max_mensagens_contexto);
 
