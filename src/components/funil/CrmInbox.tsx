@@ -71,7 +71,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [atribuindo, setAtribuindo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [togglingBot, setTogglingBot] = useState(false);
-  const [listWidth, setListWidth] = useState(288);
+  const [listWidth, setListWidth] = useState(360);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -619,10 +619,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       )}
                     >
                       <div className="relative shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                        <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                           {(lead as any).foto_perfil
                             ? <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
-                            : <User className="h-4 w-4 text-muted-foreground" />}
+                            : <User className="h-5 w-5 text-muted-foreground" />}
                         </div>
                         {(lead as any).tem_mensagem_nova && (
                           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 border-2 border-background flex items-center justify-center animate-pulse">
@@ -686,10 +686,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       selectedProtocolo?.id === proto.id && "bg-primary/10"
                     )}
                   >
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
                       {proto.leads?.foto_perfil
                         ? <img src={proto.leads.foto_perfil} alt={proto.leads?.nome} className="h-full w-full object-cover" />
-                        : <User className="h-4 w-4 text-muted-foreground" />}
+                        : <User className="h-5 w-5 text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
