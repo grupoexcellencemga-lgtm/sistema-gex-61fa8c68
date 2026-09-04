@@ -639,6 +639,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>{lead.nome}</p>
+                          {(lead as any).bot_ativo && (
+                            <Bot className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                          )}
                           {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
                             <span
                               className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"

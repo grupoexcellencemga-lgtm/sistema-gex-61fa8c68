@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       let leadId: string | undefined;
       const { data: existingLead } = await supabase
         .from("leads")
-        .select("id, status_atendimento")
+        .select("id, status_atendimento, bot_ativo")
         .eq("contato_id", telefone)
         .eq("canal_id", canal.id)
         .eq("empresa_id", empresaId)
@@ -188,6 +188,18 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
         }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
+
+        // Se bot_ativo, dispara processar-bot imediatamente (sem aguardar cron)
+        if (existingLead?.bot_ativo) {
+          fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${serviceKey}`,
+            },
+            body: "{}",
+          }).catch(e => console.error("[webhook] erro processar-bot:", e));
+        }
       }
     }
 
