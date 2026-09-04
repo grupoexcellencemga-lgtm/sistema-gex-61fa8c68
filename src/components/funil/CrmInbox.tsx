@@ -458,6 +458,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         tem_mensagem_nova: false,
         mensagens_nao_lidas: 0,
         ultima_mensagem_em: new Date().toISOString(),
+        bot_ativo: false,
       }).eq("id", selectedLeadId);
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
     } catch (err: any) {
