@@ -504,10 +504,13 @@ export function AgentesBotSection() {
                 placeholder="Ex: Você é um assistente virtual da Grupo Excellence. Responda dúvidas sobre cursos e matrículas de forma educada e objetiva. Se não souber responder, diga que um atendente irá ajudar em breve."
                 value={form.instrucao}
                 onChange={(e) => setForm((f) => ({ ...f, instrucao: e.target.value }))}
-                rows={5}
-                className="resize-none"
+                rows={18}
+                className="resize-y font-mono text-xs leading-relaxed"
               />
-              <p className="text-xs text-muted-foreground">Define o comportamento e personalidade do bot.</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Define o comportamento e personalidade do bot.</p>
+                <p className="text-xs text-muted-foreground">{form.instrucao.length} caracteres</p>
+              </div>
             </div>
 
             <div className="space-y-1.5">
