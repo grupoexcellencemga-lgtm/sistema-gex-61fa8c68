@@ -68,6 +68,73 @@ Deno.serve(async (req) => {
       // Verifica horário
       if (!dentroDoHorario(agente)) {
         console.log(`[processar-bot] agente ${agente.nome} fora do horário`);
+
+        // Se for modo direto (forceLeadId), envia mensagem de fora de horário uma vez
+        if (forceLeadId && agente.canais_ids?.length) {
+          const { data: leadFora } = await supabase
+            .from("leads")
+            .select("id, nome, contato_id, canal_id, empresa_id")
+            .eq("id", forceLeadId)
+            .eq("empresa_id", agente.empresa_id)
+            .eq("bot_ativo", true)
+            .in("canal_id", agente.canais_ids)
+            .is("deleted_at", null)
+            .maybeSingle();
+
+          if (leadFora) {
+            // Verifica se já enviou mensagem de fora-de-horário neste mesmo dia
+            const hoje = new Date().toISOString().split("T")[0];
+            const { data: jaRespondeu } = await supabase
+              .from("mensagens_crm")
+              .select("id")
+              .eq("lead_id", leadFora.id)
+              .eq("direcao", "saida")
+              .gte("created_at", `${hoje}T00:00:00Z`)
+              .ilike("conteudo", "%fora do horário%")
+              .limit(1)
+              .maybeSingle();
+
+            if (!jaRespondeu) {
+              const { data: canalFora } = await supabase
+                .from("canais_crm")
+                .select("evolution_url, evolution_token, evolution_instancia")
+                .eq("id", leadFora.canal_id)
+                .maybeSingle();
+
+              if (canalFora?.evolution_instancia) {
+                const apiKeyFora = canalFora.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+                const msgFora = agente.horario_inicio && agente.horario_fim
+                  ? `Oi! Recebi sua mensagem. Nosso atendimento é das ${agente.horario_inicio.substring(0,5)} às ${agente.horario_fim.substring(0,5)}. Em breve um de nossos consultores retorna com você!`
+                  : "Oi! Recebi sua mensagem e retornaremos em breve. Nosso time está fora do horário de atendimento no momento.";
+
+                await fetch(
+                  `${canalFora.evolution_url}/message/sendText/${canalFora.evolution_instancia}`,
+                  {
+                    method: "POST",
+                    headers: { apikey: apiKeyFora!, "Content-Type": "application/json" },
+                    body: JSON.stringify({ number: leadFora.contato_id, text: msgFora }),
+                  }
+                );
+
+                // Busca protocolo ativo para linkar
+                const { data: protFora } = await supabase
+                  .from("protocolos_atendimento")
+                  .select("id").eq("lead_id", leadFora.id).eq("status", "ativo").maybeSingle();
+
+                await supabase.from("mensagens_crm").insert({
+                  lead_id: leadFora.id,
+                  empresa_id: agente.empresa_id,
+                  conteudo: msgFora,
+                  direcao: "saida",
+                  canal: "whatsapp",
+                  protocolo_id: protFora?.id ?? null,
+                });
+                await supabase.rpc("marcar_bot_respondido", { p_lead_id: leadFora.id });
+                console.log(`[processar-bot] mensagem fora-de-horário enviada para lead ${leadFora.id}`);
+              }
+            }
+          }
+        }
         continue;
       }
 
@@ -121,13 +188,43 @@ Deno.serve(async (req) => {
         if (ultimaMensagem.bot_respondido) continue;
 
         // Busca o protocolo ativo para delimitar o histórico da conversa atual
-        // (cada protocolo = uma conversa; ao abrir novo protocolo, bot começa do zero)
         const { data: protocoloAtual } = await supabase
           .from("protocolos_atendimento")
           .select("id, created_at")
           .eq("lead_id", lead.id)
           .eq("status", "ativo")
           .maybeSingle();
+
+        // Busca o último protocolo FECHADO para dar contexto do atendimento anterior
+        let resumoAnterior = "";
+        try {
+          const { data: protAnterior } = await supabase
+            .from("protocolos_atendimento")
+            .select("id, created_at")
+            .eq("lead_id", lead.id)
+            .eq("status", "finalizado")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (protAnterior) {
+            const { data: msgsAnteriores } = await supabase
+              .from("mensagens_crm")
+              .select("conteudo, direcao")
+              .eq("lead_id", lead.id)
+              .eq("protocolo_id", protAnterior.id)
+              .order("created_at", { ascending: true })
+              .limit(10);
+
+            if (msgsAnteriores?.length) {
+              const trechos = msgsAnteriores
+                .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
+                .map((m: any) => `${m.direcao === "entrada" ? "Cliente" : "Bot"}: ${m.conteudo}`)
+                .join("\n");
+              resumoAnterior = `\n\n---\n# CONTEXTO DO ATENDIMENTO ANTERIOR\nEsta pessoa já conversou com você antes. Resumo do último contato:\n${trechos}\n\nUse esse contexto para não repetir perguntas já feitas e para personalizar o atendimento atual.`;
+            }
+          }
+        } catch (_) { /* ignora — contexto anterior é opcional */ }
 
         // Busca as N mensagens MAIS RECENTES do protocolo atual
         // Filtra por protocolo_id (mensagens inseridas após correção do webhook)
@@ -168,11 +265,14 @@ Deno.serve(async (req) => {
         const historico = (historicoDesc ?? []).reverse();
 
         // Monta mensagens para Anthropic
+        // [Mídia] é preservado como aviso para o bot saber que foi enviada uma mídia
         const rawMsgs = historico
-          .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
+          .filter((m: any) => m.conteudo)
           .map((m: any) => ({
             role: (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant",
-            content: m.conteudo as string,
+            content: m.conteudo === "[Mídia]"
+              ? "[A pessoa enviou uma mídia (áudio, foto ou vídeo) — você não consegue visualizá-la]"
+              : m.conteudo as string,
           }));
 
         // Remove mensagens consecutivas com o mesmo role,
@@ -253,17 +353,31 @@ Deno.serve(async (req) => {
           console.error("[processar-bot] erro ao buscar base de conhecimento:", kbErr);
         }
 
+        // Contexto do contato (nome + telefone) injetado no system prompt
+        const nomeContato = lead.nome && lead.nome !== lead.contato_id ? lead.nome : null;
+        const contextoContato = nomeContato
+          ? `\n\n---\n# CONTATO ATUAL\nNome: ${nomeContato}\nTelefone: ${lead.contato_id}\nUse o nome da pessoa naturalmente na conversa quando fizer sentido.`
+          : `\n\n---\n# CONTATO ATUAL\nTelefone: ${lead.contato_id}`;
+
         // Chama Anthropic
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
         const response = await anthropic.messages.create({
           model: agente.modelo,
           max_tokens: 1024,
-          system: agente.instrucao + baseConhecimento,
+          system: agente.instrucao + baseConhecimento + resumoAnterior + contextoContato,
           messages,
         });
 
-        const resposta = response.content[0].type === "text" ? response.content[0].text : null;
+        let resposta = response.content[0].type === "text" ? response.content[0].text : null;
         if (!resposta) continue;
+
+        // Detecta sinal de handoff para consultor humano
+        const handoff = resposta.includes("[HANDOFF]");
+        if (handoff) {
+          resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
+          await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+          console.log(`[processar-bot] handoff ativado para lead ${lead.id} — bot desativado`);
+        }
 
         // Busca canal para enviar via Evolution API
         const { data: canal } = await supabase
