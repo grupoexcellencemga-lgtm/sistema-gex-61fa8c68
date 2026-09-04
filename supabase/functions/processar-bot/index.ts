@@ -34,7 +34,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    console.log("[processar-bot] iniciando ciclo");
+    // Modo direto: webhook passou um leadId específico para resposta imediata
+    let body: any = {};
+    try { body = await req.json(); } catch (_) { /* body vazio do cron */ }
+    const forceLeadId: string | undefined = body?.forceLeadId;
+    const delayMs: number = body?.delayMs ?? 0;
+
+    if (forceLeadId) {
+      console.log(`[processar-bot] modo direto para lead ${forceLeadId}, delay ${delayMs}ms`);
+      // Aguarda o delay (para a pessoa terminar de digitar)
+      if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+    } else {
+      console.log("[processar-bot] iniciando ciclo cron");
+    }
 
     // Busca todos os agentes ativos
     const { data: agentes, error: agErr } = await supabase
@@ -61,19 +73,36 @@ Deno.serve(async (req) => {
 
       if (!agente.canais_ids?.length) continue;
 
-      // Busca leads em fila nos canais deste agente, aguardando além do tempo configurado
-      const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
+      let leads: any[] | null = null;
 
-      const { data: leads } = await supabase
-        .from("leads")
-        .select("id, nome, contato_id, canal_id, empresa_id")
-        .eq("empresa_id", agente.empresa_id)
-        .eq("status_atendimento", "fila")
-        .eq("bot_ativo", true)
-        .in("canal_id", agente.canais_ids)
-        .lt("ultima_mensagem_em", cutoff)
-        .is("deleted_at", null)
-        .not("ultima_mensagem_em", "is", null);
+      if (forceLeadId) {
+        // Modo direto: processa apenas o lead específico (sem cutoff de tempo)
+        const { data } = await supabase
+          .from("leads")
+          .select("id, nome, contato_id, canal_id, empresa_id")
+          .eq("id", forceLeadId)
+          .eq("empresa_id", agente.empresa_id)
+          .eq("status_atendimento", "fila")
+          .eq("bot_ativo", true)
+          .in("canal_id", agente.canais_ids)
+          .is("deleted_at", null)
+          .maybeSingle();
+        leads = data ? [data] : [];
+      } else {
+        // Modo cron: busca leads aguardando além do tempo configurado
+        const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
+        const { data } = await supabase
+          .from("leads")
+          .select("id, nome, contato_id, canal_id, empresa_id")
+          .eq("empresa_id", agente.empresa_id)
+          .eq("status_atendimento", "fila")
+          .eq("bot_ativo", true)
+          .in("canal_id", agente.canais_ids)
+          .lt("ultima_mensagem_em", cutoff)
+          .is("deleted_at", null)
+          .not("ultima_mensagem_em", "is", null);
+        leads = data;
+      }
 
       if (!leads?.length) continue;
 
@@ -91,26 +120,32 @@ Deno.serve(async (req) => {
         if (!ultimaMensagem || ultimaMensagem.direcao !== "entrada") continue;
         if (ultimaMensagem.bot_respondido) continue;
 
-        // Busca histórico de mensagens
-        const { data: historico } = await supabase
+        // Busca as N mensagens MAIS RECENTES para ter contexto relevante
+        const { data: historicoDesc } = await supabase
           .from("mensagens_crm")
           .select("conteudo, direcao, created_at")
           .eq("lead_id", lead.id)
-          .order("created_at", { ascending: true })
+          .order("created_at", { ascending: false })
           .limit(agente.max_mensagens_contexto);
 
+        // Reverte para ordem cronológica
+        const historico = (historicoDesc ?? []).reverse();
+
         // Monta mensagens para Anthropic
-        const rawMsgs = (historico ?? [])
+        const rawMsgs = historico
           .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
           .map((m: any) => ({
             role: (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant",
             content: m.conteudo as string,
           }));
 
-        // Remove mensagens consecutivas com o mesmo role
+        // Remove mensagens consecutivas com o mesmo role,
+        // mantendo a ÚLTIMA (mais recente) de cada sequência consecutiva
         const deduped: Anthropic.MessageParam[] = [];
         for (const m of rawMsgs) {
-          if (deduped.length === 0 || deduped[deduped.length - 1].role !== m.role) {
+          if (deduped.length > 0 && deduped[deduped.length - 1].role === m.role) {
+            deduped[deduped.length - 1] = m; // substitui pela mais recente
+          } else {
             deduped.push(m);
           }
         }

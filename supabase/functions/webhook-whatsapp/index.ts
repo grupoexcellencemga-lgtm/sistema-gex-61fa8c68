@@ -189,7 +189,8 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
         }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
 
-        // Se bot_ativo, dispara processar-bot imediatamente (sem aguardar cron)
+        // Se bot_ativo, dispara processar-bot com delay de 20s para o lead específico
+        // (aguarda a pessoa terminar de digitar antes de responder)
         if (existingLead?.bot_ativo) {
           fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
             method: "POST",
@@ -197,7 +198,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${serviceKey}`,
             },
-            body: "{}",
+            body: JSON.stringify({ forceLeadId: leadId, delayMs: 20000 }),
           }).catch(e => console.error("[webhook] erro processar-bot:", e));
         }
       }
