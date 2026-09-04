@@ -100,15 +100,25 @@ Deno.serve(async (req) => {
           .limit(agente.max_mensagens_contexto);
 
         // Monta mensagens para Anthropic
-        const messages: Anthropic.MessageParam[] = (historico ?? [])
+        const rawMsgs = (historico ?? [])
           .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
           .map((m: any) => ({
-            role: m.direcao === "saida" ? "assistant" : "user",
-            content: m.conteudo,
+            role: (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant",
+            content: m.conteudo as string,
           }));
 
-        // Garante que começa com "user"
-        if (!messages.length || messages[0].role !== "user") continue;
+        // Remove mensagens consecutivas com o mesmo role
+        const deduped: Anthropic.MessageParam[] = [];
+        for (const m of rawMsgs) {
+          if (deduped.length === 0 || deduped[deduped.length - 1].role !== m.role) {
+            deduped.push(m);
+          }
+        }
+
+        // Garante que começa com "user" (descarta mensagens de bot no início)
+        const firstUserIdx = deduped.findIndex(m => m.role === "user");
+        if (firstUserIdx === -1) continue;
+        const messages = deduped.slice(firstUserIdx);
 
         // Chama Anthropic
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);

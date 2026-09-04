@@ -168,6 +168,21 @@ Deno.serve(async (req) => {
     let isNew = false;
 
     if (!sessao) {
+      // Se já existe sessão completed para este lead+fluxo, não reinicia o fluxo
+      const { data: sessaoAnterior } = await supabase
+        .from("fluxo_sessoes")
+        .select("id")
+        .eq("lead_id", leadId)
+        .eq("fluxo_id", fluxo.id)
+        .eq("status", "completed")
+        .limit(1)
+        .maybeSingle();
+      if (sessaoAnterior) {
+        return new Response(JSON.stringify({ ok: true, msg: "fluxo já completado para este lead" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Iniciar novo fluxo
       const startNode = fj.nodes.find(n => n.type === "start");
       if (!startNode) {
@@ -340,17 +355,16 @@ Deno.serve(async (req) => {
     // 5. Persistir sessão
     const now = new Date().toISOString();
     if (isNew) {
-      if (finalStatus !== "completed") {
-        await supabase.from("fluxo_sessoes").insert({
-          lead_id: leadId,
-          fluxo_id: fluxo.id,
-          empresa_id: empresaId,
-          current_node_id: currentNodeId,
-          status: finalStatus,
-          wait_until: waitUntil,
-          contexto: { ultima_mensagem: lastMsg },
-        });
-      }
+      // Sempre persiste a sessão (inclusive completed) para evitar que o fluxo reinicie
+      await supabase.from("fluxo_sessoes").insert({
+        lead_id: leadId,
+        fluxo_id: fluxo.id,
+        empresa_id: empresaId,
+        current_node_id: currentNodeId,
+        status: finalStatus,
+        wait_until: waitUntil,
+        contexto: { ultima_mensagem: lastMsg },
+      });
     } else if (sessao) {
       await supabase.from("fluxo_sessoes")
         .update({ current_node_id: currentNodeId, status: finalStatus, wait_until: waitUntil, updated_at: now })
