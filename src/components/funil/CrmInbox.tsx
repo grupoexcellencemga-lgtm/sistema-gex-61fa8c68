@@ -379,7 +379,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       // Atualiza lead
       const { error } = await (supabase as any)
         .from("leads")
-        .update({ status_atendimento: "finalizado" })
+        .update({ status_atendimento: "finalizado", bot_ativo: false })
         .eq("id", leadId);
       if (error) throw error;
 
