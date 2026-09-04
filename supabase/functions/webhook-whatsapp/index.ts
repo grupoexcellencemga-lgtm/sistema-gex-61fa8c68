@@ -50,8 +50,27 @@ Deno.serve(async (req) => {
       if (!remoteJid || remoteJid.includes("@g.us")) continue;
 
       const telefone = remoteJid.replace("@s.whatsapp.net", "");
-      // pushName quando fromMe é o nome do próprio número (comercial), não do contato
-      const nomeContato: string = fromMe ? telefone : (msg.pushName || telefone);
+
+      // Resolve nome do contato
+      let nomeContato: string = fromMe ? telefone : (msg.pushName || telefone);
+      if (fromMe) {
+        try {
+          const EVOLUTION_URL = "http://2.25.125.70:8080";
+          const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+          if (globalKey) {
+            const contactRes = await fetch(
+              `${EVOLUTION_URL}/chat/findContacts/${instance}?where={"id":"${remoteJid}"}`,
+              { headers: { apikey: globalKey } }
+            );
+            if (contactRes.ok) {
+              const contacts = await contactRes.json();
+              const contact = Array.isArray(contacts) ? contacts[0] : contacts;
+              const nome = contact?.pushName || contact?.name || contact?.verifiedName;
+              if (nome) nomeContato = nome;
+            }
+          }
+        } catch (_) { /* ignora — usa telefone como fallback */ }
+      }
       const texto: string =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
