@@ -71,7 +71,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [atribuindo, setAtribuindo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [togglingBot, setTogglingBot] = useState(false);
-  const [listWidth, setListWidth] = useState(360);
+  const [listWidth, setListWidth] = useState(() => {
+    try { const v = localStorage.getItem("crm-inbox-list-width"); return v ? Math.max(200, Math.min(520, Number(v))) : 360; } catch { return 360; }
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -86,6 +88,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (!isResizing.current) return;
       const newWidth = Math.max(200, Math.min(520, startWidth + ev.clientX - startX));
       setListWidth(newWidth);
+      try { localStorage.setItem("crm-inbox-list-width", String(newWidth)); } catch {}
     }
     function onMouseUp() {
       isResizing.current = false;
