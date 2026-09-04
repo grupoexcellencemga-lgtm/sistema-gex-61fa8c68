@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${serviceKey}`,
             },
-            body: JSON.stringify({ forceLeadId: leadId, delayMs: 20000 }),
+            body: JSON.stringify({ forceLeadId: leadId, delayMs: 8000 }),
           }).catch(e => console.error("[webhook] erro processar-bot:", e));
         }
       }
