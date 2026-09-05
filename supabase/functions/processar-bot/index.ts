@@ -143,13 +143,13 @@ Deno.serve(async (req) => {
       let leads: any[] | null = null;
 
       if (forceLeadId) {
-        // Modo direto: processa apenas o lead específico (sem cutoff de tempo)
+        // Modo direto: processa o lead específico sem exigir status "fila"
+        // (bot_ativo=true já é a autorização — o status não deve bloquear)
         const { data } = await supabase
           .from("leads")
           .select("id, nome, contato_id, canal_id, empresa_id")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
-          .eq("status_atendimento", "fila")
           .eq("bot_ativo", true)
           .in("canal_id", agente.canais_ids)
           .is("deleted_at", null)
