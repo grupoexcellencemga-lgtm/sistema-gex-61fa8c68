@@ -398,19 +398,13 @@ export const MatriculaFormDialog = ({
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label>Valor total (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={matriculaForm.valor_total}
-                  onChange={(e) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      valor_total: e.target.value,
-                    }))
-                  }
-                  placeholder="0,00"
-                />
+                <Label>Valor do produto</Label>
+                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-semibold text-muted-foreground">
+                  {matriculaForm.valor_total
+                    ? formatCurrency(parseFloat(matriculaForm.valor_total))
+                    : <span className="font-normal text-muted-foreground/60">Selecione o produto</span>}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Definido pelo produto</p>
               </div>
 
               <div>
@@ -430,7 +424,7 @@ export const MatriculaFormDialog = ({
               </div>
 
               <div>
-                <Label>Valor final</Label>
+                <Label>Valor contratado</Label>
                 <div className="h-10 flex items-center px-3 rounded-md border bg-background text-sm font-semibold">
                   {formatCurrency(valorFinalCalc)}
                 </div>

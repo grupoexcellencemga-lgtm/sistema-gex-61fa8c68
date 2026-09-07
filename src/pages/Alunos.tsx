@@ -1215,10 +1215,7 @@ const Alunos = () => {
       ...prev,
       produto_id: produtoId,
       turma_id: "",
-      valor_total:
-        produto?.valor !== null && produto?.valor !== undefined
-          ? String(produto.valor)
-          : prev.valor_total,
+      valor_total: produto?.valor != null ? String(produto.valor) : "",
     }));
   };
 
