@@ -105,6 +105,8 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       vencido: number;
       contratado: number;
       aReceber: number;
+      taxaEmpresa: number;
+      taxaAluno: number;
       conta: string;
       situacao: SituacaoAluno;
     };
@@ -126,6 +128,14 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         .filter((p: any) => p.status === "vencido")
         .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
 
+      const taxaEmpresa = pgtos
+        .filter((p: any) => p.status === "pago" && p.taxa_absorvida_por === "empresa")
+        .reduce((s: number, p: any) => s + Number(p.taxa_valor || 0), 0);
+
+      const taxaAluno = pgtos
+        .filter((p: any) => p.status === "pago" && p.taxa_absorvida_por === "aluno")
+        .reduce((s: number, p: any) => s + Number(p.taxa_valor || 0), 0);
+
       const conta = [
         ...new Set(
           pgtos
@@ -143,6 +153,8 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         atual.vencido += vencido;
         atual.contratado += contratado;
         atual.aReceber = Math.max(0, atual.contratado - atual.pago);
+        atual.taxaEmpresa += taxaEmpresa;
+        atual.taxaAluno += taxaAluno;
         if (conta && !atual.conta.includes(conta)) {
           atual.conta = [atual.conta, conta].filter(Boolean).join(", ");
         }
@@ -156,6 +168,8 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
           vencido,
           contratado,
           aReceber: Math.max(0, contratado - pago),
+          taxaEmpresa,
+          taxaAluno,
           conta: conta || "—",
           situacao: getSituacao(pago, pendente, vencido, contratado),
         });
@@ -169,14 +183,16 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     const totalRecebido = alunoEntries.reduce((s, a) => s + a.pago, 0);
     const totalPendente = alunoEntries.reduce((s, a) => s + a.aReceber, 0);
     const totalContratado = alunoEntries.reduce((s, a) => s + a.contratado, 0);
+    const totalTaxaEmpresa = alunoEntries.reduce((s, a) => s + a.taxaEmpresa, 0);
     const totalDespesas = despesas.reduce((s: number, d: any) => s + Number(d.valor || 0), 0);
-    const liquido = totalRecebido - totalDespesas;
+    const liquido = totalRecebido - totalTaxaEmpresa - totalDespesas;
 
     return {
       alunoEntries,
       totalRecebido,
       totalPendente,
       totalContratado,
+      totalTaxaEmpresa,
       totalDespesas,
       liquido,
       parteGex: liquido * 0.5,
@@ -260,7 +276,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Contratado</p>
           <p className="font-bold text-sm">{formatCurrency(dados.totalContratado)}</p>
@@ -268,6 +284,12 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Recebido</p>
           <p className="font-bold text-sm text-emerald-600">{formatCurrency(dados.totalRecebido)}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="text-xs text-muted-foreground">Taxas (empresa)</p>
+          <p className={`font-bold text-sm ${dados.totalTaxaEmpresa > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+            {dados.totalTaxaEmpresa > 0 ? `-${formatCurrency(dados.totalTaxaEmpresa)}` : "—"}
+          </p>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">A receber</p>
@@ -290,6 +312,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                 <TableHead>Conta / Banco</TableHead>
                 <TableHead className="text-right">Contratado</TableHead>
                 <TableHead className="text-right">Recebido</TableHead>
+                <TableHead className="text-right">Taxa</TableHead>
                 <TableHead className="text-right">A receber</TableHead>
                 <TableHead className="text-center">Situação</TableHead>
               </TableRow>
@@ -311,6 +334,24 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                   <TableCell className="text-sm text-right font-medium text-emerald-600">
                     {a.pago > 0 ? formatCurrency(a.pago) : "—"}
                   </TableCell>
+                  <TableCell className="text-sm text-right">
+                    {(a.taxaEmpresa > 0 || a.taxaAluno > 0) ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        {a.taxaEmpresa > 0 && (
+                          <span className="text-xs font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">
+                            -{formatCurrency(a.taxaEmpresa)} Empresa
+                          </span>
+                        )}
+                        {a.taxaAluno > 0 && (
+                          <span className="text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-900/20 px-1.5 py-0.5 rounded">
+                            {formatCurrency(a.taxaAluno)} Aluno
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm text-right text-amber-600">
                     {a.aReceber > 0 ? formatCurrency(a.aReceber) : "—"}
                   </TableCell>
@@ -321,7 +362,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
               ))}
               {dados.alunoEntries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                     Nenhum aluno matriculado nesta turma
                   </TableCell>
                 </TableRow>

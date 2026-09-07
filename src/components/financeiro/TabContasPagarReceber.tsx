@@ -174,6 +174,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     conta_bancaria_id: "",
     observacoes: "",
     tipo_baixa: "total",
+    taxa_valor: "",
+    taxa_absorvida_por: "" as "" | "empresa" | "aluno",
   });
 
   const { data: formasPagamento = [] } = useFormasPagamento();
@@ -1294,6 +1296,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       conta_bancaria_id,
       valor_pago,
       observacoes,
+      taxa_valor,
+      taxa_absorvida_por,
     }: {
       conta: any;
       data_pagamento: string;
@@ -1302,6 +1306,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       conta_bancaria_id: string;
       valor_pago: number;
       observacoes?: string;
+      taxa_valor?: number | null;
+      taxa_absorvida_por?: string | null;
     }) => {
       if (!conta) throw new Error("Conta não encontrada.");
       if (!data_pagamento) throw new Error("Informe a data de pagamento.");
@@ -1342,6 +1348,11 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       if (sourceType === "aluno") {
         const pagamento = pagamentos.find((item: any) => item.id === originalId);
         const novoValorPago = roundMoney(Number(pagamento?.valor_pago || 0) + valorInformado);
+        const taxaUpdate: Record<string, any> = {};
+        if (taxa_valor != null && taxa_valor > 0) {
+          taxaUpdate.taxa_valor = taxa_valor;
+          taxaUpdate.taxa_absorvida_por = taxa_absorvida_por || null;
+        }
         const { error } = await supabase
           .from("pagamentos")
           .update({
@@ -1350,6 +1361,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
             valor_pago: novoValorPago,
             forma_pagamento,
             conta_bancaria_id,
+            ...taxaUpdate,
           })
           .eq("id", originalId);
 
@@ -1851,6 +1863,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       conta_bancaria_id: conta.conta_bancaria_id || "",
       observacoes: "",
       tipo_baixa: "total",
+      taxa_valor: "",
+      taxa_absorvida_por: "",
     });
 
     setPayDialogOpen(true);
@@ -2892,6 +2906,53 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                   />
                 </div>
 
+                {/* Taxa da operação */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Taxa da operação</p>
+                    <p className="text-xs text-muted-foreground">Cartão, gateway, boleto, etc. Opcional.</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Valor da taxa (R$)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        value={payForm.taxa_valor}
+                        onChange={(e) => setPayForm((f) => ({ ...f, taxa_valor: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label>Quem absorveu?</Label>
+                      <div className="grid grid-cols-3 gap-2 mt-1">
+                        {(["", "empresa", "aluno"] as const).map((opt) => (
+                          <Button
+                            key={opt || "nenhum"}
+                            type="button"
+                            size="sm"
+                            variant={payForm.taxa_absorvida_por === opt ? "default" : "outline"}
+                            onClick={() => setPayForm((f) => ({ ...f, taxa_absorvida_por: opt }))}
+                          >
+                            {opt === "" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  {payForm.taxa_absorvida_por === "empresa" && Number(payForm.taxa_valor) > 0 && (
+                    <p className="text-xs text-amber-600 font-medium">
+                      Empresa recebe líquido de {formatCurrency(Number(payForm.valor || 0) - Number(payForm.taxa_valor))}
+                    </p>
+                  )}
+                  {payForm.taxa_absorvida_por === "aluno" && Number(payForm.taxa_valor) > 0 && (
+                    <p className="text-xs text-sky-600 font-medium">
+                      Aluno pagou {formatCurrency(Number(payForm.valor || 0))} (já inclui taxa)
+                    </p>
+                  )}
+                </div>
+
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -2997,6 +3058,8 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                       conta_bancaria_id: payForm.conta_bancaria_id,
                       valor_pago: Number(payForm.valor) || Number(payingConta.saldo_restante ?? payingConta.valor),
                       observacoes: payForm.observacoes,
+                      taxa_valor: Number(payForm.taxa_valor) > 0 ? Number(payForm.taxa_valor) : null,
+                      taxa_absorvida_por: payForm.taxa_absorvida_por || null,
                     });
                   }}
                   disabled={markPaidMutation.isPending}
