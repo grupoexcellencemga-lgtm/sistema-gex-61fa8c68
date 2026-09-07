@@ -12,9 +12,24 @@ export const PAGE_SIZE = 25;
 
 export const emptyMatriculaForm = {
   produto_id: "", turma_id: "", data_inicio: "", data_fim: "", status: "ativo", observacoes: "",
-  valor_total: "", desconto: "", parcelas: "1", forma_pagamento: "", data_vencimento: "", conta_bancaria_id: "",
+  valor_total: "",        // valor do produto (referência)
+  valor_contratado: "",   // valor negociado (editável)
+  desconto: "",           // calculado: valor_total - valor_contratado (mantido para compatibilidade)
+  parcelas: "1", forma_pagamento: "", data_vencimento: "", conta_bancaria_id: "",
   comercial_id: "", percentual_comissao: "5", taxa_cartao: "", repassar_taxa: false,
   comprovante_url: "", comprovantes_urls: [] as Array<{ url: string; nome: string }>, comprovantes_files: [] as File[],
+  // Modo de pagamento
+  modalidade_pagamento: "unico" as "unico" | "entrada_parcelas",
+  // Entrada (opcional)
+  entrada_valor: "",
+  entrada_forma_pagamento: "",
+  entrada_data: "",
+  entrada_conta_bancaria_id: "",
+  entrada_taxa_valor: "",
+  entrada_taxa_absorvida_por: "" as "" | "empresa" | "aluno",
+  // Forma de pagamento das parcelas restantes
+  parcelas_forma_pagamento: "",
+  parcelas_conta_bancaria_id: "",
 };
 
 // Re-export from centralized formatters

@@ -460,8 +460,14 @@ const Alunos = () => {
         parseFloat(matriculaForm.valor_total) ||
         Number(produtoSelecionado?.valor || 0);
 
-      const desconto = parseFloat(matriculaForm.desconto) || 0;
-      const valorFinal = Math.max(valorTotal - desconto, 0);
+      // valor_contratado é o valor negociado; se não informado, usa valorTotal
+      const valorContratado =
+        parseFloat(matriculaForm.valor_contratado) > 0
+          ? parseFloat(matriculaForm.valor_contratado)
+          : valorTotal;
+
+      const desconto = Math.max(valorTotal - valorContratado, 0);
+      const valorFinal = valorContratado;
 
       const dataInicioResolvida =
         matriculaForm.data_inicio || turmaSelecionada?.data_inicio || null;
@@ -505,58 +511,79 @@ const Alunos = () => {
       await salvarComprovantesMatricula(mat.id);
 
       if (valorFinal > 0 || matriculaForm.forma_pagamento === "permuta") {
-        const isCartao = ["credito", "cartao_credito", "cartao"].includes(
-          matriculaForm.forma_pagamento
-        );
-        const isDebito = matriculaForm.forma_pagamento === "debito";
-        const isLink = matriculaForm.forma_pagamento === "link";
-        // Boleto NÃO tem taxa de máquina (só cartão, débito e link).
-        const temTaxaMaquina = isCartao || isDebito || isLink;
-        // Cartão, débito e link entram integralmente: um único lançamento.
-        // Boleto é recebido parcela a parcela: um lançamento por mês.
-        const recebeIntegral = isCartao || isDebito || isLink;
-        const numParcelas = recebeIntegral ? 1 : parseInt(matriculaForm.parcelas) || 1;
-        const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
-        const taxaCartao = temTaxaMaquina
-          ? parseFloat(matriculaForm.taxa_cartao) || 0
-          : 0;
+        const modoEntrada = matriculaForm.modalidade_pagamento === "entrada_parcelas";
+        const entradaValor = modoEntrada ? (parseFloat(matriculaForm.entrada_valor) || 0) : 0;
+        const valorRestante = Math.max(valorFinal - entradaValor, 0);
 
-        const taxaCalc = calcTaxaMaquina(
-          valorFinal,
-          temTaxaMaquina ? taxaCartao : 0,
-          !!matriculaForm.repassar_taxa
-        );
-
-        const valorBase = matriculaForm.repassar_taxa
-          ? taxaCalc.valorCobrado
-          : taxaCalc.valorLiquido;
-
-        const valorParcela = valorBase / numParcelas;
-
-        const rows = Array.from({ length: numParcelas }, (_, i) => {
-          const d = new Date(dataVencimentoResolvida + "T12:00:00");
-
-          if (!recebeIntegral) d.setMonth(d.getMonth() + i);
-
-          return {
+        // ─── Entrada (pago agora) ────────────────────────────────────────────
+        if (modoEntrada && entradaValor > 0) {
+          const entradaTaxa = parseFloat(matriculaForm.entrada_taxa_valor) || 0;
+          const { error: entErr } = await supabase.from("pagamentos").insert({
             empresa_id: empresaId,
             aluno_id: selectedAluno.id,
             produto_id: produtoIdResolvido,
             matricula_id: mat.id,
-            valor: Math.round(valorParcela * 100) / 100,
-            forma_pagamento: matriculaForm.forma_pagamento || null,
-            parcelas: recebeIntegral ? 1 : numParcelas,
-            parcela_atual: recebeIntegral ? 1 : i + 1,
-            parcelas_cartao: isCartao || isLink ? parcelasCliente : null,
-            taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
-            data_vencimento: d.toISOString().split("T")[0],
-            status: "pendente",
-            conta_bancaria_id: matriculaForm.conta_bancaria_id || null,
-          };
-        });
+            valor: entradaValor,
+            valor_pago: entradaValor,
+            forma_pagamento: matriculaForm.entrada_forma_pagamento || null,
+            conta_bancaria_id: matriculaForm.entrada_conta_bancaria_id || null,
+            data_vencimento: matriculaForm.entrada_data || dataVencimentoResolvida,
+            data_pagamento: matriculaForm.entrada_data || dataVencimentoResolvida,
+            status: "pago",
+            parcelas: 1,
+            parcela_atual: 1,
+            taxa_valor: entradaTaxa > 0 ? entradaTaxa : null,
+            taxa_absorvida_por: entradaTaxa > 0 ? (matriculaForm.entrada_taxa_absorvida_por || null) : null,
+          } as any);
+          if (entErr) throw entErr;
+        }
 
-        const { error: pagErr } = await supabase.from("pagamentos").insert(rows);
-        if (pagErr) throw pagErr;
+        // ─── Parcelas restantes (ou únicas) ─────────────────────────────────
+        const baseParcelasValor = modoEntrada ? valorRestante : valorFinal;
+        const fpParcelas = modoEntrada ? matriculaForm.parcelas_forma_pagamento : matriculaForm.forma_pagamento;
+        const contaParcelas = modoEntrada ? matriculaForm.parcelas_conta_bancaria_id : matriculaForm.conta_bancaria_id;
+
+        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada)) {
+          const isCartao = ["credito", "cartao_credito", "cartao"].includes(fpParcelas || "");
+          const isDebito = (fpParcelas || "") === "debito";
+          const isLink = (fpParcelas || "") === "link";
+          const temTaxaMaquina = isCartao || isDebito || isLink;
+          const recebeIntegral = isCartao || isDebito || isLink;
+          const numParcelas = recebeIntegral ? 1 : parseInt(matriculaForm.parcelas) || 1;
+          const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
+          const taxaCartao = temTaxaMaquina ? parseFloat(matriculaForm.taxa_cartao) || 0 : 0;
+
+          const taxaCalc = calcTaxaMaquina(
+            baseParcelasValor,
+            temTaxaMaquina ? taxaCartao : 0,
+            !!matriculaForm.repassar_taxa
+          );
+          const valorBase = matriculaForm.repassar_taxa ? taxaCalc.valorCobrado : taxaCalc.valorLiquido;
+          const valorParcela = valorBase / numParcelas;
+
+          const rows = Array.from({ length: numParcelas }, (_, i) => {
+            const d = new Date(dataVencimentoResolvida + "T12:00:00");
+            if (!recebeIntegral) d.setMonth(d.getMonth() + i);
+            return {
+              empresa_id: empresaId,
+              aluno_id: selectedAluno.id,
+              produto_id: produtoIdResolvido,
+              matricula_id: mat.id,
+              valor: Math.round(valorParcela * 100) / 100,
+              forma_pagamento: fpParcelas || null,
+              parcelas: recebeIntegral ? 1 : numParcelas,
+              parcela_atual: recebeIntegral ? 1 : i + 1,
+              parcelas_cartao: isCartao || isLink ? parcelasCliente : null,
+              taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
+              data_vencimento: d.toISOString().split("T")[0],
+              status: "pendente",
+              conta_bancaria_id: contaParcelas || null,
+            };
+          });
+
+          const { error: pagErr } = await supabase.from("pagamentos").insert(rows);
+          if (pagErr) throw pagErr;
+        }
       }
 
       if (matriculaForm.comercial_id && valorFinal > 0) {
@@ -1210,12 +1237,14 @@ const Alunos = () => {
 
   const handleProdutoChange = (produtoId: string) => {
     const produto = produtos.find((p: any) => p.id === produtoId);
-
+    const val = produto?.valor != null ? String(produto.valor) : "";
     setMatriculaForm((prev) => ({
       ...prev,
       produto_id: produtoId,
       turma_id: "",
-      valor_total: produto?.valor != null ? String(produto.valor) : "",
+      valor_total: val,
+      valor_contratado: val,
+      desconto: "",
     }));
   };
 
