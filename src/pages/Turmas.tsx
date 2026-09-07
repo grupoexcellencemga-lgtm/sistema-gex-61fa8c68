@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks, Link } from "lucide-react";
 import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
 import { toast } from "sonner";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -23,6 +23,7 @@ import { TurmaAlunosTab } from "@/components/turmas/TurmaAlunosTab";
 import { TurmaFinanceiroTab } from "@/components/turmas/TurmaFinanceiroTab";
 import { TurmaMetricasTab } from "@/components/turmas/TurmaMetricasTab";
 import { TurmaOperacaoTab } from "@/components/turmas/TurmaOperacaoTab";
+import { TurmaUTMLinksDialog } from "@/components/turmas/TurmaUTMLinksDialog";
 import { recalcularPrazosDaTurma } from "@/lib/checklistEvento";
 import { formatDate } from "@/lib/formatters";
 import { NOMES_MES } from "@/components/agenda/agendaUtils";
@@ -78,6 +79,7 @@ const Turmas = () => {
   const [filters, setFilters] = useState<Record<string, string>>({ turma: "", produto: "", cidade: "", modalidade: "", periodo: "", responsavel: "" });
   const [statusFilter, setStatusFilter] = useState<string>("ativa");
   const [selectedTurma, setSelectedTurma] = useState<any | null>(null);
+  const [utmDialogOpen, setUtmDialogOpen] = useState(false);
 
   // Navegação por mês (pela data de início da turma)
   const [verTodosMeses, setVerTodosMeses] = useState(false);
@@ -289,6 +291,9 @@ const Turmas = () => {
       <div>
         <PageHeader title={selectedTurma.nome} description={`${selectedTurma.produtos?.nome || ""} • ${selectedTurma.cidade} • ${selectedTurma.modalidade}`}>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setUtmDialogOpen(true)}>
+              <Link className="h-4 w-4 mr-2" />Link de inscrição
+            </Button>
             {isFinalizada ? (
               <Button variant="outline" onClick={() => finalizeMutation.mutate({ id: selectedTurma.id, status: "ativa" })} disabled={finalizeMutation.isPending}>
                 <RotateCcw className="h-4 w-4 mr-2" />Reativar Turma
@@ -332,6 +337,7 @@ const Turmas = () => {
             <TurmaOperacaoTab turma={selectedTurma} />
           </TabsContent>
         </Tabs>
+        <TurmaUTMLinksDialog open={utmDialogOpen} onOpenChange={setUtmDialogOpen} turma={selectedTurma} />
       </div>
     );
   }

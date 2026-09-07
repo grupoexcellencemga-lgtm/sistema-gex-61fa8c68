@@ -49,6 +49,7 @@ const ConsorcioDashboard = lazy(() => import("./pages/consorcios/Dashboard"));
 const Empresas = lazy(() => import("./pages/Empresas"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Inscricao = lazy(() => import("./pages/Inscricao"));
+const InscricaoTurma = lazy(() => import("./pages/InscricaoTurma"));
 const EventoPublico = lazy(() => import("./pages/EventoPublico"));
 
 const queryClient = new QueryClient({
@@ -78,11 +79,16 @@ const AppRoutes = () => {
   }
 
   // Public routes — accessible regardless of auth state (no PWA prompts)
-  if (location.pathname.startsWith("/inscricao/") || location.pathname.startsWith("/e/")) {
+  if (
+    location.pathname.startsWith("/inscricao/") ||
+    location.pathname.startsWith("/inscricao-turma/") ||
+    location.pathname.startsWith("/e/")
+  ) {
     return (
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/inscricao/:eventoId" element={<Inscricao />} />
+          <Route path="/inscricao-turma/:turmaId" element={<InscricaoTurma />} />
           <Route path="/e/:slug" element={<EventoPublico />} />
         </Routes>
       </Suspense>
