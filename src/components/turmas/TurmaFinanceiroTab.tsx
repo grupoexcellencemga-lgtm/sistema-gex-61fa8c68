@@ -22,6 +22,7 @@ type SituacaoAluno = "gratuito" | "pago" | "parcial" | "pendente" | "vencido";
 function getSituacao(pago: number, pendente: number, vencido: number, contratado: number): SituacaoAluno {
   if (contratado === 0 && pago === 0) return "gratuito";
   if (vencido > 0) return "vencido";
+  if (pago >= contratado && contratado > 0) return "pago";
   if (pendente === 0 && pago > 0) return "pago";
   if (pago > 0) return "parcial";
   return "pendente";
@@ -103,6 +104,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       pendente: number;
       vencido: number;
       contratado: number;
+      aReceber: number;
       conta: string;
       situacao: SituacaoAluno;
     };
@@ -140,6 +142,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         atual.pendente += pendente;
         atual.vencido += vencido;
         atual.contratado += contratado;
+        atual.aReceber = Math.max(0, atual.contratado - atual.pago);
         if (conta && !atual.conta.includes(conta)) {
           atual.conta = [atual.conta, conta].filter(Boolean).join(", ");
         }
@@ -152,6 +155,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
           pendente,
           vencido,
           contratado,
+          aReceber: Math.max(0, contratado - pago),
           conta: conta || "—",
           situacao: getSituacao(pago, pendente, vencido, contratado),
         });
@@ -163,7 +167,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     );
 
     const totalRecebido = alunoEntries.reduce((s, a) => s + a.pago, 0);
-    const totalPendente = alunoEntries.reduce((s, a) => s + a.pendente + a.vencido, 0);
+    const totalPendente = alunoEntries.reduce((s, a) => s + a.aReceber, 0);
     const totalContratado = alunoEntries.reduce((s, a) => s + a.contratado, 0);
     const totalDespesas = despesas.reduce((s: number, d: any) => s + Number(d.valor || 0), 0);
     const liquido = totalRecebido - totalDespesas;
@@ -308,7 +312,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                     {a.pago > 0 ? formatCurrency(a.pago) : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-right text-amber-600">
-                    {(a.pendente + a.vencido) > 0 ? formatCurrency(a.pendente + a.vencido) : "—"}
+                    {a.aReceber > 0 ? formatCurrency(a.aReceber) : "—"}
                   </TableCell>
                   <TableCell className="text-center">
                     <SituacaoBadge s={a.situacao} />
