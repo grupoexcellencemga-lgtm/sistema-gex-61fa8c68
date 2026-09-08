@@ -823,8 +823,14 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inscricoes.map((insc: any) => {
+                  {(() => {
+                    const matriculadosEmails = new Set(
+                      alunos.map((a: any) => (a.email || "").toLowerCase())
+                    );
+                    return inscricoes.map((insc: any) => {
                     const wa = whatsappLink(insc.telefone);
+                    const jaMatriculado =
+                      !!(insc.email && matriculadosEmails.has(insc.email.toLowerCase()));
                     return (
                       <TableRow key={insc.id}>
                         <TableCell className="font-medium text-sm">{insc.nome}</TableCell>
@@ -849,6 +855,9 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {jaMatriculado ? (
+                              <span className="text-xs text-emerald-600 font-medium px-2">Já matriculado</span>
+                            ) : (
                             <Button
                               variant="outline"
                               size="sm"
@@ -858,6 +867,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                               <UserPlus className="h-3.5 w-3.5 mr-1" />
                               Matricular
                             </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -874,7 +884,8 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  });
+                  })()}
                   {inscricoes.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
