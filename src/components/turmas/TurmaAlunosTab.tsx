@@ -70,14 +70,13 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
       setNovoAlunoForm({ nome: "", email: "", telefone: "" });
       // Avança direto para o financeiro
       const produto = produtos.find((p: any) => p.id === turma.produto_id);
+      const prodValStr = produto?.valor != null ? String(produto.valor) : "";
       setMatriculaForm({
         ...emptyMatriculaForm,
         turma_id: turma.id,
         produto_id: turma.produto_id || "",
-        valor_total:
-          produto?.valor !== null && produto?.valor !== undefined
-            ? String(produto.valor)
-            : "",
+        valor_total: prodValStr,
+        valor_contratado: prodValStr,
         data_inicio: turma.data_inicio || "",
         data_fim: turma.data_fim || "",
       });
@@ -142,7 +141,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
       if (error) throw error;
       return data;
     },
-    enabled: (matriculaDialogOpen || buscaDialogOpen) && !!empresaId,
+    enabled: !!empresaId,
   });
 
   const { data: contasBancarias = [] } = useQuery({
@@ -213,14 +212,13 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
   const avancarParaFinanceiro = () => {
     if (!alunoSelecionado) return;
     const produto = produtos.find((p: any) => p.id === turma.produto_id);
+    const prodValStr = produto?.valor != null ? String(produto.valor) : "";
     setMatriculaForm({
       ...emptyMatriculaForm,
       turma_id: turma.id,
       produto_id: turma.produto_id || "",
-      valor_total:
-        produto?.valor !== null && produto?.valor !== undefined
-          ? String(produto.valor)
-          : "",
+      valor_total: prodValStr,
+      valor_contratado: prodValStr,
       data_inicio: turma.data_inicio || "",
       data_fim: turma.data_fim || "",
     });
