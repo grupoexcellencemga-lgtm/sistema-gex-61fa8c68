@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Download } from "lucide-react";
+import { Loader2, Download, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -225,6 +226,31 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
 
   const isLoading = loadingMat || loadingPag || loadingDesp;
 
+  const [filtroAluno, setFiltroAluno] = useState("");
+  const [filtroContas, setFiltroContas] = useState<string[]>([]);
+  const [filtroSituacoes, setFiltroSituacoes] = useState<SituacaoAluno[]>([]);
+
+  const contasUnicas = useMemo(() => {
+    const set = new Set<string>();
+    dados.alunoEntries.forEach((a) => {
+      if (a.conta && a.conta !== "—") {
+        a.conta.split(", ").forEach((c) => set.add(c.trim()));
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [dados.alunoEntries]);
+
+  const entriesFiltradas = useMemo(() => {
+    return dados.alunoEntries.filter((a) => {
+      if (filtroAluno && !a.nome.toLowerCase().includes(filtroAluno.toLowerCase())) return false;
+      if (filtroContas.length > 0 && !filtroContas.some((c) => a.conta.includes(c))) return false;
+      if (filtroSituacoes.length > 0 && !filtroSituacoes.includes(a.situacao)) return false;
+      return true;
+    });
+  }, [dados.alunoEntries, filtroAluno, filtroContas, filtroSituacoes]);
+
+  const algumFiltroAtivo = filtroAluno !== "" || filtroContas.length > 0 || filtroSituacoes.length > 0;
+
   const exportarExcel = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
@@ -347,9 +373,73 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                 <TableHead className="text-right">A receber</TableHead>
                 <TableHead className="text-center">Situação</TableHead>
               </TableRow>
+              <TableRow className="hover:bg-transparent border-b border-border/50">
+                <TableHead className="py-1.5">
+                  <div className="relative">
+                    <Input
+                      placeholder="Buscar aluno…"
+                      value={filtroAluno}
+                      onChange={(e) => setFiltroAluno(e.target.value)}
+                      className="h-7 text-xs pr-6"
+                    />
+                    {filtroAluno && (
+                      <button type="button" onClick={() => setFiltroAluno("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead className="py-1.5">
+                  {contasUnicas.length > 0 ? (
+                    <select
+                      value={filtroContas[0] || ""}
+                      onChange={(e) => setFiltroContas(e.target.value ? [e.target.value] : [])}
+                      className="h-7 w-full text-xs rounded-md border border-input bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="">Todas as contas</option>
+                      {contasUnicas.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : null}
+                </TableHead>
+                <TableHead />
+                <TableHead />
+                <TableHead />
+                <TableHead />
+                <TableHead className="py-1.5">
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {(["pago", "parcial", "pendente", "vencido", "gratuito"] as SituacaoAluno[]).map((s) => {
+                      const labels: Record<SituacaoAluno, string> = { pago: "Pago", parcial: "Parcial", pendente: "Pendente", vencido: "Inad.", gratuito: "Grat." };
+                      const colors: Record<SituacaoAluno, string> = {
+                        pago:     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                        parcial:  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                        pendente: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                        vencido:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                        gratuito: "bg-muted text-muted-foreground",
+                      };
+                      const ativo = filtroSituacoes.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setFiltroSituacoes((prev) =>
+                            prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+                          )}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border-0 font-medium transition-opacity ${colors[s]} ${
+                            filtroSituacoes.length === 0 || ativo ? "opacity-100" : "opacity-30"
+                          }`}
+                        >
+                          {labels[s]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </TableHead>
+              </TableRow>
             </TableHeader>
             <TableBody>
-              {dados.alunoEntries.map((a, i) => (
+              {entriesFiltradas.map((a, i) => (
                 <TableRow key={i}>
                   <TableCell className="text-sm font-medium">
                     <button
@@ -391,10 +481,14 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                   </TableCell>
                 </TableRow>
               ))}
-              {dados.alunoEntries.length === 0 && (
+              {entriesFiltradas.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                    Nenhum aluno matriculado nesta turma
+                    {algumFiltroAtivo
+                      ? <span>Nenhum aluno corresponde aos filtros.{" "}
+                          <button type="button" className="underline hover:text-foreground" onClick={() => { setFiltroAluno(""); setFiltroContas([]); setFiltroSituacoes([]); }}>Limpar filtros</button>
+                        </span>
+                      : "Nenhum aluno matriculado nesta turma"}
                   </TableCell>
                 </TableRow>
               )}
