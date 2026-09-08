@@ -22,9 +22,10 @@ type SituacaoAluno = "gratuito" | "pago" | "parcial" | "pendente" | "vencido";
 function getSituacao(pago: number, pendente: number, vencido: number, contratado: number): SituacaoAluno {
   if (contratado === 0 && pago === 0) return "gratuito";
   if (vencido > 0) return "vencido";
-  if (pago >= contratado && contratado > 0) return "pago";
-  if (pendente === 0 && pago > 0) return "pago";
-  if (pago > 0) return "parcial";
+  if (contratado > 0 && pago >= contratado) return "pago";
+  // Parcial: pagou algo mas não quitou (inclui modo entrada sem parcelas geradas)
+  if (pago > 0 && pago < contratado) return "parcial";
+  if (pendente > 0 || vencido > 0) return "pendente";
   return "pendente";
 }
 
