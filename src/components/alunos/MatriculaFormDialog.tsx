@@ -154,6 +154,44 @@ export const MatriculaFormDialog = ({
 
   const taxaPercentual = taxaAutoCalc.percentual;
 
+  // ── Taxa automática para a ENTRADA ──
+  const isEntradaCredito = ["credito", "cartao", "cartao_credito"].includes(
+    matriculaForm.entrada_forma_pagamento || ""
+  );
+  const isEntradaDebito = matriculaForm.entrada_forma_pagamento === "debito";
+  const isEntradaLink = matriculaForm.entrada_forma_pagamento === "link";
+  const isEntradaBoleto = matriculaForm.entrada_forma_pagamento === "boleto";
+  const showEntradaTaxa =
+    !isEntradaBoleto && (isEntradaCredito || isEntradaDebito || isEntradaLink);
+
+  const entradaTaxaAutoCalc = useMemo(() => {
+    if (!showEntradaTaxa || !taxas.length) return { percentual: 0, nome: "" };
+    if (isEntradaDebito) {
+      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Débito" };
+    }
+    if (isEntradaCredito) {
+      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Crédito 1x");
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Crédito 1x" };
+    }
+    if (isEntradaLink) {
+      const found = taxas.find((t: any) => t.tipo === "link" && t.nome === "1x");
+      return found ? { percentual: Number(found.percentual), nome: `Link ${found.nome}` } : { percentual: 0, nome: "Link 1x" };
+    }
+    return { percentual: 0, nome: "" };
+  }, [showEntradaTaxa, isEntradaCredito, isEntradaDebito, isEntradaLink, taxas]);
+
+  useEffect(() => {
+    if (!modoEntrada || !showEntradaTaxa || entradaTaxaAutoCalc.percentual <= 0) return;
+    const entradaVal = parseFloat(matriculaForm.entrada_valor) || 0;
+    if (entradaVal <= 0) return;
+    const taxaVal = Math.round(entradaVal * entradaTaxaAutoCalc.percentual / 100 * 100) / 100;
+    const current = parseFloat(matriculaForm.entrada_taxa_valor) || 0;
+    if (current !== taxaVal) {
+      setMatriculaForm((p: any) => ({ ...p, entrada_taxa_valor: String(taxaVal) }));
+    }
+  }, [entradaTaxaAutoCalc.percentual, matriculaForm.entrada_valor, showEntradaTaxa, modoEntrada]);
+
   const taxaCalc = calcTaxaMaquina(
     valorFinalCalc,
     showTaxa ? taxaPercentual : 0,
@@ -532,6 +570,11 @@ export const MatriculaFormDialog = ({
                         onChange={(e) => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_valor: e.target.value }))}
                         placeholder="0,00 — opcional"
                       />
+                      {showEntradaTaxa && entradaTaxaAutoCalc.percentual > 0 && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {entradaTaxaAutoCalc.nome} · {entradaTaxaAutoCalc.percentual.toFixed(2).replace(".", ",")}%
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label>Quem absorveu a taxa?</Label>
@@ -556,71 +599,11 @@ export const MatriculaFormDialog = ({
                   </div>
                 </div>
 
-                {/* Parcelas restantes */}
-                <div className="rounded-md border p-3 space-y-3 bg-background">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parcelas restantes</p>
-                    {entradaValorCalc > 0 && (
-                      <span className="text-xs font-semibold text-amber-600">
-                        Restante: {formatCurrency(restanteCalc)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Nº de parcelas</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={matriculaForm.parcelas}
-                        onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas: e.target.value }))}
-                      />
-                      {entradaValorCalc > 0 && parseInt(matriculaForm.parcelas) > 0 && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {parseInt(matriculaForm.parcelas)}x de {formatCurrency(restanteCalc / (parseInt(matriculaForm.parcelas) || 1))}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label>1º Vencimento</Label>
-                      <Input
-                        type="date"
-                        value={matriculaForm.data_vencimento}
-                        onChange={(e) => setMatriculaForm((p: any) => ({ ...p, data_vencimento: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Forma de pagamento</Label>
-                      <Select
-                        value={matriculaForm.parcelas_forma_pagamento}
-                        onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_forma_pagamento: v }))}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          {formasPagamento.map((f) => (
-                            <SelectItem key={f.id} value={f.codigo}>{f.nome}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Conta bancária</Label>
-                      <Select
-                        value={matriculaForm.parcelas_conta_bancaria_id}
-                        onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_conta_bancaria_id: v }))}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          {contasBancarias.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
+                {entradaValorCalc > 0 && (
+                  <p className="text-xs text-amber-600 font-medium">
+                    Restante após entrada: {formatCurrency(restanteCalc)} — adicione as parcelas na aba Financeiro da matrícula.
+                  </p>
+                )}
               </div>
             )}
 
