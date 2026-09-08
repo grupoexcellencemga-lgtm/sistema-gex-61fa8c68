@@ -266,6 +266,9 @@ const Turmas = () => {
       if (vars.status === "finalizada") {
         toast.success("Turma finalizada");
         setSelectedTurma((prev: any) => prev ? { ...prev, status: "finalizada" } : null);
+      } else if (vars.status === "cancelada") {
+        toast.success("Turma cancelada");
+        setSelectedTurma((prev: any) => prev ? { ...prev, status: "cancelada" } : null);
       } else {
         toast.success("Turma reativada");
         setSelectedTurma((prev: any) => prev ? { ...prev, status: "ativa" } : null);
@@ -304,31 +307,54 @@ const Turmas = () => {
   // Detail view for a turma
   if (selectedTurma) {
     const isFinalizada = selectedTurma.status === "finalizada";
+    const isCancelada = selectedTurma.status === "cancelada";
+    const isEncerrada = isFinalizada || isCancelada;
     return (
       <div>
-        <PageHeader title={selectedTurma.nome} description={`${selectedTurma.produtos?.nome || ""} • ${selectedTurma.cidade} • ${selectedTurma.modalidade}`}>
-          <div className="flex gap-2">
+        {/* Header customizado: Voltar à esquerda, ações à direita */}
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between mb-6">
+          <div className="flex items-start gap-3">
+            <Button variant="outline" size="sm" className="mt-1 shrink-0" onClick={closeTurmaDetail}>
+              <ArrowLeft className="h-4 w-4 mr-1" />Voltar
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{selectedTurma.nome}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{selectedTurma.produtos?.nome || ""} • {selectedTurma.cidade} • {selectedTurma.modalidade}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3 sm:mt-0 flex-wrap">
             <Button variant="outline" onClick={() => setUtmDialogOpen(true)}>
               <Link className="h-4 w-4 mr-2" />Link de inscrição
             </Button>
-            {isFinalizada ? (
+            <Button variant="outline" onClick={() => openEdit(selectedTurma)}>
+              <Pencil className="h-4 w-4 mr-2" />Editar Turma
+            </Button>
+            <div className="w-px bg-border h-8 hidden sm:block" />
+            {isEncerrada ? (
               <Button variant="outline" onClick={() => finalizeMutation.mutate({ id: selectedTurma.id, status: "ativa" })} disabled={finalizeMutation.isPending}>
                 <RotateCcw className="h-4 w-4 mr-2" />Reativar Turma
               </Button>
             ) : (
-              <Button variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => {
-                if (confirm("Deseja finalizar esta turma?")) finalizeMutation.mutate({ id: selectedTurma.id, status: "finalizada" });
-              }} disabled={finalizeMutation.isPending}>
-                <CheckCircle2 className="h-4 w-4 mr-2" />Finalizar Turma
-              </Button>
+              <>
+                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" onClick={() => {
+                  if (confirm("Deseja cancelar esta turma?")) finalizeMutation.mutate({ id: selectedTurma.id, status: "cancelada" });
+                }} disabled={finalizeMutation.isPending}>
+                  <Trash2 className="h-4 w-4 mr-2" />Cancelar Turma
+                </Button>
+                <Button variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => {
+                  if (confirm("Deseja finalizar esta turma?")) finalizeMutation.mutate({ id: selectedTurma.id, status: "finalizada" });
+                }} disabled={finalizeMutation.isPending}>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />Finalizar Turma
+                </Button>
+              </>
             )}
-            <Button variant="outline" onClick={closeTurmaDetail}>
-              <ArrowLeft className="h-4 w-4 mr-2" />Voltar
-            </Button>
           </div>
-        </PageHeader>
+        </div>
         {isFinalizada && (
           <Badge variant="secondary" className="mb-4 bg-green-100 text-green-800">Turma Finalizada</Badge>
+        )}
+        {isCancelada && (
+          <Badge variant="secondary" className="mb-4 bg-red-100 text-red-800">Turma Cancelada</Badge>
         )}
         <Tabs value={activeTurmaTab} onValueChange={handleTurmaTabChange} className="mt-4">
           <TabsList>
@@ -355,6 +381,68 @@ const Turmas = () => {
           </TabsContent>
         </Tabs>
         <TurmaUTMLinksDialog open={utmDialogOpen} onOpenChange={setUtmDialogOpen} turma={selectedTurma} />
+
+        {/* Dialog de edição acessível a partir do detalhe */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Editar Turma</DialogTitle></DialogHeader>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="col-span-2"><Label>Nome da turma</Label><Input value={form.nome} onChange={(e) => u("nome", e.target.value)} placeholder="Ex: OPEX Turma 22" /></div>
+              <div><Label>Produto</Label>
+                <Select value={form.produto_id} onValueChange={(v) => u("produto_id", v)}>
+                  <SelectTrigger><SelectValue placeholder="Produto" /></SelectTrigger>
+                  <SelectContent>{produtos.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Cidade</Label><Input value={form.cidade} onChange={(e) => u("cidade", e.target.value)} placeholder="Ex: Maringá" /></div>
+              <div><Label>Modalidade</Label>
+                <Select value={form.modalidade} onValueChange={(v) => u("modalidade", v)}>
+                  <SelectTrigger><SelectValue placeholder="Modalidade" /></SelectTrigger>
+                  <SelectContent><SelectItem value="presencial">Presencial</SelectItem><SelectItem value="online">Online</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div><Label>Responsável(is)</Label>
+                <ResponsaveisMultiSelect
+                  profissionais={profissionais}
+                  selectedIds={form.responsavelIds}
+                  onChange={(ids) => setForm(prev => ({ ...prev, responsavelIds: ids }))}
+                />
+              </div>
+              <div><Label>Data de início</Label><Input type="date" value={form.data_inicio} onChange={(e) => u("data_inicio", e.target.value)} /></div>
+              <div><Label>Data de término</Label><Input type="date" value={form.data_fim} onChange={(e) => u("data_fim", e.target.value)} /></div>
+              <div className="col-span-2 border-t pt-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Página de inscrição pública</p>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Chave PIX (opcional)</Label>
+                    <Input value={form.pix_chave} onChange={(e) => u("pix_chave", e.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" />
+                    <p className="text-xs text-muted-foreground mt-0.5">Aparecerá como opção de pagamento via PIX na página de inscrição.</p>
+                  </div>
+                  <div>
+                    <Label>Link de pagamento ASAAS — Cartão (opcional)</Label>
+                    <Input value={form.asaas_link_pagamento} onChange={(e) => u("asaas_link_pagamento", e.target.value)} placeholder="https://www.asaas.com/c/..." />
+                    <p className="text-xs text-muted-foreground mt-0.5">Link de checkout do ASAAS. Aparecerá como botão "Pagar no Crédito" após a inscrição.</p>
+                  </div>
+                  <div>
+                    <Label>Descrição</Label>
+                    <Textarea value={form.descricao} onChange={(e) => u("descricao", e.target.value)} placeholder="Descrição da turma" rows={3} />
+                  </div>
+                  <div>
+                    <Label>Pergunta extra no formulário de inscrição</Label>
+                    <Input value={form.pergunta_inscricao} onChange={(e) => u("pergunta_inscricao", e.target.value)} placeholder='Ex: "Qual sua maior dificuldade hoje?" (opcional)' />
+                    <p className="text-xs text-muted-foreground mt-0.5">Se preenchida, esta pergunta substitui "Como ficou sabendo?" no formulário público.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-2">
+                <Button className="w-full" onClick={save} disabled={isSaving}>
+                  {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Salvar Alterações
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
