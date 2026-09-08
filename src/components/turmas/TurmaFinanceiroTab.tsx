@@ -203,6 +203,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     const totalPendente = alunoEntries.reduce((s, a) => s + a.aReceber, 0);
     const totalContratado = alunoEntries.reduce((s, a) => s + a.contratado, 0);
     const totalTaxaEmpresa = alunoEntries.reduce((s, a) => s + a.taxaEmpresa, 0);
+    const totalTaxaAluno   = alunoEntries.reduce((s, a) => s + a.taxaAluno,   0);
     const totalDespesas = despesas.reduce((s: number, d: any) => s + Number(d.valor || 0), 0);
     // valor_pago já é o líquido no banco (máquina descontou a taxa antes de depositar).
     // Subtrair totalTaxaEmpresa seria contar duas vezes.
@@ -214,6 +215,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       totalPendente,
       totalContratado,
       totalTaxaEmpresa,
+      totalTaxaAluno,
       totalDespesas,
       liquido,
       parteGex: liquido * 0.5,
@@ -232,6 +234,8 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         { Campo: "Responsável", Valor: turma.responsavel || "" },
         { Campo: "Total contratado", Valor: dados.totalContratado },
         { Campo: "Entradas (recebido)", Valor: dados.totalRecebido },
+        { Campo: "Taxa absorvida pela empresa", Valor: -dados.totalTaxaEmpresa },
+        { Campo: "Taxa absorvida pelo aluno", Valor: dados.totalTaxaAluno },
         { Campo: "A receber (pendente)", Valor: dados.totalPendente },
         { Campo: "Despesas", Valor: dados.totalDespesas },
         { Campo: "Líquido", Valor: dados.liquido },
@@ -297,7 +301,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Contratado</p>
           <p className="font-bold text-sm">{formatCurrency(dados.totalContratado)}</p>
@@ -307,9 +311,15 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
           <p className="font-bold text-sm text-emerald-600">{formatCurrency(dados.totalRecebido)}</p>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
-          <p className="text-xs text-muted-foreground">Taxas (empresa)</p>
+          <p className="text-xs text-muted-foreground">Taxa empresa</p>
           <p className={`font-bold text-sm ${dados.totalTaxaEmpresa > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
             {dados.totalTaxaEmpresa > 0 ? `-${formatCurrency(dados.totalTaxaEmpresa)}` : "—"}
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="text-xs text-muted-foreground">Taxa aluno</p>
+          <p className={`font-bold text-sm ${dados.totalTaxaAluno > 0 ? "text-sky-600" : "text-muted-foreground"}`}>
+            {dados.totalTaxaAluno > 0 ? `+${formatCurrency(dados.totalTaxaAluno)}` : "—"}
           </p>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
