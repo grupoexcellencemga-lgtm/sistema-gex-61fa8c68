@@ -551,6 +551,56 @@ Deno.serve(async (req) => {
                     tipo: "alerta",
                     descricao: `[IA] Handoff solicitado — ${input.resumo}`,
                   });
+
+                  // Notifica o comercial responsável via WhatsApp
+                  try {
+                    const { data: leadResp } = await supabase
+                      .from("leads")
+                      .select("responsavel_id, nome, contato_id")
+                      .eq("id", lead.id)
+                      .maybeSingle();
+
+                    if (leadResp?.responsavel_id) {
+                      const { data: comercial } = await supabase
+                        .from("comerciais")
+                        .select("nome, telefone")
+                        .eq("id", leadResp.responsavel_id)
+                        .maybeSingle();
+
+                      if (comercial?.telefone) {
+                        const { data: canalHandoff } = await supabase
+                          .from("canais_crm")
+                          .select("evolution_url, evolution_token, evolution_instancia")
+                          .eq("id", lead.canal_id)
+                          .maybeSingle();
+
+                        if (canalHandoff?.evolution_instancia) {
+                          const apiKeyHandoff = canalHandoff.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+                          const telefone = comercial.telefone.replace(/\D/g, "");
+                          const nomeContato = leadResp.nome || leadResp.contato_id;
+                          const msgComercial =
+                            `*Handoff — Lead aguardando atendimento humano*\n\n` +
+                            `Lead: ${nomeContato}\n` +
+                            `Telefone: ${leadResp.contato_id}\n\n` +
+                            `Resumo da conversa:\n${input.resumo}\n\n` +
+                            `Acesse o CRM para dar continuidade ao atendimento.`;
+
+                          await fetch(
+                            `${canalHandoff.evolution_url}/message/sendText/${canalHandoff.evolution_instancia}`,
+                            {
+                              method: "POST",
+                              headers: { apikey: apiKeyHandoff!, "Content-Type": "application/json" },
+                              body: JSON.stringify({ number: telefone, text: msgComercial }),
+                            }
+                          );
+                          console.log(`[processar-bot] notificação handoff enviada para ${comercial.nome} (${telefone})`);
+                        }
+                      }
+                    }
+                  } catch (notifErr) {
+                    console.error("[processar-bot] erro ao notificar comercial:", notifErr);
+                  }
+
                   resultado = "Handoff registrado — bot desativado";
                   console.log(`[processar-bot] handoff (tool) para lead ${lead.id}`);
                 }
