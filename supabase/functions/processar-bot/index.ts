@@ -436,11 +436,44 @@ Deno.serve(async (req) => {
           console.error("[processar-bot] erro ao buscar base de conhecimento:", kbErr);
         }
 
-        // Contexto do contato (nome + telefone) injetado no system prompt
+        // Perfil do contato: aluno ativo, ex-aluno ou lead novo
+        let perfilContato = "lead novo (nunca matriculado)";
+        try {
+          const telDigits = lead.contato_id.replace(/\D/g, "");
+          const tel10 = telDigits.slice(-10);
+          const tel11 = telDigits.slice(-11);
+          const { data: alunoEncontrado } = await supabase
+            .from("alunos")
+            .select("id, nome")
+            .eq("empresa_id", agente.empresa_id)
+            .is("deleted_at", null)
+            .or(`telefone.ilike.%${tel11},telefone.ilike.%${tel10}`)
+            .limit(1)
+            .maybeSingle();
+
+          if (alunoEncontrado) {
+            const { count: matriculasAtivas } = await supabase
+              .from("matriculas")
+              .select("id", { count: "exact", head: true })
+              .eq("aluno_id", alunoEncontrado.id)
+              .eq("status", "ativo")
+              .is("deleted_at", null);
+            perfilContato = (matriculasAtivas ?? 0) > 0
+              ? "aluno ativo (já matriculado em pelo menos um curso)"
+              : "ex-aluno (já estudou aqui mas sem matrícula ativa no momento)";
+          }
+        } catch (_) {}
+
+        // Contexto do contato (nome + telefone + perfil) injetado no system prompt
         const nomeContato = lead.nome && lead.nome !== lead.contato_id ? lead.nome : null;
-        const contextoContato = nomeContato
-          ? `\n\n---\n# CONTATO ATUAL\nNome: ${nomeContato}\nTelefone: ${lead.contato_id}\nUse o nome da pessoa naturalmente na conversa quando fizer sentido.`
-          : `\n\n---\n# CONTATO ATUAL\nTelefone: ${lead.contato_id}`;
+        const contextoContato =
+          `\n\n---\n# CONTATO ATUAL\n` +
+          (nomeContato ? `Nome: ${nomeContato}\n` : "") +
+          `Telefone: ${lead.contato_id}\n` +
+          `Perfil: ${perfilContato}\n` +
+          (nomeContato
+            ? `Use o nome da pessoa naturalmente na conversa quando fizer sentido.`
+            : ``);
 
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
