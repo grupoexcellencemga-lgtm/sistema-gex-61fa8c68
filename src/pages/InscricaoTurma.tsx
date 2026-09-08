@@ -198,11 +198,6 @@ const InscricaoTurma = () => {
             <div className="rounded-xl border bg-card shadow-sm p-6 space-y-4">
               <div>
                 <h2 className="font-semibold text-lg">Preencha seus dados</h2>
-                {valor && valor > 0 && (
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Investimento: <span className="font-semibold text-foreground">R$ {valor.toFixed(2).replace(".", ",")}</span>
-                  </p>
-                )}
               </div>
 
               <div className="space-y-1">
