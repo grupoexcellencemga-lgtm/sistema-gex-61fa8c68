@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks, Link } from "lucide-react";
 import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
+import { PixKeySelect } from "@/components/ui/pix-key-select";
 import { toast } from "sonner";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useProfissionais } from "@/hooks/useProfissionais";
@@ -425,7 +426,7 @@ const Turmas = () => {
                 <div className="space-y-3">
                   <div>
                     <Label>Chave PIX (opcional)</Label>
-                    <Input value={form.pix_chave} onChange={(e) => u("pix_chave", e.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" />
+                    <PixKeySelect value={form.pix_chave} onChange={(v) => setForm(prev => ({ ...prev, pix_chave: v }))} />
                     <p className="text-xs text-muted-foreground mt-0.5">Aparecerá como opção de pagamento via PIX na página de inscrição.</p>
                   </div>
                   <div>
@@ -512,7 +513,7 @@ const Turmas = () => {
               <div className="space-y-3">
                 <div>
                   <Label>Chave PIX (opcional)</Label>
-                  <Input value={form.pix_chave} onChange={(e) => u("pix_chave", e.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" />
+                  <PixKeySelect value={form.pix_chave} onChange={(v) => setForm(prev => ({ ...prev, pix_chave: v }))} />
                   <p className="text-xs text-muted-foreground mt-0.5">Aparecerá como opção de pagamento via PIX na página de inscrição.</p>
                 </div>
                 <div>

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { ResponsaveisMultiSelect } from "@/components/ui/responsaveis-multi-select";
+import { PixKeySelect } from "@/components/ui/pix-key-select";
 
 export interface EventoForm {
   nome: string;
@@ -210,10 +211,9 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
                 </div>
                 <div className="space-y-2">
                   <Label>Chave PIX (opcional)</Label>
-                  <Input
+                  <PixKeySelect
                     value={form.pix_chave}
-                    onChange={(e) => u("pix_chave", e.target.value)}
-                    placeholder="CNPJ, CPF, e-mail ou chave aleatória"
+                    onChange={(v) => setForm(f => ({ ...f, pix_chave: v }))}
                   />
                   <p className="text-[11px] text-muted-foreground">
                     Aparecerá como opção de pagamento via PIX na página de inscrição.

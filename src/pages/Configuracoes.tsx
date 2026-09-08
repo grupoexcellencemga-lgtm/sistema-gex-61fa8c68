@@ -10,6 +10,7 @@ import { CanaisCrmSection } from "@/components/configuracoes/CanaisCrmSection";
 import { WhatsAppManagerSection } from "@/components/configuracoes/WhatsAppManagerSection";
 import { EmpresaIdentidadeSection } from "@/components/configuracoes/EmpresaIdentidadeSection";
 import { AgentesBotSection } from "@/components/configuracoes/AgentesBotSection";
+import { ChavesPixSection } from "@/components/configuracoes/ChavesPixSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
@@ -50,6 +51,7 @@ import {
   Paintbrush,
   Radio,
   Bot,
+  QrCode,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -400,6 +402,11 @@ const Configuracoes = () => {
               <Bot className="h-4 w-4" />
               Agentes IA
             </TabsTrigger>
+
+            <TabsTrigger value="chaves-pix" className="gap-1.5 shrink-0">
+              <QrCode className="h-4 w-4" />
+              Chaves PIX
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -704,6 +711,10 @@ const Configuracoes = () => {
 
         <TabsContent value="agentes-bot" className="max-w-3xl space-y-6">
           <AgentesBotSection />
+        </TabsContent>
+
+        <TabsContent value="chaves-pix" className="max-w-3xl space-y-6">
+          <ChavesPixSection />
         </TabsContent>
       </Tabs>
     </div>
