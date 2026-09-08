@@ -53,6 +53,23 @@ export const MatriculaFormDialog = ({
   isSaving,
   handleProdutoChange,
 }: Props) => {
+  // Garante que valor_total seja preenchido automaticamente quando:
+  // 1. produto_id está definido mas valor_total ainda está vazio (race condition de carregamento)
+  // 2. produtos carregou depois que o form foi montado
+  useEffect(() => {
+    if (!matriculaForm.produto_id) return;
+    if (matriculaForm.valor_total) return; // já preenchido, não sobrescreve
+    const produto = produtos.find((p: any) => p.id === matriculaForm.produto_id);
+    if (produto?.valor == null) return;
+    const val = String(produto.valor);
+    if (!val) return;
+    setMatriculaForm((prev: any) => ({
+      ...prev,
+      valor_total: val,
+      valor_contratado: prev.valor_contratado || val,
+    }));
+  }, [matriculaForm.produto_id, produtos]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const valorFinalCalc =
     parseFloat(matriculaForm.valor_contratado) > 0
       ? parseFloat(matriculaForm.valor_contratado)
