@@ -551,12 +551,12 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                     onValueChange={(v) => { setBuscaDialog(v); setAlunoSelecionado(null); }}
                   />
                   <CommandList className="max-h-60">
-                    <CommandEmpty>
-                      <div className="py-2 text-center text-sm text-muted-foreground">
-                        Nenhum aluno encontrado.
-                      </div>
-                    </CommandEmpty>
                     <CommandGroup>
+                      {alunosDisponiveis.length === 0 && (
+                        <div className="py-4 text-center text-sm text-muted-foreground">
+                          Nenhum aluno encontrado.
+                        </div>
+                      )}
                       {alunosDisponiveis.slice(0, 50).map((a: any) => (
                         <CommandItem
                           key={a.id}
