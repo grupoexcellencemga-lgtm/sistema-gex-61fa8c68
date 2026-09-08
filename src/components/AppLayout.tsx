@@ -4,6 +4,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 
 const routeTitles: Record<string, string> = {
   "/": "Início",
@@ -37,6 +38,7 @@ const routeTitles: Record<string, string> = {
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { plural: alunoPlural } = useAlunoLabel();
+  useRealtimeSync();
   const rawTitle = routeTitles[location.pathname] ?? "Sistema GEx";
   const pageTitle = rawTitle === "Alunos" ? alunoPlural : rawTitle;
 
