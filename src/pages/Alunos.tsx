@@ -60,6 +60,9 @@ const Alunos = () => {
     parcelas_cartao: "",
     taxa_cartao: "",
     repassar_taxa: false,
+    modalidade_cobranca: "ja_pago" as "ja_pago" | "a_pagar",
+    taxa_valor: "",
+    taxa_absorvida_por: "" as "" | "empresa" | "aluno",
   });
 
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
@@ -828,6 +831,10 @@ const Alunos = () => {
           d.setMonth(d.getMonth() + meses);
           return d.toISOString().split("T")[0];
         };
+        const statusPag = novoPagForm.modalidade_cobranca === "ja_pago" ? "pago" : "pendente";
+        const taxaValorPag = parseFloat(novoPagForm.taxa_valor) || 0;
+        const taxaAbsorvidaPor = novoPagForm.taxa_absorvida_por || null;
+
         const registros = Array.from({ length: parcelasBoleto }, (_, i) => ({
           aluno_id: selectedAluno.id,
           produto_id: novoPagForm.produto_id || null,
@@ -836,16 +843,22 @@ const Alunos = () => {
           valor: valorParcela,
           forma_pagamento: "boleto",
           data_vencimento: addMes(novoPagForm.data_vencimento, i),
-          status: "pendente",
+          status: statusPag,
           conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
           parcelas: parcelasBoleto,
           parcela_atual: i + 1,
           parcelas_cartao: null,
           taxa_cartao: null,
+          taxa_valor: taxaValorPag > 0 ? taxaValorPag : null,
+          taxa_absorvida_por: taxaAbsorvidaPor,
         }));
         const { error } = await supabase.from("pagamentos").insert(registros);
         if (error) throw error;
       } else {
+        const statusPag = novoPagForm.modalidade_cobranca === "ja_pago" ? "pago" : "pendente";
+        const taxaValorPag = parseFloat(novoPagForm.taxa_valor) || 0;
+        const taxaAbsorvidaPor = novoPagForm.taxa_absorvida_por || null;
+
         const { error } = await supabase.from("pagamentos").insert({
           aluno_id: selectedAluno.id,
           produto_id: novoPagForm.produto_id || null,
@@ -854,12 +867,14 @@ const Alunos = () => {
           valor: Math.round(valorCobrado * 100) / 100,
           forma_pagamento: novoPagForm.forma_pagamento || null,
           data_vencimento: novoPagForm.data_vencimento,
-          status: "pendente",
+          status: statusPag,
           conta_bancaria_id: novoPagForm.conta_bancaria_id || null,
           parcelas: 1,
           parcela_atual: 1,
           parcelas_cartao: parcelasCartao,
           taxa_cartao: taxaCartao > 0 ? taxaCartao : null,
+          taxa_valor: taxaValorPag > 0 ? taxaValorPag : null,
+          taxa_absorvida_por: taxaAbsorvidaPor,
         });
         if (error) throw error;
       }
@@ -888,6 +903,9 @@ const Alunos = () => {
         parcelas_cartao: "",
         taxa_cartao: "",
         repassar_taxa: false,
+        modalidade_cobranca: "ja_pago",
+        taxa_valor: "",
+        taxa_absorvida_por: "",
       });
     },
     onError: (err: any) => toast.error("Erro: " + err.message),

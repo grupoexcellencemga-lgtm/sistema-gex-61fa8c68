@@ -16,11 +16,11 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, GraduationCap, Plus, Loader2, Clock, FileText, MessageSquare, Receipt, CheckSquare, Paperclip } from "lucide-react";
+import { Pencil, Trash2, GraduationCap, Plus, Loader2, Clock, FileText, MessageSquare, Receipt, CheckSquare, Paperclip, CheckCircle2 } from "lucide-react";
 import { gerarReciboPagamento } from "@/lib/pdfUtils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { formatPhone, formatCPF } from "@/lib/utils";
+import { formatPhone, formatCPF, cn } from "@/lib/utils";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { abrirComprovante } from "@/lib/comprovantes";
 import { formatDate, formatCurrency } from "./alunosUtils";
@@ -218,6 +218,16 @@ export const AlunoDetailSheet = (props: Props) => {
       setNovoPagForm((p: any) => ({ ...p, taxa_cartao: "", repassar_taxa: false }));
     }
   }, [novoShowTaxa, novoTaxaPercentual, novoPagForm.taxa_cartao, novoPagForm.repassar_taxa, setNovoPagForm]);
+
+  // Auto-preenche taxa_valor (R$) com base no % calculado
+  useEffect(() => {
+    if (!novoShowTaxa || novoValorTaxa <= 0) return;
+    const current = parseFloat(novoPagForm.taxa_valor) || 0;
+    const rounded = Math.round(novoValorTaxa * 100) / 100;
+    if (current !== rounded) {
+      setNovoPagForm((p: any) => ({ ...p, taxa_valor: String(rounded) }));
+    }
+  }, [novoValorTaxa, novoShowTaxa]);
 
   const totalPago = pagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalPendente = pagamentos.filter((p: any) => p.status === "pendente").reduce((s: number, p: any) => s + Number(p.valor), 0);
@@ -887,17 +897,48 @@ export const AlunoDetailSheet = (props: Props) => {
 
       {/* Dialog - Novo Pagamento Avulso */}
       <Dialog open={novoPagamentoDialog} onOpenChange={setNovoPagamentoDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Novo Pagamento</DialogTitle>
             <DialogDescription>Lançar pagamento adicional para {selectedAluno?.nome}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 mt-2">
+
+            {/* Toggle Já pago / A pagar */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setNovoPagForm((p: any) => ({ ...p, modalidade_cobranca: "ja_pago" }))}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                  novoPagForm.modalidade_cobranca !== "a_pagar"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Já foi pago
+              </button>
+              <button
+                type="button"
+                onClick={() => setNovoPagForm((p: any) => ({ ...p, modalidade_cobranca: "a_pagar" }))}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                  novoPagForm.modalidade_cobranca === "a_pagar"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                )}
+              >
+                <Clock className="h-4 w-4" />
+                Pendente
+              </button>
+            </div>
+
             <div>
               <Label>Matrícula (opcional)</Label>
               <Select value={novoPagForm.matricula_id} onValueChange={(v) => {
                 const mat = (matriculas || []).find((m: any) => m.id === v);
-                setNovoPagForm(p => ({ ...p, matricula_id: v, produto_id: mat?.produto_id || "" }));
+                setNovoPagForm((p: any) => ({ ...p, matricula_id: v, produto_id: mat?.produto_id || "" }));
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Vincular a uma matrícula" />
@@ -911,123 +952,108 @@ export const AlunoDetailSheet = (props: Props) => {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Valor (R$)</Label>
-              <Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
-            </div>
-            <div>
-              <Label>Data de vencimento</Label>
-              <Input type="date" value={novoPagForm.data_vencimento} onChange={(e) => setNovoPagForm(p => ({ ...p, data_vencimento: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Forma de pagamento</Label>
-              <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm(p => ({ ...p, forma_pagamento: v, repassar_taxa: false }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {formasPagamento.length === 0 ? (
-                    <SelectItem value="nenhuma_forma_pagamento" disabled>
-                      Nenhuma forma cadastrada
-                    </SelectItem>
-                  ) : (
-                    formasPagamento.map((forma) => (
-                      <SelectItem key={forma.id} value={forma.codigo}>
-                        {forma.nome}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Parcelas para boleto (sem taxa) */}
-            {novoPagForm.forma_pagamento === "boleto" && (
-              <div className="rounded-md border p-3 bg-accent/30 space-y-2">
-                <div>
-                  <Label>Parcelas de boleto</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="24"
-                    value={novoPagForm.parcelas_cartao || "1"}
-                    onChange={(e) => setNovoPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
-                    placeholder="1"
-                  />
-                </div>
-                {parseInt(novoPagForm.parcelas_cartao) > 1 && novoPagForm.valor && (
-                  <p className="text-xs text-muted-foreground">
-                    {parseInt(novoPagForm.parcelas_cartao)}× de{" "}
-                    <strong>
-                      {formatCurrency(parseFloat(novoPagForm.valor) / parseInt(novoPagForm.parcelas_cartao))}
-                    </strong>{" "}
-                    — vencimentos mensais a partir da data acima.
-                  </p>
-                )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Valor (R$)</Label>
+                <Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm((p: any) => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
               </div>
-            )}
+              <div>
+                <Label>{novoPagForm.modalidade_cobranca === "a_pagar" ? "1º Vencimento" : "Data do pagamento"}</Label>
+                <Input type="date" value={novoPagForm.data_vencimento} onChange={(e) => setNovoPagForm((p: any) => ({ ...p, data_vencimento: e.target.value }))} />
+              </div>
+            </div>
 
-            {novoShowTaxa && (
-              <div className="rounded-md border p-3 bg-accent/30 space-y-2">
-                <div>
-                  <Label>Parcelas</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={novoPagForm.parcelas_cartao || "1"}
-                    onChange={(e) => setNovoPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
-                    placeholder="1"
-                  />
-                </div>
-
-                {novoTaxaPercentual > 0 ? (
-                  <>
-                    <div>
-                      <p className="text-sm font-medium">
-                        Taxa: {novoTaxaAutoCalc.nome} — {novoTaxaPercentual.toFixed(2).replace(".", ",")}%
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Valor da taxa: {formatCurrency(novoValorTaxa)}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <Switch
-                        checked={novoPagForm.repassar_taxa || false}
-                        onCheckedChange={(checked) => setNovoPagForm((p: any) => ({ ...p, repassar_taxa: checked }))}
-                      />
-                      <Label className="text-sm cursor-pointer">Repassar taxa para o cliente</Label>
-                    </div>
-
-                    {novoPagForm.repassar_taxa ? (
-                      <div className="text-sm bg-background rounded p-2">
-                        <span className="text-muted-foreground">Cliente pagará: </span>
-                        <span className="font-semibold">{formatCurrency(novoValorComTaxa)}</span>
-                      </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Forma de pagamento</Label>
+                <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm((p: any) => ({ ...p, forma_pagamento: v, repassar_taxa: false, taxa_valor: "" }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formasPagamento.length === 0 ? (
+                      <SelectItem value="nenhuma_forma_pagamento" disabled>Nenhuma forma cadastrada</SelectItem>
                     ) : (
-                      <div className="text-sm bg-background rounded p-2">
-                        <span className="text-muted-foreground">Líquido lançado: </span>
-                        <span className="font-semibold">{formatCurrency(novoValorComTaxa)}</span>
-                      </div>
+                      formasPagamento.map((forma) => (
+                        <SelectItem key={forma.id} value={forma.codigo}>{forma.nome}</SelectItem>
+                      ))
                     )}
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhuma taxa automática encontrada para esta forma de pagamento/parcela.
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Conta Bancária</Label>
+                <Select value={novoPagForm.conta_bancaria_id} onValueChange={(v) => setNovoPagForm((p: any) => ({ ...p, conta_bancaria_id: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Parcelas — para boleto ou crédito/link */}
+            {(novoPagForm.forma_pagamento === "boleto" || novoShowTaxa) && (
+              <div>
+                <Label>Parcelas</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max={novoPagForm.forma_pagamento === "boleto" ? "24" : undefined}
+                  value={novoPagForm.parcelas_cartao || "1"}
+                  onChange={(e) => setNovoPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
+                  placeholder="1"
+                />
+                {parseInt(novoPagForm.parcelas_cartao) > 1 && novoPagForm.valor && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {parseInt(novoPagForm.parcelas_cartao)}× de {formatCurrency(parseFloat(novoPagForm.valor) / parseInt(novoPagForm.parcelas_cartao))}
                   </p>
                 )}
               </div>
             )}
-            <div>
-              <Label>Conta Bancária</Label>
-              <Select value={novoPagForm.conta_bancaria_id} onValueChange={(v) => setNovoPagForm(p => ({ ...p, conta_bancaria_id: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
-                </SelectContent>
-              </Select>
+
+            {/* Taxa da operação */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Taxa da operação (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={novoPagForm.taxa_valor}
+                  onChange={(e) => setNovoPagForm((p: any) => ({ ...p, taxa_valor: e.target.value }))}
+                  placeholder="0,00 — opcional"
+                />
+                {novoShowTaxa && novoTaxaPercentual > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {novoTaxaAutoCalc.nome} · {novoTaxaPercentual.toFixed(2).replace(".", ",")}%
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Quem absorveu a taxa?</Label>
+                <div className="grid grid-cols-3 gap-1 mt-1">
+                  {(["", "empresa", "aluno"] as const).map((opt) => (
+                    <button
+                      key={opt || "nenhum"}
+                      type="button"
+                      className={cn(
+                        "h-9 rounded-lg border text-xs font-medium transition-colors",
+                        novoPagForm.taxa_absorvida_por === opt
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border"
+                      )}
+                      onClick={() => setNovoPagForm((p: any) => ({ ...p, taxa_absorvida_por: opt }))}
+                    >
+                      {opt === "" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
             <Button className="w-full" onClick={onSaveNovoPagamento} disabled={insertPagamentoIsPending}>
               {insertPagamentoIsPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Lançar Pagamento
