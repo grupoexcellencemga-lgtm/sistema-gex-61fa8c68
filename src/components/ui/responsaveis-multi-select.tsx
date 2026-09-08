@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,6 +16,7 @@ interface Props {
   onChange: (ids: string[]) => void;
   placeholder?: string;
   className?: string;
+  onAddNew?: (nome: string) => Promise<{ id: string; nome: string } | null>;
 }
 
 export function ResponsaveisMultiSelect({
@@ -24,11 +25,28 @@ export function ResponsaveisMultiSelect({
   onChange,
   placeholder = "Selecionar responsáveis...",
   className,
+  onAddNew,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newNome, setNewNome] = useState("");
+  const [addingLoading, setAddingLoading] = useState(false);
 
   const toggle = (id: string) => {
     onChange(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
+  };
+
+  const handleSaveNew = async () => {
+    if (!newNome.trim() || !onAddNew) return;
+    setAddingLoading(true);
+    try {
+      const result = await onAddNew(newNome.trim());
+      if (result) onChange([...selectedIds, result.id]);
+      setNewNome("");
+      setAddingNew(false);
+    } finally {
+      setAddingLoading(false);
+    }
   };
 
   const selectedNames = profissionais.filter(p => selectedIds.includes(p.id)).map(p => p.nome);
@@ -85,6 +103,49 @@ export function ResponsaveisMultiSelect({
             })
           )}
         </div>
+        {onAddNew && (
+          <div className="border-t mt-1 pt-1">
+            {!addingNew ? (
+              <button
+                type="button"
+                onClick={() => setAddingNew(true)}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-primary hover:bg-accent cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Adicionar pessoa
+              </button>
+            ) : (
+              <div className="flex gap-1 px-2 py-1">
+                <input
+                  autoFocus
+                  className="flex-1 text-sm border rounded px-2 py-1 min-w-0 bg-background"
+                  placeholder="Nome..."
+                  value={newNome}
+                  onChange={e => setNewNome(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") { e.preventDefault(); handleSaveNew(); }
+                    if (e.key === "Escape") { setAddingNew(false); setNewNome(""); }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!newNome.trim() || addingLoading}
+                  onClick={handleSaveNew}
+                  className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded disabled:opacity-50 flex items-center gap-1"
+                >
+                  {addingLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAddingNew(false); setNewNome(""); }}
+                  className="text-xs px-1.5 py-1 rounded text-muted-foreground hover:bg-accent"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

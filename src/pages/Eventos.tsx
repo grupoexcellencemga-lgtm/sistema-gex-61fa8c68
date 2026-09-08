@@ -25,6 +25,15 @@ const Eventos = () => {
   const queryClient = useQueryClient();
   const { filterByResponsavel } = useDataFilter();
 
+  const handleAddProfissional = async (nome: string) => {
+    const { data, error } = await supabase.from("profissionais").insert({
+      nome, empresa_id: empresaId, ativo: true,
+    }).select("id, nome").single();
+    if (error) return null;
+    queryClient.invalidateQueries({ queryKey: ["profissionais", empresaId] });
+    return data as { id: string; nome: string };
+  };
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EventoForm>(emptyForm);
@@ -352,6 +361,7 @@ const Eventos = () => {
           turmas={turmasEvento}
           profissionais={profissionais}
           checklistModelos={modelosChecklist}
+          onAddNewResponsavel={handleAddProfissional}
         />
       </>
     );

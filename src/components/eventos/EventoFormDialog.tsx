@@ -47,9 +47,10 @@ interface Props {
   turmas: any[];
   profissionais: any[];
   checklistModelos: any[];
+  onAddNewResponsavel?: (nome: string) => Promise<{ id: string; nome: string } | null>;
 }
 
-export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, isEditing, isPending, produtos, turmas, profissionais, checklistModelos }: Props) {
+export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, isEditing, isPending, produtos, turmas, profissionais, checklistModelos, onAddNewResponsavel }: Props) {
   const u = (field: keyof EventoForm, value: string | boolean) => setForm(prev => ({ ...prev, [field]: value }));
 
   const modelos = checklistModelos || [];
@@ -159,6 +160,7 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
                 profissionais={profissionais}
                 selectedIds={form.responsavelIds}
                 onChange={(ids) => setForm(f => ({ ...f, responsavelIds: ids }))}
+                onAddNew={onAddNewResponsavel}
               />
             </div>
             <div className="space-y-2 sm:col-span-2">

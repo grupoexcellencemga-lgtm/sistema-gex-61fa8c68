@@ -102,6 +102,15 @@ const Turmas = () => {
 
   const { filterByResponsavel } = useDataFilter();
 
+  const handleAddProfissional = async (nome: string) => {
+    const { data, error } = await supabase.from("profissionais").insert({
+      nome, empresa_id: empresaId, ativo: true,
+    }).select("id, nome").single();
+    if (error) return null;
+    queryClient.invalidateQueries({ queryKey: ["profissionais", empresaId] });
+    return data as { id: string; nome: string };
+  };
+
   const { data: turmasRaw = [], isLoading } = useQuery({
     queryKey: ["turmas", empresaId],
     queryFn: async () => {
@@ -406,6 +415,7 @@ const Turmas = () => {
                   profissionais={profissionais}
                   selectedIds={form.responsavelIds}
                   onChange={(ids) => setForm(prev => ({ ...prev, responsavelIds: ids }))}
+                  onAddNew={handleAddProfissional}
                 />
               </div>
               <div><Label>Data de início</Label><Input type="date" value={form.data_inicio} onChange={(e) => u("data_inicio", e.target.value)} /></div>
@@ -491,6 +501,7 @@ const Turmas = () => {
                 profissionais={profissionais}
                 selectedIds={form.responsavelIds}
                 onChange={(ids) => setForm(prev => ({ ...prev, responsavelIds: ids }))}
+                onAddNew={handleAddProfissional}
               />
             </div>
             <div><Label>Data de início</Label><Input type="date" value={form.data_inicio} onChange={(e) => u("data_inicio", e.target.value)} /></div>
