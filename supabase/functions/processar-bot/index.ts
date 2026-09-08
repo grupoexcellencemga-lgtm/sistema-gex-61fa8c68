@@ -15,6 +15,89 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: "atualizar_lead",
+    description: "Atualiza informações cadastrais do lead/contato com dados coletados na conversa.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nome: { type: "string", description: "Nome completo" },
+        email: { type: "string", description: "E-mail" },
+        cidade: { type: "string", description: "Cidade onde mora" },
+        produto_interesse: { type: "string", description: "Produto ou curso de interesse" },
+        empresa_nome: { type: "string", description: "Nome da empresa onde trabalha (B2B)" },
+        cargo: { type: "string", description: "Cargo ou função" },
+        perfil_lead: { type: "string", enum: ["pf", "pj"], description: "Pessoa física (pf) ou jurídica (pj)" },
+      },
+    },
+  },
+  {
+    name: "pontuar_lead",
+    description: "Define a pontuação de qualificação do lead (0-100) com base no potencial e interesse demonstrado.",
+    input_schema: {
+      type: "object",
+      properties: {
+        score: { type: "number", description: "Pontuação de 0 a 100" },
+        motivo: { type: "string", description: "Justificativa da pontuação" },
+      },
+      required: ["score", "motivo"],
+    },
+  },
+  {
+    name: "registrar_nota",
+    description: "Registra uma nota ou observação relevante sobre o lead no histórico de atividades.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nota: { type: "string", description: "Texto da nota a ser registrada" },
+      },
+      required: ["nota"],
+    },
+  },
+  {
+    name: "mover_etapa",
+    description: "Move o lead para outra etapa do pipeline de vendas.",
+    input_schema: {
+      type: "object",
+      properties: {
+        etapa: {
+          type: "string",
+          enum: ["lead", "contato", "negociacao", "matricula", "perdido"],
+          description: "Nova etapa do pipeline",
+        },
+        motivo: { type: "string", description: "Motivo da mudança de etapa" },
+      },
+      required: ["etapa"],
+    },
+  },
+  {
+    name: "criar_tarefa",
+    description: "Cria uma tarefa de acompanhamento para a equipe humana.",
+    input_schema: {
+      type: "object",
+      properties: {
+        titulo: { type: "string", description: "Título da tarefa" },
+        descricao: { type: "string", description: "Descrição detalhada" },
+        prioridade: { type: "string", enum: ["baixa", "media", "alta"], description: "Prioridade da tarefa" },
+        data_vencimento: { type: "string", description: "Data de vencimento (YYYY-MM-DD)" },
+      },
+      required: ["titulo"],
+    },
+  },
+  {
+    name: "solicitar_handoff",
+    description: "Transfere o atendimento para um consultor humano. Use quando o lead solicitar falar com humano, tiver dúvidas complexas que você não consegue resolver, ou quando estiver pronto para fechar negócio e precisar de atenção personalizada.",
+    input_schema: {
+      type: "object",
+      properties: {
+        resumo: { type: "string", description: "Resumo da conversa e motivo do handoff para o consultor" },
+      },
+      required: ["resumo"],
+    },
+  },
+];
+
 function horaAtualBrasilia(): { hora: number; minuto: number; diaSemana: number } {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   return { hora: now.getHours(), minuto: now.getMinutes(), diaSemana: now.getDay() };
@@ -359,25 +442,137 @@ Deno.serve(async (req) => {
           ? `\n\n---\n# CONTATO ATUAL\nNome: ${nomeContato}\nTelefone: ${lead.contato_id}\nUse o nome da pessoa naturalmente na conversa quando fizer sentido.`
           : `\n\n---\n# CONTATO ATUAL\nTelefone: ${lead.contato_id}`;
 
-        // Chama Anthropic
+        // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
-        const response = await anthropic.messages.create({
-          model: agente.modelo,
-          max_tokens: 1024,
-          system: agente.instrucao + baseConhecimento + resumoAnterior + contextoContato,
-          messages,
-        });
+        const systemPrompt = agente.instrucao + baseConhecimento + resumoAnterior + contextoContato;
+        let loopMessages: Anthropic.MessageParam[] = [...messages];
+        let resposta: string | null = null;
+        let handoff = false;
+        const MAX_ITER = 5;
 
-        let resposta = response.content[0].type === "text" ? response.content[0].text : null;
-        if (!resposta) continue;
+        for (let iter = 0; iter < MAX_ITER; iter++) {
+          const response = await anthropic.messages.create({
+            model: agente.modelo,
+            max_tokens: 1024,
+            system: systemPrompt,
+            tools: TOOLS,
+            messages: loopMessages,
+          });
 
-        // Detecta sinal de handoff para consultor humano
-        const handoff = resposta.includes("[HANDOFF]");
-        if (handoff) {
-          resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
-          await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
-          console.log(`[processar-bot] handoff ativado para lead ${lead.id} — bot desativado`);
+          if (response.stop_reason === "end_turn") {
+            const textBlock = response.content.find((b) => b.type === "text");
+            resposta = textBlock?.type === "text" ? textBlock.text : null;
+            // Fallback legado: [HANDOFF] no texto
+            if (resposta?.includes("[HANDOFF]")) {
+              resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
+              handoff = true;
+              await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+              console.log(`[processar-bot] handoff (texto) para lead ${lead.id}`);
+            }
+            break;
+          }
+
+          if (response.stop_reason === "tool_use") {
+            const assistantMessage: Anthropic.MessageParam = { role: "assistant", content: response.content };
+            loopMessages = [...loopMessages, assistantMessage];
+            const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+            for (const block of response.content) {
+              if (block.type !== "tool_use") continue;
+              const input = block.input as Record<string, any>;
+              let resultado = "ok";
+
+              try {
+                if (block.name === "atualizar_lead") {
+                  const campos: Record<string, any> = {};
+                  const permitidos = ["nome", "email", "cidade", "produto_interesse", "empresa_nome", "cargo", "perfil_lead"];
+                  for (const k of permitidos) if (input[k] !== undefined) campos[k] = input[k];
+                  if (Object.keys(campos).length > 0) {
+                    await supabase.from("leads").update(campos).eq("id", lead.id);
+                    resultado = `Lead atualizado: ${JSON.stringify(campos)}`;
+                    console.log(`[processar-bot] atualizar_lead lead=${lead.id}`, campos);
+                  }
+
+                } else if (block.name === "pontuar_lead") {
+                  const score = Math.max(0, Math.min(100, Math.round(Number(input.score))));
+                  await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Score definido: ${score}/100 — ${input.motivo}`,
+                  });
+                  resultado = `Score ${score} registrado`;
+                  console.log(`[processar-bot] pontuar_lead lead=${lead.id} score=${score}`);
+
+                } else if (block.name === "registrar_nota") {
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] ${input.nota}`,
+                  });
+                  resultado = "Nota registrada";
+                  console.log(`[processar-bot] registrar_nota lead=${lead.id}`);
+
+                } else if (block.name === "mover_etapa") {
+                  await supabase.from("leads").update({ etapa: input.etapa }).eq("id", lead.id);
+                  if (input.motivo) {
+                    await supabase.from("atividades").insert({
+                      lead_id: lead.id,
+                      empresa_id: agente.empresa_id,
+                      tipo: "nota",
+                      descricao: `[IA] Etapa movida para "${input.etapa}": ${input.motivo}`,
+                    });
+                  }
+                  resultado = `Etapa movida para ${input.etapa}`;
+                  console.log(`[processar-bot] mover_etapa lead=${lead.id} etapa=${input.etapa}`);
+
+                } else if (block.name === "criar_tarefa") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: input.titulo,
+                    descricao: input.descricao ?? null,
+                    prioridade: input.prioridade ?? "media",
+                    data_vencimento: input.data_vencimento ?? null,
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  resultado = "Tarefa criada";
+                  console.log(`[processar-bot] criar_tarefa lead=${lead.id} titulo=${input.titulo}`);
+
+                } else if (block.name === "solicitar_handoff") {
+                  handoff = true;
+                  await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "alerta",
+                    descricao: `[IA] Handoff solicitado — ${input.resumo}`,
+                  });
+                  resultado = "Handoff registrado — bot desativado";
+                  console.log(`[processar-bot] handoff (tool) para lead ${lead.id}`);
+                }
+              } catch (toolErr) {
+                resultado = `Erro ao executar ferramenta: ${String(toolErr)}`;
+                console.error(`[processar-bot] erro em ${block.name}:`, toolErr);
+              }
+
+              toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultado });
+            }
+
+            loopMessages = [...loopMessages, { role: "user", content: toolResults }];
+            continue;
+          }
+
+          // Qualquer outro stop_reason — extrai o que houver
+          const fallback = response.content.find((b) => b.type === "text");
+          resposta = fallback?.type === "text" ? fallback.text : null;
+          break;
         }
+
+        if (!resposta) continue;
 
         // Busca canal para enviar via Evolution API
         const { data: canal } = await supabase
