@@ -101,7 +101,8 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     type AlunoEntry = {
       alunoId: string;
       nome: string;
-      pago: number;
+      pago: number;        // caixa: líquido recebido no banco
+      pagoEfetivo: number; // obrigação: pago + taxa absorvida pela empresa
       pendente: number;
       vencido: number;
       contratado: number;
@@ -113,13 +114,27 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     };
     const porAluno = new Map<string, AlunoEntry>();
 
+    // Tolerância de R$0,10 para ruído de arredondamento de taxa
+    const semNoise = (v: number) => (Math.round(v * 100) / 100 < 0.10 ? 0 : Math.round(v * 100) / 100);
+
     matriculas.forEach((m: any) => {
       const pgtos = pagamentos.filter((p: any) => p.matricula_id === m.id);
       const contratado = Number(m.valor_final || 0);
 
+      // Caixa: líquido que entrou no banco
       const pago = pgtos
         .filter((p: any) => p.status === "pago")
         .reduce((s: number, p: any) => s + getValorPago(p), 0);
+
+      // Obrigação do aluno: líquido + taxa que a empresa absorveu
+      // (empresa absorveu a taxa → aluno cumpriu sua parte pelo valor integral)
+      const pagoEfetivo = pgtos
+        .filter((p: any) => p.status === "pago")
+        .reduce((s: number, p: any) => {
+          const base = getValorPago(p);
+          const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
+          return s + base + taxaEmp;
+        }, 0);
 
       const pendente = pgtos
         .filter((p: any) => p.status === "pendente")
@@ -150,29 +165,32 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       const atual = porAluno.get(chave);
       if (atual) {
         atual.pago += pago;
+        atual.pagoEfetivo += pagoEfetivo;
         atual.pendente += pendente;
         atual.vencido += vencido;
         atual.contratado += contratado;
-        atual.aReceber = Math.max(0, atual.contratado - atual.pago);
+        atual.aReceber = semNoise(Math.max(0, atual.contratado - atual.pagoEfetivo));
         atual.taxaEmpresa += taxaEmpresa;
         atual.taxaAluno += taxaAluno;
         if (conta && !atual.conta.includes(conta)) {
           atual.conta = [atual.conta, conta].filter(Boolean).join(", ");
         }
-        atual.situacao = getSituacao(atual.pago, atual.pendente, atual.vencido, atual.contratado);
+        atual.situacao = getSituacao(atual.pagoEfetivo, atual.pendente, atual.vencido, atual.contratado);
       } else {
+        const aReceber = semNoise(Math.max(0, contratado - pagoEfetivo));
         porAluno.set(chave, {
           alunoId: m.aluno_id,
           nome: m.alunos?.nome || "—",
           pago,
+          pagoEfetivo,
           pendente,
           vencido,
           contratado,
-          aReceber: Math.max(0, contratado - pago),
+          aReceber,
           taxaEmpresa,
           taxaAluno,
           conta: conta || "—",
-          situacao: getSituacao(pago, pendente, vencido, contratado),
+          situacao: getSituacao(pagoEfetivo, pendente, vencido, contratado),
         });
       }
     });
