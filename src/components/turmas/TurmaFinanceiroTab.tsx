@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Download, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -219,12 +220,14 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       totalTaxaAluno,
       totalDespesas,
       liquido,
-      parteGex: liquido * 0.5,
-      parteResponsavel: liquido * 0.5,
     };
   }, [matriculas, pagamentos, despesas]);
 
   const isLoading = loadingMat || loadingPag || loadingDesp;
+
+  const [divisaoGex, setDivisaoGex] = useState(50);
+  const parteGex = dados.liquido * (divisaoGex / 100);
+  const parteResponsavel = dados.liquido * ((100 - divisaoGex) / 100);
 
   const [filtroAluno, setFiltroAluno] = useState("");
   const [filtroContas, setFiltroContas] = useState<string[]>([]);
@@ -534,25 +537,61 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         </Card>
       </div>
 
-      <div className="border-t pt-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-muted-foreground">Divisão 50/50</p>
+      <div className="border-t pt-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Divisão do líquido</p>
           <p className="text-xs text-muted-foreground">
             Líquido: <span className={`font-semibold ${dados.liquido >= 0 ? "text-emerald-600" : "text-destructive"}`}>
               {formatCurrency(dados.liquido)}
             </span>
           </p>
         </div>
+
+        {/* Gangorra */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
+          <div className={`rounded-lg border p-4 text-center transition-all ${divisaoGex >= 50 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30"}`}>
             <p className="text-xs text-muted-foreground mb-1">GEx</p>
-            <p className="text-lg font-bold text-primary">{formatCurrency(dados.parteGex)}</p>
-            <p className="text-xs text-muted-foreground">50%</p>
+            <p className={`text-lg font-bold transition-colors ${divisaoGex >= 50 ? "text-primary" : "text-foreground"}`}>
+              {formatCurrency(parteGex)}
+            </p>
+            <p className="text-xs font-semibold text-primary mt-0.5">{divisaoGex}%</p>
           </div>
-          <div className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-center">
+          <div className={`rounded-lg border p-4 text-center transition-all ${100 - divisaoGex >= 50 ? "border-emerald-300/50 bg-emerald-50/50 dark:bg-emerald-900/10" : "border-border bg-muted/30"}`}>
             <p className="text-xs text-muted-foreground mb-1">{turma.responsavel || "Responsável"}</p>
-            <p className="text-lg font-bold">{formatCurrency(dados.parteResponsavel)}</p>
-            <p className="text-xs text-muted-foreground">50%</p>
+            <p className={`text-lg font-bold transition-colors ${100 - divisaoGex >= 50 ? "text-emerald-600" : "text-foreground"}`}>
+              {formatCurrency(parteResponsavel)}
+            </p>
+            <p className="text-xs font-semibold text-emerald-600 mt-0.5">{100 - divisaoGex}%</p>
+          </div>
+        </div>
+
+        {/* Slider */}
+        <div className="px-1 space-y-2">
+          <div className="relative">
+            {/* Faixas de cor atrás do slider */}
+            <div className="absolute inset-0 flex rounded-full overflow-hidden pointer-events-none h-2 top-1/2 -translate-y-1/2">
+              <div className="bg-primary/30 transition-all" style={{ width: `${divisaoGex}%` }} />
+              <div className="bg-emerald-400/30 transition-all flex-1" />
+            </div>
+            <Slider
+              value={[divisaoGex]}
+              onValueChange={([v]) => setDivisaoGex(v)}
+              min={0}
+              max={100}
+              step={1}
+              className="relative"
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
+            <span>← GEx</span>
+            <button
+              type="button"
+              className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              onClick={() => setDivisaoGex(50)}
+            >
+              {divisaoGex === 50 ? "50 / 50" : "Resetar"}
+            </button>
+            <span>{turma.responsavel || "Responsável"} →</span>
           </div>
         </div>
       </div>
