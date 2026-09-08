@@ -439,12 +439,25 @@ export const MatriculaFormDialog = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Valor do produto</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
-                  {matriculaForm.valor_total
-                    ? formatCurrency(parseFloat(matriculaForm.valor_total))
-                    : <span className="text-muted-foreground/60">Selecione o produto</span>}
-                </div>
+                <Label>Valor do produto (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={matriculaForm.valor_total}
+                  onChange={(e) =>
+                    setMatriculaForm((p: any) => ({
+                      ...p,
+                      valor_total: e.target.value,
+                      // Se valor_contratado estava igual ao valor_total (sem desconto manual), acompanha
+                      valor_contratado:
+                        p.valor_contratado === p.valor_total || !p.valor_contratado
+                          ? e.target.value
+                          : p.valor_contratado,
+                    }))
+                  }
+                  placeholder={matriculaForm.produto_id ? "Sem valor — digite aqui" : "Selecione o produto"}
+                />
                 <p className="text-[11px] text-muted-foreground mt-0.5">Referência do produto</p>
               </div>
 
