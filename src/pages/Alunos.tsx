@@ -48,7 +48,7 @@ const Alunos = () => {
   const [selectedParcelas, setSelectedParcelas] = useState<any[]>([]);
   const [editPagamentoDialog, setEditPagamentoDialog] = useState(false);
   const [editingPagamento, setEditingPagamento] = useState<any>(null);
-  const [editPagForm, setEditPagForm] = useState({ valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "" });
+  const [editPagForm, setEditPagForm] = useState({ valor: "", data_vencimento: "", forma_pagamento: "", conta_bancaria_id: "", status: "pendente", taxa_valor: "", taxa_absorvida_por: "" as "" | "empresa" | "aluno", parcelas_cartao: "" });
   const [novoPagamentoDialog, setNovoPagamentoDialog] = useState(false);
   const [novoPagForm, setNovoPagForm] = useState({
     matricula_id: "",
@@ -646,6 +646,8 @@ const Alunos = () => {
       dataPagamento,
       formaPagamento,
       contaBancariaId,
+      taxaValor,
+      taxaAbsorvidaPor,
     }: {
       id: string;
       status: string;
@@ -655,6 +657,8 @@ const Alunos = () => {
       dataPagamento?: string;
       formaPagamento?: string;
       contaBancariaId?: string;
+      taxaValor?: string;
+      taxaAbsorvidaPor?: string;
     }) => {
       const update: any = { status };
 
@@ -672,6 +676,10 @@ const Alunos = () => {
         if (contaBancariaId) {
           update.conta_bancaria_id = contaBancariaId;
         }
+
+        const tv = parseFloat(taxaValor || "") || 0;
+        if (tv > 0) update.taxa_valor = tv;
+        if (taxaAbsorvidaPor) update.taxa_absorvida_por = taxaAbsorvidaPor;
       }
 
       if (status === "pendente") {
@@ -753,14 +761,29 @@ const Alunos = () => {
         throw new Error("Data de vencimento é obrigatória");
       }
 
+      const taxaValorEdit = parseFloat(editPagForm.taxa_valor) || 0;
+      const isPago = editPagForm.status === "pago";
+      const updatePayload: any = {
+        valor,
+        forma_pagamento: editPagForm.forma_pagamento || null,
+        conta_bancaria_id: editPagForm.conta_bancaria_id || null,
+        status: editPagForm.status,
+        taxa_valor: taxaValorEdit > 0 ? taxaValorEdit : null,
+        taxa_absorvida_por: editPagForm.taxa_absorvida_por || null,
+        parcelas_cartao: parseInt(editPagForm.parcelas_cartao) || null,
+      };
+      if (isPago) {
+        updatePayload.data_vencimento = editPagForm.data_vencimento;
+        updatePayload.data_pagamento = editPagForm.data_vencimento;
+        updatePayload.valor_pago = valor;
+      } else {
+        updatePayload.data_vencimento = editPagForm.data_vencimento;
+        updatePayload.data_pagamento = null;
+        updatePayload.valor_pago = 0;
+      }
       const { error } = await supabase
         .from("pagamentos")
-        .update({
-          valor,
-          data_vencimento: editPagForm.data_vencimento,
-          forma_pagamento: editPagForm.forma_pagamento || null,
-          conta_bancaria_id: editPagForm.conta_bancaria_id || null,
-        })
+        .update(updatePayload)
         .eq("id", editingPagamento.id);
 
       if (error) throw error;
@@ -1245,9 +1268,13 @@ const Alunos = () => {
     setEditingPagamento(p);
     setEditPagForm({
       valor: String(p.valor ?? ""),
-      data_vencimento: p.data_vencimento || "",
+      data_vencimento: p.data_pagamento || p.data_vencimento || "",
       forma_pagamento: p.forma_pagamento || "",
       conta_bancaria_id: p.conta_bancaria_id || "",
+      status: p.status || "pendente",
+      taxa_valor: String(p.taxa_valor ?? ""),
+      taxa_absorvida_por: p.taxa_absorvida_por || "",
+      parcelas_cartao: String(p.parcelas_cartao ?? ""),
     });
     setEditPagamentoDialog(true);
   };

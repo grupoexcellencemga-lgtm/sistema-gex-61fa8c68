@@ -116,6 +116,8 @@ export const AlunoDetailSheet = (props: Props) => {
     data_pagamento: hoje,
     forma_pagamento: "",
     conta_bancaria_id: "",
+    taxa_valor: "",
+    taxa_absorvida_por: "" as "" | "empresa" | "aluno",
   });
 
   const { data: formasPagamento = [] } = useFormasPagamento();
@@ -228,6 +230,76 @@ export const AlunoDetailSheet = (props: Props) => {
       setNovoPagForm((p: any) => ({ ...p, taxa_valor: String(rounded) }));
     }
   }, [novoValorTaxa, novoShowTaxa]);
+
+  // ── Taxa automática para "Confirmar pagamento" ──
+  const confirmForma = confirmPagamentoForm.forma_pagamento || confirmingPagamento?.forma_pagamento || "";
+  const confirmValorBase = parseFloat(String(confirmingPagamento?.valor || 0)) || 0;
+  const confirmIsCartao = ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(confirmForma);
+  const confirmIsDebito = confirmForma === "debito";
+  const confirmIsLink = confirmForma === "link";
+  const confirmShowTaxa = confirmIsCartao || confirmIsDebito || confirmIsLink;
+  const confirmTaxaAutoCalc = useMemo(() => {
+    if (!confirmShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
+    if (confirmIsDebito) {
+      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome: "Débito" };
+    }
+    if (confirmIsCartao) {
+      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === "Crédito 1x");
+      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome: "Crédito 1x" };
+    }
+    if (confirmIsLink) {
+      const f = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === "1x");
+      return f ? { percentual: Number(f.percentual), nome: `Link ${f.nome}` } : { percentual: 0, nome: "Link 1x" };
+    }
+    return { percentual: 0, nome: "" };
+  }, [confirmShowTaxa, confirmIsCartao, confirmIsDebito, confirmIsLink, taxasSistema]);
+  const confirmTaxaVal = confirmTaxaAutoCalc.percentual > 0
+    ? Math.round(confirmValorBase * confirmTaxaAutoCalc.percentual / 100 * 100) / 100
+    : 0;
+  useEffect(() => {
+    if (!confirmShowTaxa || confirmTaxaVal <= 0) return;
+    const current = parseFloat(confirmPagamentoForm.taxa_valor) || 0;
+    if (current !== confirmTaxaVal) {
+      setConfirmPagamentoForm((p) => ({ ...p, taxa_valor: String(confirmTaxaVal) }));
+    }
+  }, [confirmTaxaVal, confirmShowTaxa]);
+
+  // ── Taxa automática para "Editar pagamento" ──
+  const editForma = editPagForm.forma_pagamento || "";
+  const editValorBase = parseFloat(String(editPagForm.valor || 0)) || 0;
+  const editParcelasCalc = parseInt(editPagForm.parcelas_cartao) || 1;
+  const editIsCartao = ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(editForma);
+  const editIsDebito = editForma === "debito";
+  const editIsLink = editForma === "link";
+  const editShowTaxa = editIsCartao || editIsDebito || editIsLink;
+  const editTaxaAutoCalc = useMemo(() => {
+    if (!editShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
+    if (editIsDebito) {
+      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome: "Débito" };
+    }
+    if (editIsCartao) {
+      const nome = editParcelasCalc === 1 ? "Crédito 1x" : `Crédito ${editParcelasCalc}x`;
+      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome };
+    }
+    if (editIsLink) {
+      const f = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === `${editParcelasCalc}x`);
+      return f ? { percentual: Number(f.percentual), nome: `Link ${f.nome}` } : { percentual: 0, nome: `Link ${editParcelasCalc}x` };
+    }
+    return { percentual: 0, nome: "" };
+  }, [editShowTaxa, editIsCartao, editIsDebito, editIsLink, editParcelasCalc, taxasSistema]);
+  const editTaxaVal = editTaxaAutoCalc.percentual > 0
+    ? Math.round(editValorBase * editTaxaAutoCalc.percentual / 100 * 100) / 100
+    : 0;
+  useEffect(() => {
+    if (!editShowTaxa || editTaxaVal <= 0) return;
+    const current = parseFloat(editPagForm.taxa_valor) || 0;
+    if (current !== editTaxaVal) {
+      setEditPagForm((p: any) => ({ ...p, taxa_valor: String(editTaxaVal) }));
+    }
+  }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
   const totalPago = pagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor), 0);
   const totalPendente = pagamentos.filter((p: any) => p.status === "pendente").reduce((s: number, p: any) => s + Number(p.valor), 0);
@@ -722,6 +794,46 @@ export const AlunoDetailSheet = (props: Props) => {
                 </div>
               </div>
 
+              {/* Taxa + absorção no confirmar */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Taxa da operação (R$)</Label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    value={confirmPagamentoForm.taxa_valor}
+                    onChange={(e) => setConfirmPagamentoForm((p) => ({ ...p, taxa_valor: e.target.value }))}
+                    placeholder="0,00 — opcional"
+                  />
+                  {confirmShowTaxa && confirmTaxaAutoCalc.percentual > 0 && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {confirmTaxaAutoCalc.nome} · {confirmTaxaAutoCalc.percentual.toFixed(2).replace(".", ",")}%
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label>Quem absorveu a taxa?</Label>
+                  <div className="grid grid-cols-3 gap-1 mt-1">
+                    {(["", "empresa", "aluno"] as const).map((opt) => (
+                      <button
+                        key={opt || "nenhum"}
+                        type="button"
+                        className={cn(
+                          "h-9 rounded-lg border text-xs font-medium transition-colors",
+                          confirmPagamentoForm.taxa_absorvida_por === opt
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border"
+                        )}
+                        onClick={() => setConfirmPagamentoForm((p) => ({ ...p, taxa_absorvida_por: opt }))}
+                      >
+                        {opt === "" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <Button
                 className="w-full"
                 onClick={() => {
@@ -731,6 +843,8 @@ export const AlunoDetailSheet = (props: Props) => {
                     data_pagamento: confirmPagamentoForm.data_pagamento,
                     forma_pagamento: confirmPagamentoForm.forma_pagamento,
                     conta_bancaria_id: confirmPagamentoForm.conta_bancaria_id,
+                    taxa_valor: confirmPagamentoForm.taxa_valor,
+                    taxa_absorvida_por: confirmPagamentoForm.taxa_absorvida_por,
                   });
 
                   setConfirmPagamentoDialog(false);
@@ -842,51 +956,136 @@ export const AlunoDetailSheet = (props: Props) => {
 
       {/* Dialog - Editar Pagamento */}
       <Dialog open={editPagamentoDialog} onOpenChange={setEditPagamentoDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Pagamento</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 mt-2">
-            <div>
-              <Label>Valor (R$)</Label>
-              <Input type="number" step="0.01" value={editPagForm.valor} onChange={(e) => setEditPagForm(p => ({ ...p, valor: e.target.value }))} />
+
+            {/* Toggle status */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditPagForm((p: any) => ({ ...p, status: "pago" }))}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                  editPagForm.status === "pago"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Pago
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditPagForm((p: any) => ({ ...p, status: "pendente" }))}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
+                  editPagForm.status === "pendente"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                )}
+              >
+                <Clock className="h-4 w-4" />
+                Pendente
+              </button>
             </div>
-            <div>
-              <Label>Data de vencimento</Label>
-              <Input type="date" value={editPagForm.data_vencimento} onChange={(e) => setEditPagForm(p => ({ ...p, data_vencimento: e.target.value }))} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Valor (R$)</Label>
+                <Input type="number" step="0.01" value={editPagForm.valor} onChange={(e) => setEditPagForm((p: any) => ({ ...p, valor: e.target.value }))} />
+              </div>
+              <div>
+                <Label>{editPagForm.status === "pago" ? "Data do pagamento" : "Data de vencimento"}</Label>
+                <Input type="date" value={editPagForm.data_vencimento} onChange={(e) => setEditPagForm((p: any) => ({ ...p, data_vencimento: e.target.value }))} />
+              </div>
             </div>
-            <div>
-              <Label>Forma de pagamento</Label>
-              <Select value={editPagForm.forma_pagamento} onValueChange={(v) => setEditPagForm(p => ({ ...p, forma_pagamento: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {formasPagamento.length === 0 ? (
-                    <SelectItem value="nenhuma_forma_pagamento" disabled>
-                      Nenhuma forma cadastrada
-                    </SelectItem>
-                  ) : (
-                    formasPagamento.map((forma) => (
-                      <SelectItem key={forma.id} value={forma.codigo}>
-                        {forma.nome}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Forma de pagamento</Label>
+                <Select value={editPagForm.forma_pagamento} onValueChange={(v) => setEditPagForm((p: any) => ({ ...p, forma_pagamento: v, taxa_valor: "" }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formasPagamento.length === 0 ? (
+                      <SelectItem value="nenhuma_forma_pagamento" disabled>Nenhuma forma cadastrada</SelectItem>
+                    ) : (
+                      formasPagamento.map((forma) => (
+                        <SelectItem key={forma.id} value={forma.codigo}>{forma.nome}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Conta Bancária</Label>
+                <Select value={editPagForm.conta_bancaria_id} onValueChange={(v) => setEditPagForm((p: any) => ({ ...p, conta_bancaria_id: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Conta Bancária</Label>
-              <Select value={editPagForm.conta_bancaria_id} onValueChange={(v) => setEditPagForm(p => ({ ...p, conta_bancaria_id: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>)}
-                </SelectContent>
-              </Select>
+
+            {/* Parcelas — cartão/link */}
+            {editShowTaxa && (
+              <div>
+                <Label>Parcelas</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editPagForm.parcelas_cartao || "1"}
+                  onChange={(e) => setEditPagForm((p: any) => ({ ...p, parcelas_cartao: e.target.value }))}
+                />
+              </div>
+            )}
+
+            {/* Taxa */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Taxa da operação (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editPagForm.taxa_valor}
+                  onChange={(e) => setEditPagForm((p: any) => ({ ...p, taxa_valor: e.target.value }))}
+                  placeholder="0,00 — opcional"
+                />
+                {editShowTaxa && editTaxaAutoCalc.percentual > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {editTaxaAutoCalc.nome} · {editTaxaAutoCalc.percentual.toFixed(2).replace(".", ",")}%
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Quem absorveu a taxa?</Label>
+                <div className="grid grid-cols-3 gap-1 mt-1">
+                  {(["", "empresa", "aluno"] as const).map((opt) => (
+                    <button
+                      key={opt || "nenhum"}
+                      type="button"
+                      className={cn(
+                        "h-9 rounded-lg border text-xs font-medium transition-colors",
+                        editPagForm.taxa_absorvida_por === opt
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border"
+                      )}
+                      onClick={() => setEditPagForm((p: any) => ({ ...p, taxa_absorvida_por: opt }))}
+                    >
+                      {opt === "" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
             <Button className="w-full" onClick={onSavePagamento} disabled={updatePagamentoIsPending}>
               {updatePagamentoIsPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar Alterações
