@@ -191,6 +191,7 @@ const InscricaoTurma = () => {
               </p>
             </div>
           ) : (
+            <>
             {turma.descricao && (
               <p className="text-muted-foreground text-sm text-center">{turma.descricao}</p>
             )}
@@ -257,6 +258,7 @@ const InscricaoTurma = () => {
                 Após o envio, nossa equipe entrará em contato com as próximas etapas.
               </p>
             </div>
+            </>
           )}
 
           <p className="text-center text-xs text-muted-foreground pb-6">
