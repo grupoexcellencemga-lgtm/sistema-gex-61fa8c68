@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus, Trash2 } from "lucide-react";
+import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus, Trash2, Globe, CalendarDays } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/formatters";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
@@ -443,6 +445,45 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
     onError: (err: any) => toast.error("Erro ao remover: " + err.message),
   });
 
+  // ── Inscrições online (inscricoes_turmas) ──
+  const { data: inscricoes = [], isLoading: inscricoesLoading } = useQuery({
+    queryKey: ["inscricoes-turma", turma.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("inscricoes_turmas")
+        .select("*")
+        .eq("turma_id", turma.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const deletarInscricaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from("inscricoes_turmas")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inscricoes-turma", turma.id] });
+      toast.success("Inscrição removida.");
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const matricularInscricao = (insc: any) => {
+    setNovoAlunoForm({
+      nome: insc.nome || "",
+      email: insc.email || "",
+      telefone: insc.telefone || "",
+    });
+    setCriarAlunoOpen(true);
+    setBuscaDialogOpen(true);
+  };
+
   // ── Filtro da tabela de alunos ──
   const filtrados = useMemo(() => {
     const termo = normalizar(busca);
@@ -747,6 +788,108 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Inscrições pelo link público */}
+      <div className="pt-2">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe className="h-5 w-5 text-primary" />
+          <span className="text-lg font-semibold">
+            Inscrições pelo link público
+          </span>
+          {!inscricoesLoading && inscricoes.length > 0 && (
+            <Badge variant="secondary">{inscricoes.length}</Badge>
+          )}
+        </div>
+
+        <Card>
+          <CardContent className="p-0">
+            {inscricoesLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>E-mail</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Data
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-28 text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inscricoes.map((insc: any) => {
+                    const wa = whatsappLink(insc.telefone);
+                    return (
+                      <TableRow key={insc.id}>
+                        <TableCell className="font-medium text-sm">{insc.nome}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{insc.email || "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {wa ? (
+                            <a href={wa} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700">
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              {insc.telefone}
+                            </a>
+                          ) : (
+                            insc.telefone || "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {insc.utm_source ? (
+                            <Badge variant="outline" className="text-xs font-normal">{insc.utm_source}</Badge>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {insc.created_at ? formatDate(insc.created_at) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => matricularInscricao(insc)}
+                            >
+                              <UserPlus className="h-3.5 w-3.5 mr-1" />
+                              Matricular
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              disabled={deletarInscricaoMutation.isPending}
+                              onClick={() => {
+                                if (confirm(`Remover inscrição de ${insc.nome}?`))
+                                  deletarInscricaoMutation.mutate(insc.id);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {inscricoes.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        Nenhuma inscrição pelo link público ainda.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
