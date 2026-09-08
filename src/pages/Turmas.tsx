@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Loader2, Trash2, ArrowLeft, ClipboardCheck, CheckCircle2, RotateCcw, Users, DollarSign, TrendingUp, ChevronLeft, ChevronRight, ListChecks, Link } from "lucide-react";
@@ -36,9 +37,13 @@ interface TurmaForm {
   data_fim: string;
   responsavelIds: string[];
   produto_id: string;
+  pix_chave: string;
+  asaas_link_pagamento: string;
+  descricao: string;
+  pergunta_inscricao: string;
 }
 
-const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio: "", data_fim: "", responsavelIds: [], produto_id: "" };
+const emptyForm: TurmaForm = { nome: "", cidade: "", modalidade: "", data_inicio: "", data_fim: "", responsavelIds: [], produto_id: "", pix_chave: "", asaas_link_pagamento: "", descricao: "", pergunta_inscricao: "" };
 
 const Turmas = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -185,6 +190,10 @@ const Turmas = () => {
         nome: data.nome, cidade: data.cidade, modalidade: data.modalidade.toLowerCase(),
         data_inicio: data.data_inicio || null, data_fim: data.data_fim || null,
         responsavel: null, produto_id: data.produto_id || null,
+        pix_chave: data.pix_chave.trim() || null,
+        asaas_link_pagamento: data.asaas_link_pagamento.trim() || null,
+        descricao: data.descricao.trim() || null,
+        pergunta_inscricao: data.pergunta_inscricao.trim() || null,
       }).select("id").single();
       if (error) throw error;
       if (criada && data.responsavelIds.length > 0) {
@@ -203,6 +212,10 @@ const Turmas = () => {
         nome: data.nome, cidade: data.cidade, modalidade: data.modalidade.toLowerCase(),
         data_inicio: data.data_inicio || null, data_fim: data.data_fim || null,
         responsavel: null, produto_id: data.produto_id || null,
+        pix_chave: data.pix_chave.trim() || null,
+        asaas_link_pagamento: data.asaas_link_pagamento.trim() || null,
+        descricao: data.descricao.trim() || null,
+        pergunta_inscricao: data.pergunta_inscricao.trim() || null,
       }).eq("id", id);
       if (error) throw error;
 
@@ -267,6 +280,10 @@ const Turmas = () => {
       nome: t.nome, cidade: t.cidade, modalidade: t.modalidade,
       data_inicio: t.data_inicio || "", data_fim: t.data_fim || "",
       responsavelIds: t.responsavelIds || [], produto_id: t.produto_id || "",
+      pix_chave: t.pix_chave || "",
+      asaas_link_pagamento: t.asaas_link_pagamento || "",
+      descricao: t.descricao || "",
+      pergunta_inscricao: t.pergunta_inscricao || "",
     });
     setEditingId(t.id); setDialogOpen(true);
   };
@@ -364,7 +381,7 @@ const Turmas = () => {
       </PageHeader>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Editar Turma" : "Cadastrar Nova Turma"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div className="col-span-2"><Label>Nome da turma</Label><Input value={form.nome} onChange={(e) => u("nome", e.target.value)} placeholder="Ex: OPEX Turma 22" /></div>
@@ -390,6 +407,32 @@ const Turmas = () => {
             </div>
             <div><Label>Data de início</Label><Input type="date" value={form.data_inicio} onChange={(e) => u("data_inicio", e.target.value)} /></div>
             <div><Label>Data de término</Label><Input type="date" value={form.data_fim} onChange={(e) => u("data_fim", e.target.value)} /></div>
+
+            <div className="col-span-2 border-t pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Página de inscrição pública</p>
+              <div className="space-y-3">
+                <div>
+                  <Label>Chave PIX (opcional)</Label>
+                  <Input value={form.pix_chave} onChange={(e) => u("pix_chave", e.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" />
+                  <p className="text-xs text-muted-foreground mt-0.5">Aparecerá como opção de pagamento via PIX na página de inscrição.</p>
+                </div>
+                <div>
+                  <Label>Link de pagamento ASAAS — Cartão (opcional)</Label>
+                  <Input value={form.asaas_link_pagamento} onChange={(e) => u("asaas_link_pagamento", e.target.value)} placeholder="https://www.asaas.com/c/..." />
+                  <p className="text-xs text-muted-foreground mt-0.5">Link de checkout do ASAAS. Aparecerá como botão "Pagar no Crédito" após a inscrição.</p>
+                </div>
+                <div>
+                  <Label>Descrição</Label>
+                  <Textarea value={form.descricao} onChange={(e) => u("descricao", e.target.value)} placeholder="Descrição da turma" rows={3} />
+                </div>
+                <div>
+                  <Label>Pergunta extra no formulário de inscrição</Label>
+                  <Input value={form.pergunta_inscricao} onChange={(e) => u("pergunta_inscricao", e.target.value)} placeholder='Ex: "Qual sua maior dificuldade hoje?" (opcional)' />
+                  <p className="text-xs text-muted-foreground mt-0.5">Se preenchida, esta pergunta substitui "Como ficou sabendo?" no formulário público.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="col-span-2">
               <Button className="w-full" onClick={save} disabled={isSaving}>
                 {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
