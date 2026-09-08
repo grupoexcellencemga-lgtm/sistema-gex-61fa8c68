@@ -204,7 +204,9 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     const totalContratado = alunoEntries.reduce((s, a) => s + a.contratado, 0);
     const totalTaxaEmpresa = alunoEntries.reduce((s, a) => s + a.taxaEmpresa, 0);
     const totalDespesas = despesas.reduce((s: number, d: any) => s + Number(d.valor || 0), 0);
-    const liquido = totalRecebido - totalTaxaEmpresa - totalDespesas;
+    // valor_pago já é o líquido no banco (máquina descontou a taxa antes de depositar).
+    // Subtrair totalTaxaEmpresa seria contar duas vezes.
+    const liquido = totalRecebido - totalDespesas;
 
     return {
       alunoEntries,
