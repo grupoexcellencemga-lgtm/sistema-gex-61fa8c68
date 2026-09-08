@@ -183,20 +183,23 @@ export const MatriculaFormDialog = ({
 
   const entradaTaxaAutoCalc = useMemo(() => {
     if (!showEntradaTaxa || !taxas.length) return { percentual: 0, nome: "" };
+    const numP = parseInt(matriculaForm.entrada_parcelas) || 1;
     if (isEntradaDebito) {
       const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
       return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Débito" };
     }
     if (isEntradaCredito) {
-      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Crédito 1x");
-      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Crédito 1x" };
+      const nome = numP === 1 ? "Crédito 1x" : `Crédito ${numP}x`;
+      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
     }
     if (isEntradaLink) {
-      const found = taxas.find((t: any) => t.tipo === "link" && t.nome === "1x");
-      return found ? { percentual: Number(found.percentual), nome: `Link ${found.nome}` } : { percentual: 0, nome: "Link 1x" };
+      const nome = `${numP}x`;
+      const found = taxas.find((t: any) => t.tipo === "link" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: `Link ${found.nome}` } : { percentual: 0, nome: `Link ${nome}` };
     }
     return { percentual: 0, nome: "" };
-  }, [showEntradaTaxa, isEntradaCredito, isEntradaDebito, isEntradaLink, taxas]);
+  }, [showEntradaTaxa, isEntradaCredito, isEntradaDebito, isEntradaLink, matriculaForm.entrada_parcelas, taxas]);
 
   useEffect(() => {
     if (!modoEntrada || !showEntradaTaxa || entradaTaxaAutoCalc.percentual <= 0) return;
@@ -589,6 +592,23 @@ export const MatriculaFormDialog = ({
                       </Select>
                     </div>
                   </div>
+                  {/* Parcelas da entrada — visível apenas para crédito ou link */}
+                  {(isEntradaCredito || isEntradaLink) && (
+                    <div>
+                      <Label>Parcelas</Label>
+                      <Select
+                        value={matriculaForm.entrada_parcelas}
+                        onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, entrada_parcelas: v }))}
+                      >
+                        <SelectTrigger><SelectValue placeholder="1x" /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((n) => (
+                            <SelectItem key={n} value={n}>{n}x</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {/* Taxa da entrada */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>

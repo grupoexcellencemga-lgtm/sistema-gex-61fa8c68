@@ -27,6 +27,7 @@ export const emptyMatriculaForm = {
   entrada_conta_bancaria_id: "",
   entrada_taxa_valor: "",
   entrada_taxa_absorvida_por: "" as "" | "empresa" | "aluno",
+  entrada_parcelas: "1",
   // Forma de pagamento das parcelas restantes
   parcelas_forma_pagamento: "",
   parcelas_conta_bancaria_id: "",
