@@ -267,7 +267,11 @@ const Jornada = () => {
       if (!pessoaMap[m.aluno_id]) return;
 
       const matPagamentos = pagamentos.filter((p: any) => p.matricula_id === m.id || (p.aluno_id === m.aluno_id && p.produto_id === m.produto_id));
-      const totalPago = matPagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+      const totalPago = matPagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => {
+        const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
+        const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
+        return s + base + taxaEmp;
+      }, 0);
       const totalValor = matPagamentos.reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
       const parcelasPagas = matPagamentos.filter((p: any) => p.status === "pago").length;
       const totalParcelas = matPagamentos.length;

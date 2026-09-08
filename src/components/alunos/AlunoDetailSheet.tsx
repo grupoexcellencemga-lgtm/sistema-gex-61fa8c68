@@ -301,8 +301,25 @@ export const AlunoDetailSheet = (props: Props) => {
     }
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
-  const totalPago = pagamentos.filter((p: any) => p.status === "pago").reduce((s: number, p: any) => s + Number(p.valor), 0);
-  const totalPendente = pagamentos.filter((p: any) => p.status === "pendente").reduce((s: number, p: any) => s + Number(p.valor), 0);
+  const semNoise = (v: number) => Math.round(v * 100) / 100 < 0.10 ? 0 : Math.round(v * 100) / 100;
+  const totalPago = pagamentos
+    .filter((p: any) => p.status === "pago")
+    .reduce((s: number, p: any) => {
+      const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
+      const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
+      return s + base + taxaEmp;
+    }, 0);
+  const totalPendente = matriculas.reduce((acc: number, m: any) => {
+    const pgsMat = pagamentos.filter((pg: any) => pg.matricula_id === m.id);
+    const pagoEfetivo = pgsMat
+      .filter((pg: any) => pg.status === "pago")
+      .reduce((s: number, pg: any) => {
+        const base = pg.valor_pago != null ? Number(pg.valor_pago) : Number(pg.valor || 0);
+        const taxaEmp = pg.taxa_absorvida_por === "empresa" ? Number(pg.taxa_valor || 0) : 0;
+        return s + base + taxaEmp;
+      }, 0);
+    return acc + semNoise(Math.max(0, Number(m.valor_final || 0) - pagoEfetivo));
+  }, 0);
 
   // Soma real de todos os pagamentos vinculados a cada matrícula
   const totalPorMatricula = (matriculaId: string) =>
