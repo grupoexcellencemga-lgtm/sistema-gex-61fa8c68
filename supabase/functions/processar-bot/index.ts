@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
         // (bot_ativo=true já é a autorização — o status não deve bloquear)
         const { data } = await supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .eq("bot_ativo", true)
@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
         const { data } = await supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .eq("bot_ativo", true)
@@ -475,12 +475,33 @@ Deno.serve(async (req) => {
             ? `Use o nome da pessoa naturalmente na conversa quando fizer sentido.`
             : ``);
 
+        // Registra início da sessão na conversas_ia
+        let conversaId: string | null = null;
+        const totalMsgsHistorico = messages.length;
+        try {
+          const { data: novaConversa } = await supabase
+            .from("conversas_ia")
+            .insert({
+              empresa_id: agente.empresa_id,
+              lead_id: lead.id,
+              agente_id: agente.id,
+              protocolo_id: protocoloAtual?.id ?? null,
+              total_mensagens: totalMsgsHistorico,
+              score_inicial: lead.lead_score ?? null,
+            })
+            .select("id")
+            .single();
+          conversaId = novaConversa?.id ?? null;
+        } catch (_) {}
+
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
         const systemPrompt = agente.instrucao + baseConhecimento + resumoAnterior + contextoContato;
         let loopMessages: Anthropic.MessageParam[] = [...messages];
         let resposta: string | null = null;
         let handoff = false;
+        let resumoHandoff: string | null = null;
+        let totalIteracoes = 0;
         const MAX_ITER = 5;
 
         for (let iter = 0; iter < MAX_ITER; iter++) {
@@ -506,6 +527,7 @@ Deno.serve(async (req) => {
           }
 
           if (response.stop_reason === "tool_use") {
+            totalIteracoes++;
             const assistantMessage: Anthropic.MessageParam = { role: "assistant", content: response.content };
             loopMessages = [...loopMessages, assistantMessage];
             const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -577,6 +599,7 @@ Deno.serve(async (req) => {
 
                 } else if (block.name === "solicitar_handoff") {
                   handoff = true;
+                  resumoHandoff = input.resumo ?? null;
                   await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
                   await supabase.from("atividades").insert({
                     lead_id: lead.id,
@@ -696,6 +719,23 @@ Deno.serve(async (req) => {
 
         // Marca a última mensagem de entrada como respondida pelo bot
         await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
+
+        // Finaliza o registro na conversas_ia
+        if (conversaId) {
+          try {
+            const { data: leadAtual } = await supabase
+              .from("leads").select("lead_score").eq("id", lead.id).maybeSingle();
+            await supabase.from("conversas_ia").update({
+              finalizado_em: new Date().toISOString(),
+              houve_handoff: handoff,
+              motivo_fim: handoff ? "handoff" : "encerrado",
+              total_mensagens: totalMsgsHistorico + 1,
+              total_iteracoes: totalIteracoes,
+              score_final: leadAtual?.lead_score ?? null,
+              resumo: resumoHandoff,
+            }).eq("id", conversaId);
+          } catch (_) {}
+        }
 
         processados++;
         console.log(`[processar-bot] respondido lead ${lead.id}`);
