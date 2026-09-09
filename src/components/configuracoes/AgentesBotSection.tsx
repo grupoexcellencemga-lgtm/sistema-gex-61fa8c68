@@ -25,12 +25,13 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, GitBranch, Workflow } from "lucide-react";
+import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, GitBranch, Workflow, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
 import { FluxoSessoesPanel } from "./FluxoSessoesPanel";
 import { FluxoRelatorioCard } from "./FluxoRelatorioCard";
+import { BaseConhecimentoDialog } from "./BaseConhecimentoDialog";
 
 type Canal = {
   id: string;
@@ -109,6 +110,9 @@ export function AgentesBotSection() {
   // Fluxo editor: null = hidden, '' = new, uuid = editing
   const [editingFluxo, setEditingFluxo] = useState<string | null>(null);
   const [deleteFluxoId, setDeleteFluxoId] = useState<string | null>(null);
+
+  // Base de Conhecimento
+  const [baseConhecimentoAgente, setBaseConhecimentoAgente] = useState<AgenteBot | null>(null);
 
   const { data: agentes = [], isLoading: loadingAgentes } = useQuery<AgenteBot[]>({
     queryKey: ["agentes-bot", empresaId],
@@ -365,6 +369,15 @@ export function AgentesBotSection() {
                     />
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
                       <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Base de Conhecimento"
+                      onClick={() => setBaseConhecimentoAgente(a)}
+                    >
+                      <BookOpen className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="icon"
@@ -674,6 +687,16 @@ export function AgentesBotSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Base de Conhecimento */}
+      {baseConhecimentoAgente && (
+        <BaseConhecimentoDialog
+          open={!!baseConhecimentoAgente}
+          onClose={() => setBaseConhecimentoAgente(null)}
+          agenteId={baseConhecimentoAgente.id}
+          agenteNome={baseConhecimentoAgente.nome}
+        />
+      )}
 
       {/* Confirmar delete Fluxo */}
       <Dialog open={!!deleteFluxoId} onOpenChange={() => setDeleteFluxoId(null)}>

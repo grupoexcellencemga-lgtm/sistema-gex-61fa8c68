@@ -1,6 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.36.3";
 
+declare const Supabase: {
+  ai: {
+    Session: new (model: string) => {
+      run(input: string, opts?: { mean_pool?: boolean; normalize?: boolean }): Promise<Float32Array>;
+    };
+  };
+};
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -494,9 +502,38 @@ Deno.serve(async (req) => {
           conversaId = novaConversa?.id ?? null;
         } catch (_) {}
 
+        // RAG: busca conhecimento semântico relevante para a última mensagem do lead
+        let conhecimentoRag = "";
+        try {
+          const ultimaUserMsg = [...messages].reverse().find((m) => m.role === "user");
+          const ultimaMsgTexto = typeof ultimaUserMsg?.content === "string"
+            ? ultimaUserMsg.content
+            : (ultimaUserMsg?.content as any[])?.find((b: any) => b.type === "text")?.text ?? "";
+          if (ultimaMsgTexto) {
+            const ragSession = new Supabase.ai.Session("gte-small");
+            const queryEmbedding = await ragSession.run(ultimaMsgTexto, { mean_pool: true, normalize: true });
+            const { data: chunks } = await supabase.rpc("buscar_conhecimento", {
+              p_empresa_id: agente.empresa_id,
+              p_agente_id: agente.id,
+              p_embedding: Array.from(queryEmbedding),
+              p_limite: 3,
+              p_limiar: 0.25,
+            });
+            if (chunks?.length) {
+              const linhasRag = (chunks as any[]).map((c) =>
+                `### ${c.titulo}${c.categoria ? ` (${c.categoria})` : ""}\n${c.conteudo}`
+              ).join("\n\n");
+              conhecimentoRag = `\n\n---\n# CONHECIMENTO RELEVANTE\nUse estas informações para embasar sua resposta:\n\n${linhasRag}\n---`;
+              console.log(`[processar-bot] RAG: ${chunks.length} chunk(s) encontrado(s)`);
+            }
+          }
+        } catch (ragErr) {
+          console.error("[processar-bot] RAG erro:", ragErr);
+        }
+
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
-        const systemPrompt = agente.instrucao + baseConhecimento + resumoAnterior + contextoContato;
+        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato;
         let loopMessages: Anthropic.MessageParam[] = [...messages];
         let resposta: string | null = null;
         let handoff = false;
