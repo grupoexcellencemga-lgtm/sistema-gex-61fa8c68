@@ -54,6 +54,10 @@ type AgenteBot = {
   tempo_espera_minutos: number;
   canais_ids: string[];
   max_mensagens_contexto: number;
+  followup_ativo: boolean;
+  followup_intervalo_horas: number;
+  followup_max_tentativas: number;
+  followup_mensagens: string[];
 };
 
 type FluxoBot = {
@@ -91,6 +95,14 @@ const emptyAgente: Omit<AgenteBot, "id"> = {
   tempo_espera_minutos: 5,
   canais_ids: [],
   max_mensagens_contexto: 20,
+  followup_ativo: false,
+  followup_intervalo_horas: 24,
+  followup_max_tentativas: 3,
+  followup_mensagens: [
+    "Oi! Tudo bem? Ainda posso te ajudar com informações sobre nossos cursos 😊",
+    "Oi! Só passando para ver se ainda tem interesse. Qualquer dúvida, estou aqui!",
+    "Olá! Última mensagem da minha parte — se quiser saber mais no futuro, é só chamar. Até logo! 👋",
+  ],
 };
 
 export function AgentesBotSection() {
@@ -225,6 +237,10 @@ export function AgentesBotSection() {
       tempo_espera_minutos: a.tempo_espera_minutos,
       canais_ids: a.canais_ids,
       max_mensagens_contexto: a.max_mensagens_contexto,
+      followup_ativo: a.followup_ativo ?? false,
+      followup_intervalo_horas: a.followup_intervalo_horas ?? 24,
+      followup_max_tentativas: a.followup_max_tentativas ?? 3,
+      followup_mensagens: a.followup_mensagens?.length ? a.followup_mensagens : emptyAgente.followup_mensagens,
     });
     setDialogOpen(true);
   }
@@ -656,6 +672,113 @@ export function AgentesBotSection() {
                 />
                 <span className="text-sm text-muted-foreground">mensagens enviadas ao bot como histórico</span>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* ─── Follow-up ─── */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Follow-up automático</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    O bot analisa o contexto e decide se vale enviar uma mensagem de retorno ao lead silencioso.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.followup_ativo}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, followup_ativo: v }))}
+                />
+              </div>
+
+              {form.followup_ativo && (
+                <div className="space-y-4 pl-1">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Intervalo entre tentativas</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={168}
+                          value={form.followup_intervalo_horas}
+                          onChange={(e) => setForm((f) => ({ ...f, followup_intervalo_horas: Number(e.target.value) }))}
+                          className="w-20"
+                        />
+                        <span className="text-sm text-muted-foreground">horas</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Máximo de tentativas</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={form.followup_max_tentativas}
+                          onChange={(e) => setForm((f) => ({ ...f, followup_max_tentativas: Number(e.target.value) }))}
+                          className="w-20"
+                        />
+                        <span className="text-sm text-muted-foreground">envios</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Tom de referência das mensagens</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            followup_mensagens: [...f.followup_mensagens, ""],
+                          }))
+                        }
+                      >
+                        + adicionar
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      O Claude usa essas mensagens como referência de tom para gerar o follow-up contextualizado.
+                    </p>
+                    <div className="space-y-2">
+                      {form.followup_mensagens.map((msg, i) => (
+                        <div key={i} className="flex gap-2 items-start">
+                          <span className="mt-2 text-xs text-muted-foreground w-4 shrink-0">{i + 1}.</span>
+                          <Input
+                            value={msg}
+                            onChange={(e) =>
+                              setForm((f) => {
+                                const msgs = [...f.followup_mensagens];
+                                msgs[i] = e.target.value;
+                                return { ...f, followup_mensagens: msgs };
+                              })
+                            }
+                            placeholder={`Mensagem de referência ${i + 1}`}
+                            className="text-sm"
+                          />
+                          {form.followup_mensagens.length > 1 && (
+                            <button
+                              type="button"
+                              className="mt-2 text-destructive hover:text-destructive/80 text-xs shrink-0"
+                              onClick={() =>
+                                setForm((f) => ({
+                                  ...f,
+                                  followup_mensagens: f.followup_mensagens.filter((_, j) => j !== i),
+                                }))
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
