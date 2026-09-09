@@ -720,6 +720,9 @@ Deno.serve(async (req) => {
         // Marca a última mensagem de entrada como respondida pelo bot
         await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
 
+        // Reset do contador de follow-up (lead respondeu e bot respondeu de volta)
+        await supabase.from("leads").update({ followup_count: 0 }).eq("id", lead.id);
+
         // Finaliza o registro na conversas_ia
         if (conversaId) {
           try {
@@ -739,6 +742,97 @@ Deno.serve(async (req) => {
 
         processados++;
         console.log(`[processar-bot] respondido lead ${lead.id}`);
+      }
+    }
+
+    // FOLLOW-UP: só no modo cron (não no forceLeadId)
+    if (!forceLeadId) {
+      for (const agente of agentes) {
+        if (!agente.followup_ativo || !agente.canais_ids?.length) continue;
+        if (!dentroDoHorario(agente)) continue;
+
+        const maxTentativas = agente.followup_max_tentativas ?? 3;
+        const intervaloMs = (agente.followup_intervalo_horas ?? 24) * 60 * 60 * 1000;
+        const cutoffFollowup = new Date(Date.now() - intervaloMs).toISOString();
+
+        const { data: candidatos } = await supabase
+          .from("leads")
+          .select("id, nome, contato_id, canal_id, empresa_id, followup_count")
+          .eq("empresa_id", agente.empresa_id)
+          .eq("bot_ativo", true)
+          .lt("followup_count", maxTentativas)
+          .in("canal_id", agente.canais_ids)
+          .is("deleted_at", null);
+
+        for (const lead of candidatos ?? []) {
+          const { data: ultimaMsg } = await supabase
+            .from("mensagens_crm")
+            .select("direcao, created_at")
+            .eq("lead_id", lead.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!ultimaMsg) continue;
+          if (ultimaMsg.direcao !== "saida") continue;
+          if (ultimaMsg.created_at > cutoffFollowup) continue;
+
+          const msgs: string[] = agente.followup_mensagens ?? [
+            "Oi! Ainda posso te ajudar?",
+          ];
+          const idx = Math.min(lead.followup_count, msgs.length - 1);
+          const msgFollowup = msgs[idx];
+          const novoCount = lead.followup_count + 1;
+          const ultimaTentativa = novoCount >= maxTentativas;
+
+          const { data: canal } = await supabase
+            .from("canais_crm")
+            .select("evolution_url, evolution_token, evolution_instancia")
+            .eq("id", lead.canal_id)
+            .maybeSingle();
+
+          if (!canal?.evolution_instancia) continue;
+          const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+          if (!apiKey) continue;
+
+          const evoRes = await fetch(
+            `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`,
+            {
+              method: "POST",
+              headers: { apikey: apiKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ number: lead.contato_id, text: msgFollowup }),
+            }
+          );
+
+          if (!evoRes.ok) {
+            console.error(`[processar-bot] follow-up Evolution erro lead=${lead.id}`);
+            continue;
+          }
+
+          await supabase.from("mensagens_crm").insert({
+            lead_id: lead.id,
+            empresa_id: agente.empresa_id,
+            conteudo: msgFollowup,
+            direcao: "saida",
+            canal: "whatsapp",
+          });
+
+          await supabase.from("leads").update({
+            followup_count: novoCount,
+            ...(ultimaTentativa ? { bot_ativo: false } : {}),
+          }).eq("id", lead.id);
+
+          if (ultimaTentativa) {
+            await supabase.from("atividades").insert({
+              lead_id: lead.id,
+              empresa_id: agente.empresa_id,
+              tipo: "nota",
+              descricao: `[IA] Follow-up encerrado após ${maxTentativas} tentativas sem resposta. Bot desativado.`,
+            });
+          }
+
+          console.log(`[processar-bot] follow-up ${novoCount}/${maxTentativas} enviado para lead ${lead.id}${ultimaTentativa ? " (último — bot desativado)" : ""}`);
+        }
       }
     }
 
