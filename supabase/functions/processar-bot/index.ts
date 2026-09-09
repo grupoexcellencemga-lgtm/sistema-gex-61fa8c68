@@ -777,11 +777,73 @@ Deno.serve(async (req) => {
           if (ultimaMsg.direcao !== "saida") continue;
           if (ultimaMsg.created_at > cutoffFollowup) continue;
 
-          const msgs: string[] = agente.followup_mensagens ?? [
-            "Oi! Ainda posso te ajudar?",
-          ];
-          const idx = Math.min(lead.followup_count, msgs.length - 1);
-          const msgFollowup = msgs[idx];
+          // Busca histórico recente para o Claude avaliar o contexto
+          const { data: historicoFollowup } = await supabase
+            .from("mensagens_crm")
+            .select("conteudo, direcao, created_at")
+            .eq("lead_id", lead.id)
+            .order("created_at", { ascending: false })
+            .limit(20);
+
+          const historicoTexto = (historicoFollowup ?? [])
+            .reverse()
+            .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]")
+            .map((m: any) => `${m.direcao === "entrada" ? "Lead" : "Bot"}: ${m.conteudo}`)
+            .join("\n");
+
+          const tomReferencia = (agente.followup_mensagens as string[] ?? []).join(" | ");
+
+          // Claude decide se faz sentido enviar e gera a mensagem contextualizada
+          let msgFollowup: string | null = null;
+          try {
+            const decisao = await anthropic.messages.create({
+              model: agente.modelo,
+              max_tokens: 256,
+              system:
+                `Você analisa conversas de vendas e decide se deve ser enviado um follow-up.\n\n` +
+                `NÃO envie follow-up se:\n` +
+                `- A conversa terminou naturalmente (despedida, "qualquer coisa é só chamar", etc.)\n` +
+                `- O lead demonstrou desinteresse claro\n` +
+                `- O bot já se despediu formalmente\n` +
+                `- A última mensagem do bot já era um follow-up sem resposta\n\n` +
+                `ENVIE follow-up se:\n` +
+                `- O lead demonstrou interesse mas parou de responder no meio\n` +
+                `- O lead recebeu informações mas não deu retorno\n` +
+                `- A conversa ficou em aberto sem conclusão\n\n` +
+                `Tom de referência para a mensagem: ${tomReferencia}\n\n` +
+                `Responda APENAS com JSON válido, sem explicações:\n` +
+                `{"enviar": true, "mensagem": "sua mensagem aqui"}\n` +
+                `ou\n` +
+                `{"enviar": false}`,
+              messages: [
+                {
+                  role: "user",
+                  content: `Histórico da conversa:\n${historicoTexto}\n\nDevo enviar um follow-up?`,
+                },
+              ],
+            });
+
+            const textBlock = decisao.content.find((b) => b.type === "text");
+            const raw = textBlock?.type === "text" ? textBlock.text.trim() : "";
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (parsed.enviar === true && parsed.mensagem) {
+                msgFollowup = parsed.mensagem;
+              }
+            }
+          } catch (iaErr) {
+            console.error(`[processar-bot] follow-up IA erro lead=${lead.id}:`, iaErr);
+            // fallback: usa mensagem estática da lista
+            const msgs: string[] = agente.followup_mensagens ?? ["Oi! Ainda posso te ajudar?"];
+            msgFollowup = msgs[Math.min(lead.followup_count, msgs.length - 1)];
+          }
+
+          if (!msgFollowup) {
+            console.log(`[processar-bot] follow-up dispensado pela IA para lead ${lead.id} (contexto não recomenda)`);
+            continue;
+          }
+
           const novoCount = lead.followup_count + 1;
           const ultimaTentativa = novoCount >= maxTentativas;
 
