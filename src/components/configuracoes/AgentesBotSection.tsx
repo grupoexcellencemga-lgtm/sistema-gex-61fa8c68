@@ -33,6 +33,7 @@ import { FluxoSessoesPanel } from "./FluxoSessoesPanel";
 import { FluxoRelatorioCard } from "./FluxoRelatorioCard";
 import { BaseConhecimentoDialog } from "./BaseConhecimentoDialog";
 import { BotIARelatorioCard } from "./BotIARelatorioCard";
+import { BotLeadsRelatorioCard } from "./BotLeadsRelatorioCard";
 
 type Canal = {
   id: string;
@@ -463,6 +464,7 @@ export function AgentesBotSection() {
       <FluxoSessoesPanel />
       <FluxoRelatorioCard />
       <BotIARelatorioCard />
+      <BotLeadsRelatorioCard />
 
       {/* Modal de seleção de tipo */}
       <Dialog open={typeSelectorOpen} onOpenChange={setTypeSelectorOpen}>
