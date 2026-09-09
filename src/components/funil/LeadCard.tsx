@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, User, Trash2 } from "lucide-react";
+import { MapPin, User, Trash2, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
 
@@ -60,7 +60,12 @@ export function LeadCard({ lead, comercialNome, onClick, onDelete, isOverlay }: 
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
-          <p className="font-medium text-sm truncate pr-6">{lead.nome}</p>
+          <div className="flex items-center gap-1.5 pr-6 min-w-0">
+            <p className="font-medium text-sm truncate flex-1 min-w-0">{lead.nome}</p>
+            {(lead as any).bot_ativo && (
+              <Bot className="h-3 w-3 shrink-0 text-primary" title="Bot IA ativo" />
+            )}
+          </div>
           {lead.produto_interesse && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{lead.produto_interesse}</p>
           )}

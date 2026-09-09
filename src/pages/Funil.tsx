@@ -542,6 +542,20 @@ const Funil = () => {
     deleteEtapaMutation.mutate(etapa);
   };
 
+  const handleBotToggleAll = async (etapaId: string, ativar: boolean) => {
+    const leadIds = leads
+      .filter((l) => (l as any).etapa_id === etapaId)
+      .map((l) => l.id);
+    if (!leadIds.length) return;
+    const { error } = await supabase
+      .from("leads")
+      .update({ bot_ativo: ativar } as any)
+      .in("id", leadIds);
+    if (error) { toast.error("Erro ao atualizar bot"); return; }
+    queryClient.invalidateQueries({ queryKey: ["leads"] });
+    toast.success(ativar ? `Bot ativado para ${leadIds.length} lead${leadIds.length !== 1 ? "s" : ""}` : `Bot desativado para ${leadIds.length} lead${leadIds.length !== 1 ? "s" : ""}`);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const lead = leads.find((l) => l.id === event.active.id) ?? null;
     setActiveLead(lead);
@@ -898,6 +912,7 @@ const Funil = () => {
                               onMoveEtapa={handleMoveEtapa}
                               canMoveLeft={idx > 0}
                               canMoveRight={idx < etapasOrdenadas.length - 1}
+                              onBotToggleAll={handleBotToggleAll}
                             />
                           ))}
                         </div>

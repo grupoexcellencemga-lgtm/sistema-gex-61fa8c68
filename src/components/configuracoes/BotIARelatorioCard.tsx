@@ -127,6 +127,7 @@ export function BotIARelatorioCard() {
   }
   const agenteData = Object.entries(byAgente)
     .map(([id, v]) => ({
+      id,
       nome: agenteNome(id === "__none__" ? null : id),
       total: v.total,
       handoffs: v.handoffs,
@@ -241,7 +242,7 @@ export function BotIARelatorioCard() {
                 <p className="text-xs font-medium text-muted-foreground mb-2">Por agente</p>
                 <div className="space-y-2">
                   {agenteData.map((a) => (
-                    <div key={a.nome} className="flex items-center gap-3">
+                    <div key={a.id} className="flex items-center gap-3">
                       <p className="text-sm w-40 truncate shrink-0">{a.nome}</p>
                       <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                         <div

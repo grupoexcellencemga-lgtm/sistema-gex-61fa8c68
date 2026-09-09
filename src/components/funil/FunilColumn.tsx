@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Trash2, Bot, BotOff } from "lucide-react";
 import { LeadCard } from "./LeadCard";
 import { ETAPA_CORES, type FunilEtapa } from "./funilUtils";
 import type { LeadRow } from "@/types";
@@ -18,6 +18,7 @@ interface Props {
   onMoveEtapa: (etapa: FunilEtapa, direction: -1 | 1) => void;
   canMoveLeft: boolean;
   canMoveRight: boolean;
+  onBotToggleAll?: (etapaId: string, ativar: boolean) => void;
 }
 
 export function FunilColumn({
@@ -31,6 +32,7 @@ export function FunilColumn({
   onMoveEtapa,
   canMoveLeft,
   canMoveRight,
+  onBotToggleAll,
 }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: etapa.id });
   const cores = ETAPA_CORES[etapa.cor] || ETAPA_CORES.slate;
@@ -92,6 +94,36 @@ export function FunilColumn({
           <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!canMoveRight} onClick={() => onMoveEtapa(etapa, 1)} title="Mover para a direita">
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
+          {onBotToggleAll && leads.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" title="Bot em lote">
+                  <Bot className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="end" className="w-48 p-2 space-y-1">
+                <p className="text-[10px] text-muted-foreground font-medium px-1 pb-1">Bot IA — {leads.length} lead{leads.length !== 1 ? "s" : ""}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start h-7 text-xs text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30"
+                  onClick={() => onBotToggleAll(etapa.id, true)}
+                >
+                  <Bot className="h-3 w-3 mr-2" />
+                  Ativar bot em todos
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start h-7 text-xs text-muted-foreground hover:bg-muted"
+                  onClick={() => onBotToggleAll(etapa.id, false)}
+                >
+                  <BotOff className="h-3 w-3 mr-2" />
+                  Desativar bot em todos
+                </Button>
+              </PopoverContent>
+            </Popover>
+          )}
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditEtapa(etapa)} title="Editar coluna">
             <Pencil className="h-3 w-3" />
           </Button>

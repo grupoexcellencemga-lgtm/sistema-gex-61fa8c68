@@ -100,7 +100,7 @@ export function BotLeadsRelatorioCard() {
       if (!leadIds.length) return [];
       const { data, error } = await supabase
         .from("leads")
-        .select("id, nome, contato_id, lead_score, etapas_funil(nome, cor)")
+        .select("id, nome, contato_id, lead_score, funil_etapas(nome, cor)")
         .in("id", leadIds)
         .is("deleted_at", null);
       if (error) throw error;
@@ -109,7 +109,7 @@ export function BotLeadsRelatorioCard() {
         nome: l.nome,
         contato_id: l.contato_id,
         lead_score: l.lead_score,
-        etapa: l.etapas_funil ?? null,
+        etapa: l.funil_etapas ?? null,
       })) as Lead[];
     },
     enabled: leadIds.length > 0,
