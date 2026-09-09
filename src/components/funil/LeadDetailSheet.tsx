@@ -17,6 +17,7 @@ import { formatPhone } from "@/lib/utils";
 import { toast } from "sonner";
 import { ActivityTimeline, logActivity } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
+import { BotSessoesLead } from "./BotSessoesLead";
 import { LeadForm, emptyLeadForm, origens, cidades, ETAPA_CORES, type FunilEtapa } from "./funilUtils";
 import { maskPhone } from "@/lib/utils";
 
@@ -432,6 +433,9 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                 <div className="border-t pt-4">
                   <TarefasContextSection leadId={lead.id} />
                 </div>
+
+                {/* Sessões do Bot IA */}
+                <BotSessoesLead leadId={lead.id} />
 
                 {/* Registro de interação */}
                 <div className="border-t pt-4 space-y-2">
