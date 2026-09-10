@@ -52,16 +52,22 @@ function checkTrigger(startData: any, lastMsg: string): boolean {
 }
 
 function evalCondition(data: any, lastMsg: string): boolean {
-  const { field, operator, value } = data;
+  const { field, operator, value, no_value } = data;
   if (field !== "message") return false;
-  const subject = lastMsg.toLowerCase();
-  // Suporte a múltiplas palavras separadas por vírgula
+  const subject = lastMsg.toLowerCase().trim();
+
+  // Palavras do caminho Não têm precedência quando a mensagem casa com elas
+  if (no_value) {
+    const noVals = (no_value as string).split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+    if (noVals.some(v => subject.includes(v))) return false;
+  }
+
   const vals = (value ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
   if (!vals.length) return false;
   switch (operator) {
     case "contains":     return vals.some(v => subject.includes(v));
     case "not_contains": return vals.every(v => !subject.includes(v));
-    case "equals":       return vals.some(v => subject.trim() === v);
+    case "equals":       return vals.some(v => subject === v);
     default:             return false;
   }
 }
@@ -77,6 +83,36 @@ async function enviar(canal: any, telefone: string, texto: string): Promise<void
     headers: { apikey: apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ number: telefone, text: texto }),
   });
+}
+
+async function enviarBotoes(canal: any, telefone: string, pergunta: string): Promise<void> {
+  const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+  const res = await fetch(`${canal.evolution_url}/message/sendList/${canal.evolution_instancia}`, {
+    method: "POST",
+    headers: { apikey: apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      number: telefone,
+      listMessage: {
+        title: pergunta,
+        description: "Selecione uma opção",
+        buttonText: "Ver opções",
+        footerText: "",
+        sections: [{
+          title: "Opções",
+          rows: [
+            { title: "Sim ✅", description: "", rowId: "sim" },
+            { title: "Não ❌", description: "", rowId: "nao" },
+          ],
+        }],
+      },
+    }),
+  });
+  // fallback para texto simples se o endpoint de lista falhar
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("[enviarBotoes] sendList falhou:", res.status, errBody);
+    await enviar(canal, telefone, pergunta);
+  }
 }
 
 async function salvarMensagem(leadId: string, empresaId: string, conteudo: string): Promise<void> {
@@ -128,17 +164,36 @@ Deno.serve(async (req) => {
       .from("fluxo_sessoes")
       .select("*")
       .eq("lead_id", leadId)
-      .in("status", ["active", "waiting"])
+      .in("status", ["active", "waiting", "waiting_input"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     // 2. Selecionar fluxo:
-    //    - sessão ativa → continua com o primeiro fluxo ativo do canal
-    //    - nova sessão → tenta casar pela palavra_chave; fallback: primeiro ativo
+    //    - sessão waiting_input + keyword → reinicia do zero (abandona sessão atual)
+    //    - sessão ativa → continua com o fluxo ativo do canal
+    //    - nova sessão → tenta casar pela palavra_chave
     let fluxo: { id: string; fluxo_json: any } | null = null;
 
-    if (sessao) {
+    // Busca todos os fluxos ativos do canal para testar keyword
+    const { data: fluxosAtivos } = await supabase
+      .from("fluxos_bot")
+      .select("id, fluxo_json, palavra_chave")
+      .eq("ativo", true)
+      .eq("empresa_id", empresaId)
+      .contains("canal_ids", [canalId]);
+
+    const msgNorm = lastMsg.toLowerCase().trim();
+    const keywordMatch = fluxosAtivos?.find(
+      f => f.palavra_chave && msgNorm.includes(f.palavra_chave.toLowerCase().trim())
+    ) ?? null;
+
+    if (sessao && keywordMatch && sessao.status === "waiting_input") {
+      // Usuário mandou a palavra-chave enquanto o bot aguardava resposta → reinicia
+      await supabase.from("fluxo_sessoes").delete().eq("id", sessao.id);
+      fluxo = keywordMatch;
+    } else if (sessao) {
+      // Sessão ativa/waiting normal → continua
       const { data } = await supabase
         .from("fluxos_bot")
         .select("id, fluxo_json")
@@ -149,20 +204,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
       fluxo = data;
     } else {
-      const { data: fluxosAtivos } = await supabase
-        .from("fluxos_bot")
-        .select("id, fluxo_json, palavra_chave")
-        .eq("ativo", true)
-        .eq("empresa_id", empresaId)
-        .contains("canal_ids", [canalId]);
-
-      if (fluxosAtivos && fluxosAtivos.length > 0) {
-        const msgNorm = lastMsg.toLowerCase().trim();
-        const matched = fluxosAtivos.find(
-          f => f.palavra_chave && msgNorm === f.palavra_chave.toLowerCase().trim()
-        );
-        fluxo = matched ?? fluxosAtivos[0];
-      }
+      // Nova sessão → só inicia se a keyword bater
+      fluxo = keywordMatch;
     }
 
     if (!fluxo) {
@@ -188,22 +231,29 @@ Deno.serve(async (req) => {
 
     let currentNodeId: string;
     let isNew = false;
+    let sessaoNovaId: string | null = null;
 
     if (!sessao) {
-      // Se já existe sessão completed para este lead+fluxo, não reinicia o fluxo
-      const { data: sessaoAnterior } = await supabase
-        .from("fluxo_sessoes")
-        .select("id")
-        .eq("lead_id", leadId)
-        .eq("fluxo_id", fluxo.id)
-        .eq("status", "completed")
-        .limit(1)
+      // ── Guarda de atendimento ativo ──────────────────────────────────────────
+      // Não inicia um fluxo novo se o lead já estiver sendo atendido por humano
+      // ou IA, evitando que a palavra-chave dispare por acidente numa conversa
+      // em andamento.
+      const { data: leadStatus } = await supabase
+        .from("leads")
+        .select("status_atendimento, atendente_id")
+        .eq("id", leadId)
         .maybeSingle();
-      if (sessaoAnterior) {
-        return new Response(JSON.stringify({ ok: true, msg: "fluxo já completado para este lead" }), {
+
+      // Bloqueia apenas se um atendente humano estiver com o lead
+      // "fila" = aguardando atendimento → permite fluxo
+      const emAtendimentoHumano = leadStatus?.atendente_id != null;
+
+      if (emAtendimentoHumano) {
+        return new Response(JSON.stringify({ ok: true, msg: "lead com atendente humano — fluxo bloqueado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // ─────────────────────────────────────────────────────────────────────────
 
       // Iniciar novo fluxo
       const startNode = fj.nodes.find(n => n.type === "start");
@@ -219,10 +269,63 @@ Deno.serve(async (req) => {
       }
       currentNodeId = startNode.id;
       isNew = true;
+
+      // ── Guarda contra chamadas concorrentes ───────────────────────────────
+      // Insere a sessão ANTES de executar os nós. Se duas chamadas chegarem
+      // ao mesmo tempo (Evolution API retransmitindo o mesmo evento), o índice
+      // único (lead_id, fluxo_id) WHERE status != 'completed' rejeita a segunda
+      // e apenas UMA chamada executa o fluxo e envia mensagens.
+      const { data: sessaoNova, error: errInsert } = await supabase
+        .from("fluxo_sessoes")
+        .insert({
+          lead_id: leadId,
+          fluxo_id: fluxo.id,
+          empresa_id: empresaId,
+          current_node_id: currentNodeId,
+          status: "active",
+          contexto: { ultima_mensagem: lastMsg },
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (errInsert || !sessaoNova) {
+        return new Response(JSON.stringify({ ok: true, msg: "sessão já iniciada (concorrência)" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sessaoNovaId = sessaoNova.id;
+      // ─────────────────────────────────────────────────────────────────────
     } else {
       currentNodeId = sessao.current_node_id;
 
-      if (sessao.status === "waiting" && sessao.wait_until) {
+      if (sessao.status === "waiting_input") {
+        const waitingAtNode = getNode(fj, currentNodeId);
+        if (waitingAtNode?.type === "condition") {
+          // Mensagem recebida: re-avaliar a condição com a nova mensagem (não avança ainda)
+          // A avaliação acontece no case "condition" do loop abaixo
+        } else {
+          // Nó aguardar resposta: salva resposta se configurado e avança
+          const saveTo: string | undefined = waitingAtNode?.data?.save_to;
+          if (saveTo && lastMsg.trim()) {
+            // Campos padrão do lead
+            if (saveTo === "nome" || saveTo === "email") {
+              await supabase.from("leads").update({ [saveTo]: lastMsg.trim() }).eq("id", leadId);
+            }
+            // Atualiza variáveis de interpolação para os nós seguintes
+            msgVars[saveTo] = lastMsg.trim();
+          }
+          const afterWait = getNext(fj, currentNodeId);
+          if (!afterWait) {
+            await supabase.from("fluxo_sessoes")
+              .update({ status: "completed", updated_at: new Date().toISOString() })
+              .eq("id", sessao.id);
+            return new Response(JSON.stringify({ ok: true, msg: "concluído" }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          currentNodeId = afterWait.id;
+        }
+      } else if (sessao.status === "waiting" && sessao.wait_until) {
         if (new Date() < new Date(sessao.wait_until)) {
           // Timer ainda não expirou — ignora mensagem
           return new Response(JSON.stringify({ ok: true, msg: "aguardando timer" }), {
@@ -246,7 +349,7 @@ Deno.serve(async (req) => {
     // 4. Executar nós (máx 20 iterações para evitar loop infinito)
     const MAX = 20;
     let iter = 0;
-    let finalStatus: "active" | "waiting" | "completed" = "active";
+    let finalStatus: "active" | "waiting" | "waiting_input" | "completed" = "active";
     let waitUntil: string | null = null;
     let run = true;
 
@@ -278,6 +381,23 @@ Deno.serve(async (req) => {
         }
 
         case "condition": {
+          const resumingHere = sessao?.status === "waiting_input" && sessao?.current_node_id === node.id;
+          // Se tem pergunta e ainda não enviou (não estamos resumindo aqui), envia e aguarda
+          if (node.data.pergunta?.trim() && !resumingHere) {
+            const pergText = interpolate(node.data.pergunta, msgVars);
+            // Se há palavras-chave de Sim/Não configuradas, envia botões interativos
+            const temOpcoes = node.data.value?.trim() || node.data.no_value?.trim();
+            if (temOpcoes) {
+              await enviarBotoes(canal, telefone, pergText);
+            } else {
+              await enviar(canal, telefone, pergText);
+            }
+            await salvarMensagem(leadId, empresaId, pergText);
+            finalStatus = "waiting_input";
+            run = false;
+            break;
+          }
+          // Avalia a condição com a mensagem recebida
           const passed = evalCondition(node.data, lastMsg);
           const next =
             getNextByHandle(fj, node.id, passed ? "yes" : "no") ??
@@ -288,11 +408,17 @@ Deno.serve(async (req) => {
         }
 
         case "wait": {
-          const value: number = node.data.value ?? 30;
-          const unit: string = node.data.unit ?? "s";
-          const ms = unit === "s" ? value * 1000 : value * 60 * 1000;
-          waitUntil = new Date(Date.now() + ms).toISOString();
-          finalStatus = "waiting";
+          if (node.data.mode === "input") {
+            // Aguardar resposta: pausa indefinidamente até qualquer mensagem chegar
+            finalStatus = "waiting_input";
+            waitUntil = null;
+          } else {
+            const value: number = node.data.value ?? 30;
+            const unit: string = node.data.unit ?? "s";
+            const ms = unit === "h" ? value * 3600 * 1000 : unit === "min" ? value * 60 * 1000 : value * 1000;
+            waitUntil = new Date(Date.now() + ms).toISOString();
+            finalStatus = "waiting";
+          }
           run = false;
           break;
         }
@@ -377,16 +503,12 @@ Deno.serve(async (req) => {
     // 5. Persistir sessão
     const now = new Date().toISOString();
     if (isNew) {
-      // Sempre persiste a sessão (inclusive completed) para evitar que o fluxo reinicie
-      await supabase.from("fluxo_sessoes").insert({
-        lead_id: leadId,
-        fluxo_id: fluxo.id,
-        empresa_id: empresaId,
-        current_node_id: currentNodeId,
-        status: finalStatus,
-        wait_until: waitUntil,
-        contexto: { ultima_mensagem: lastMsg },
-      });
+      // Sessão já foi inserida antes do loop; só atualiza com o estado final
+      if (sessaoNovaId) {
+        await supabase.from("fluxo_sessoes")
+          .update({ current_node_id: currentNodeId, status: finalStatus, wait_until: waitUntil, updated_at: now })
+          .eq("id", sessaoNovaId);
+      }
     } else if (sessao) {
       await supabase.from("fluxo_sessoes")
         .update({ current_node_id: currentNodeId, status: finalStatus, wait_until: waitUntil, updated_at: now })

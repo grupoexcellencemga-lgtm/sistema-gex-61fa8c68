@@ -40,10 +40,10 @@ import { cn } from "@/lib/utils";
 
 type StartData    = { label: string; trigger: "message_received" | "keyword" | "outside_hours"; keywords: string };
 type MessageData  = { label: string; text: string };
-type ConditionData = { label: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value: string };
+type ConditionData = { label: string; pergunta?: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value: string; no_value?: string };
 type AIData       = { label: string; model: string; prompt: string };
 type AssignData   = { label: string; action: "queue" | "agent" };
-type WaitData     = { label: string; value: number; unit: "s" | "min" };
+type WaitData     = { label: string; value: number; unit: "s" | "min"; mode?: "timer" | "input"; save_to?: string };
 type EndData      = { label: string };
 
 // ─── Custom Nodes ─────────────────────────────────────────────────────────────
@@ -61,26 +61,78 @@ function StartNode({ data, selected }: { data: StartData; selected?: boolean }) 
 }
 
 function MessageNode({ data, selected }: { data: MessageData; selected?: boolean }) {
+  const hasText = !!data.text?.trim();
   return (
-    <div className={cn(base, "border-blue-500 bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300", selected && "ring-2 ring-blue-400 ring-offset-1")}>
+    <div className={cn(
+      "rounded-xl border-2 px-3 py-2 min-w-[160px] max-w-[220px] shadow-md text-xs select-none",
+      "border-blue-500 bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300",
+      selected && "ring-2 ring-blue-400 ring-offset-1"
+    )}>
       <Handle type="target" position={Position.Top} className="!bg-blue-500 !w-3 !h-3 !border-2 !border-white" />
-      <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate max-w-[130px]">{data.label || "Mensagem"}</span>
+      <div className="flex items-center gap-2 font-semibold">
+        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{data.label || "Mensagem"}</span>
+      </div>
+      {hasText && (
+        <p className="mt-1.5 text-[10px] leading-snug text-blue-500 dark:text-blue-400 line-clamp-2 border-t border-blue-200 dark:border-blue-800 pt-1">
+          {data.text}
+        </p>
+      )}
       <Handle type="source" position={Position.Bottom} className="!bg-blue-500 !w-3 !h-3 !border-2 !border-white" />
     </div>
   );
 }
 
 function ConditionNode({ data, selected }: { data: ConditionData; selected?: boolean }) {
+  const d = data as any;
+  const hasPergunta = !!d.pergunta?.trim();
+  const hasValue    = !!d.value?.trim();
+  const hasNoValue  = !!d.no_value?.trim();
+
   return (
-    <div className={cn(base, "border-amber-500 bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 relative pb-6", selected && "ring-2 ring-amber-400 ring-offset-1")}>
+    <div className={cn(
+      "rounded-xl border-2 px-3 py-2 min-w-[180px] max-w-[230px] shadow-md text-xs select-none",
+      "border-amber-500 bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300",
+      "relative pb-7",
+      selected && "ring-2 ring-amber-400 ring-offset-1"
+    )}>
       <Handle type="target" position={Position.Top} className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white" />
-      <GitBranch className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate max-w-[130px]">{data.label || "Condição"}</span>
+
+      {/* Título */}
+      <div className="flex items-center gap-2 font-semibold">
+        <GitBranch className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{d.label || "Condição"}</span>
+      </div>
+
+      {/* Pergunta */}
+      {hasPergunta && (
+        <p className="mt-1.5 text-[10px] leading-snug italic text-amber-600 dark:text-amber-400 line-clamp-2 border-t border-amber-200 dark:border-amber-800 pt-1">
+          {d.pergunta}
+        </p>
+      )}
+
+      {/* Keywords Sim / Não */}
+      {(hasValue || hasNoValue) && (
+        <div className="mt-1.5 space-y-0.5 border-t border-amber-200 dark:border-amber-800 pt-1">
+          {hasValue && (
+            <div className="flex items-center gap-1 text-[10px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <span className="truncate text-emerald-700 dark:text-emerald-400">{d.value}</span>
+            </div>
+          )}
+          {hasNoValue && (
+            <div className="flex items-center gap-1 text-[10px]">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+              <span className="truncate text-rose-600 dark:text-rose-400">{d.no_value}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <Handle type="source" position={Position.Bottom} id="yes" style={{ left: "28%" }} className="!bg-emerald-500 !w-3 !h-3 !border-2 !border-white" />
       <Handle type="source" position={Position.Bottom} id="no"  style={{ left: "72%" }} className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white" />
-      <span className="absolute bottom-1.5 left-[20%] text-[10px] font-bold text-emerald-600">Sim</span>
-      <span className="absolute bottom-1.5 left-[64%] text-[10px] font-bold text-rose-500">Não</span>
+      <span className="absolute bottom-1.5 left-[18%] text-[10px] font-bold text-emerald-600">Sim</span>
+      <span className="absolute bottom-1.5 left-[63%] text-[10px] font-bold text-rose-500">Não</span>
     </div>
   );
 }
@@ -154,7 +206,7 @@ function defaultData(type: string): Record<string, unknown> {
   switch (type) {
     case "start":     return { label: "Início",      trigger: "message_received", keywords: "" };
     case "message":   return { label: "Mensagem",    text: "" };
-    case "condition": return { label: "Condição",    field: "message", operator: "contains", value: "" };
+    case "condition": return { label: "Condição",    pergunta: "", field: "message", operator: "contains", value: "", no_value: "" };
     case "ai":        return { label: "IA (Claude)", model: "claude-haiku-4-5-20251001", prompt: "" };
     case "assign":    return { label: "Atribuir",    action: "queue" };
     case "wait":      return { label: "Aguardar 30s", value: 30, unit: "s" };
@@ -183,7 +235,7 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
         <Label className="text-xs text-muted-foreground">Gatilho</Label>
         <Select value={d.trigger} onValueChange={(v) => up({ trigger: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className="z-[9999]">
             <SelectItem value="message_received">Qualquer mensagem recebida</SelectItem>
             <SelectItem value="keyword">Palavra-chave específica</SelectItem>
             <SelectItem value="outside_hours">Fora do horário comercial</SelectItem>
@@ -215,22 +267,41 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
   if (node.type === "condition") return (
     <div className="space-y-3">
       {LabelField}
+
+      {/* Pergunta que o bot envia antes de avaliar */}
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Campo</Label>
-        <Select value={d.field} onValueChange={(v) => up({ field: v })}>
+        <Label className="text-xs text-muted-foreground">Pergunta do bot (opcional)</Label>
+        <Textarea
+          value={d.pergunta ?? ""}
+          onChange={(e) => up({ pergunta: e.target.value })}
+          rows={3}
+          className="text-sm resize-none"
+          placeholder="Ex: Quer saber mais sobre o curso? Responda SIM ou NÃO."
+        />
+        <p className="text-[11px] text-muted-foreground">Se preenchido, o bot envia esta mensagem e aguarda resposta antes de avaliar.</p>
+      </div>
+
+      <hr className="border-border" />
+
+      {/* Campo avaliado */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Campo avaliado</Label>
+        <Select value={d.field ?? "message"} onValueChange={(v) => up({ field: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className="z-[9999]">
             <SelectItem value="message">Conteúdo da mensagem</SelectItem>
             <SelectItem value="time">Horário atual</SelectItem>
             <SelectItem value="weekday">Dia da semana</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      {/* Operador */}
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Operador</Label>
-        <Select value={d.operator} onValueChange={(v) => up({ operator: v })}>
+        <Select value={d.operator ?? "contains"} onValueChange={(v) => up({ operator: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className="z-[9999]">
             <SelectItem value="contains">Contém</SelectItem>
             <SelectItem value="not_contains">Não contém</SelectItem>
             <SelectItem value="equals">Igual a</SelectItem>
@@ -238,24 +309,38 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
           </SelectContent>
         </Select>
       </div>
+
+      <hr className="border-border" />
+
+      {/* Palavras para Sim */}
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">
-          {d.field === "time" ? "Intervalo (ex: 08:00-18:00)" : "Palavras-chave"}
+        <Label className="text-xs font-semibold flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+          Palavras para <span className="text-emerald-600">Sim</span>
         </Label>
         <Input
           value={d.value ?? ""}
           onChange={(e) => up({ value: e.target.value })}
           className="h-8 text-sm"
-          placeholder={d.field === "time" ? "08:00-18:00" : "preço, quanto custa, valor"}
+          placeholder={d.field === "time" ? "08:00-18:00" : "sim, 1, quero, aceito"}
         />
-        {d.field === "message" && (
-          <p className="text-[11px] text-muted-foreground">Separe múltiplas palavras com vírgula. Basta uma coincidir.</p>
-        )}
+        <p className="text-[11px] text-muted-foreground">Separe com vírgula. Basta uma coincidir.</p>
       </div>
-      <div className="rounded-md bg-muted p-2.5 text-xs text-muted-foreground space-y-1">
-        <p className="font-semibold text-foreground mb-1">Saídas:</p>
-        <p className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Sim — condição verdadeira</p>
-        <p className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Não — condição falsa</p>
+
+      {/* Palavras para Não */}
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+          Palavras para <span className="text-rose-500">Não</span>
+          <span className="text-muted-foreground font-normal">(opcional)</span>
+        </Label>
+        <Input
+          value={d.no_value ?? ""}
+          onChange={(e) => up({ no_value: e.target.value })}
+          className="h-8 text-sm"
+          placeholder="não, 2, nope, cancelar"
+        />
+        <p className="text-[11px] text-muted-foreground">Se vazio, qualquer resposta que não for Sim vai para Não.</p>
       </div>
     </div>
   );
@@ -267,7 +352,7 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
         <Label className="text-xs text-muted-foreground">Modelo</Label>
         <Select value={d.model} onValueChange={(v) => up({ model: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className="z-[9999]">
             <SelectItem value="claude-haiku-4-5-20251001">Haiku 4.5 (rápido e econômico)</SelectItem>
             <SelectItem value="claude-sonnet-4-6">Sonnet 4.6 (mais inteligente)</SelectItem>
           </SelectContent>
@@ -287,7 +372,7 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
         <Label className="text-xs text-muted-foreground">Ação</Label>
         <Select value={d.action} onValueChange={(v) => up({ action: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className="z-[9999]">
             <SelectItem value="queue">Colocar na fila de atendimento</SelectItem>
             <SelectItem value="agent">Atribuir a agente específico</SelectItem>
           </SelectContent>
@@ -296,37 +381,104 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
     </div>
   );
 
-  if (node.type === "wait") return (
-    <div className="space-y-3">
-      {LabelField}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Tempo de espera</Label>
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            min={1}
-            max={d.unit === "s" ? 3600 : 1440}
-            value={d.value ?? 30}
-            onChange={(e) => {
-              const v = Math.max(1, Number(e.target.value));
-              up({ value: v, label: `Aguardar ${v}${d.unit ?? "s"}` });
-            }}
-            className="h-8 text-sm w-24"
-          />
-          <Select
-            value={d.unit ?? "s"}
-            onValueChange={(u) => up({ unit: u, label: `Aguardar ${d.value ?? 30}${u}` })}
-          >
-            <SelectTrigger className="h-8 text-sm w-28"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="s">Segundos</SelectItem>
-              <SelectItem value="min">Minutos</SelectItem>
-            </SelectContent>
-          </Select>
+  if (node.type === "wait") {
+    const mode = d.mode ?? "timer";
+    return (
+      <div className="space-y-3">
+        {LabelField}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Modo de espera</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => up({ mode: "timer", label: `Aguardar ${d.value ?? 30}${d.unit ?? "s"}` })}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 rounded-md border text-xs transition-colors",
+                mode === "timer"
+                  ? "border-primary bg-primary/10 text-primary font-medium"
+                  : "border-input hover:bg-muted text-muted-foreground"
+              )}
+            >
+              <Clock className="h-4 w-4" />
+              Aguardar tempo
+            </button>
+            <button
+              type="button"
+              onClick={() => up({ mode: "input", label: "Aguardar resposta" })}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 rounded-md border text-xs transition-colors",
+                mode === "input"
+                  ? "border-primary bg-primary/10 text-primary font-medium"
+                  : "border-input hover:bg-muted text-muted-foreground"
+              )}
+            >
+              <MessageSquare className="h-4 w-4" />
+              Aguardar resposta
+            </button>
+          </div>
         </div>
+
+        {mode === "timer" && (
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Tempo de espera</Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={d.unit === "s" ? 3600 : d.unit === "min" ? 1440 : 72}
+                value={d.value ?? 30}
+                onChange={(e) => {
+                  const v = Math.max(1, Number(e.target.value));
+                  up({ value: v, label: `Aguardar ${v}${d.unit ?? "s"}` });
+                }}
+                className="h-8 text-sm w-24"
+              />
+              <Select
+                value={d.unit ?? "s"}
+                onValueChange={(u) => up({ unit: u, label: `Aguardar ${d.value ?? 30}${u}` })}
+              >
+                <SelectTrigger className="h-8 text-sm w-28"><SelectValue /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="s">Segundos</SelectItem>
+                  <SelectItem value="min">Minutos</SelectItem>
+                  <SelectItem value="h">Horas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {mode === "input" && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">
+              O fluxo ficará pausado até a pessoa enviar qualquer mensagem. Só então avança para o próximo nó.
+            </p>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Salvar resposta em</Label>
+              <Select
+                value={d.save_to ?? ""}
+                onValueChange={(v) => up({ save_to: v || undefined })}
+              >
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Não salvar" /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="">Não salvar</SelectItem>
+                  <SelectItem value="nome">Nome do lead</SelectItem>
+                  <SelectItem value="email">E-mail do lead</SelectItem>
+                  <SelectItem value="cidade">Cidade (variável {"{cidade}"})</SelectItem>
+                  <SelectItem value="profissao">Profissão (variável {"{profissao}"})</SelectItem>
+                </SelectContent>
+              </Select>
+              {d.save_to && (
+                <p className="text-xs text-muted-foreground">
+                  Use <code className="bg-muted px-1 rounded">{`{${d.save_to}}`}</code> nas mensagens seguintes para usar o valor salvo.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  }
 
   return <div className="space-y-3">{LabelField}</div>;
 }
