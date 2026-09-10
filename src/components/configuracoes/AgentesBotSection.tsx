@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, Workflow, BookOpen, BarChart2, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, Workflow, BookOpen, BarChart2, Users, Link2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
@@ -41,6 +41,7 @@ type Canal = {
   nome: string;
   tipo: string;
   ativo: boolean;
+  identificador: string;
 };
 
 type AgenteBot = {
@@ -68,6 +69,7 @@ type FluxoBot = {
   ativo: boolean;
   canal_ids: string[];
   created_at: string;
+  palavra_chave: string | null;
 };
 
 const MODELOS = [
@@ -127,6 +129,27 @@ export function AgentesBotSection() {
   // Base de Conhecimento
   const [baseConhecimentoAgente, setBaseConhecimentoAgente] = useState<AgenteBot | null>(null);
 
+  // Configurar link (palavra_chave) do fluxo
+  const [linkFluxo, setLinkFluxo] = useState<FluxoBot | null>(null);
+  const [linkPalavra, setLinkPalavra] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
+  const salvarPalavraChave = useMutation({
+    mutationFn: async ({ id, palavra_chave }: { id: string; palavra_chave: string }) => {
+      const { error } = await supabase
+        .from("fluxos_bot")
+        .update({ palavra_chave: palavra_chave.trim().toUpperCase() || null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fluxos-bot", empresaId] });
+      toast.success("Link configurado!");
+      setLinkFluxo(null);
+    },
+    onError: () => toast.error("Erro ao salvar"),
+  });
+
   const { data: agentes = [], isLoading: loadingAgentes } = useQuery<AgenteBot[]>({
     queryKey: ["agentes-bot", empresaId],
     queryFn: async () => {
@@ -146,7 +169,7 @@ export function AgentesBotSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("fluxos_bot")
-        .select("id, nome, ativo, canal_ids, created_at")
+        .select("id, nome, ativo, canal_ids, created_at, palavra_chave")
         .eq("empresa_id", empresaId!)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -160,7 +183,7 @@ export function AgentesBotSection() {
     queryFn: async () => {
       const { data } = await supabase
         .from("canais_crm")
-        .select("id, nome, tipo, ativo")
+        .select("id, nome, tipo, ativo, identificador")
         .eq("tipo", "whatsapp")
         .eq("ativo", true)
         .order("nome");
@@ -497,12 +520,29 @@ export function AgentesBotSection() {
                             <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
                           )}
                         </div>
+                        {f.palavra_chave && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Link2 className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground font-mono">
+                              wa.me/…?text={f.palavra_chave}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Switch
                           checked={f.ativo}
                           onCheckedChange={(v) => toggleFluxoAtivo.mutate({ id: f.id, ativo: v })}
                         />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Configurar link do site"
+                          onClick={() => { setLinkFluxo(f); setLinkPalavra(f.palavra_chave ?? ""); setCopiado(false); }}
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingFluxo(f.id)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -846,6 +886,77 @@ export function AgentesBotSection() {
           agenteNome={baseConhecimentoAgente.nome}
         />
       )}
+
+      {/* Configurar link wa.me do fluxo */}
+      <Dialog open={!!linkFluxo} onOpenChange={(o) => { if (!o) setLinkFluxo(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              Link do site — {linkFluxo?.nome}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Palavra-chave (gatilho)</Label>
+              <Input
+                placeholder="Ex: CURSO, EVENTO, ORCAMENTO"
+                value={linkPalavra}
+                onChange={(e) => { setLinkPalavra(e.target.value.toUpperCase()); setCopiado(false); }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Quando o lead clicar no botão do site e enviar esta mensagem, este fluxo será iniciado automaticamente.
+              </p>
+            </div>
+
+            {linkPalavra.trim() && (() => {
+              const canal = canais.find(c => (linkFluxo?.canal_ids ?? []).includes(c.id));
+              const numero = canal?.identificador?.replace(/\D/g, "") || "55449XXXXXXX";
+              const link = `https://wa.me/${numero}?text=${encodeURIComponent(linkPalavra.trim())}`;
+              return (
+                <div className="space-y-1.5">
+                  <Label>Link gerado</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-muted rounded px-3 py-2 break-all font-mono">
+                      {link}
+                    </code>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(link);
+                        setCopiado(true);
+                        setTimeout(() => setCopiado(false), 2000);
+                      }}
+                    >
+                      {copiado ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Cole este link no botão do seu site. Quando clicado, abre o WhatsApp com a mensagem "{linkPalavra.trim()}" pré-preenchida.
+                  </p>
+                  {!canal?.identificador && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ⚠ Substitua <code>55449XXXXXXX</code> pelo número do WhatsApp do canal.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkFluxo(null)}>Cancelar</Button>
+            <Button
+              onClick={() => linkFluxo && salvarPalavraChave.mutate({ id: linkFluxo.id, palavra_chave: linkPalavra })}
+              disabled={salvarPalavraChave.isPending}
+            >
+              {salvarPalavraChave.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmar delete Fluxo */}
       <Dialog open={!!deleteFluxoId} onOpenChange={() => setDeleteFluxoId(null)}>

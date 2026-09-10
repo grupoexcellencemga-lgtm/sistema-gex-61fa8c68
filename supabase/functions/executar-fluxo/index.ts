@@ -123,15 +123,47 @@ Deno.serve(async (req) => {
       telefone: leadData?.telefone ?? leadData?.contato_id ?? telefone ?? "",
     };
 
-    // 1. Buscar fluxo ativo para o canal
-    const { data: fluxo } = await supabase
-      .from("fluxos_bot")
-      .select("id, fluxo_json")
-      .eq("ativo", true)
-      .eq("empresa_id", empresaId)
-      .contains("canal_ids", [canalId])
+    // 1. Sessão ativa ou em espera
+    const { data: sessao } = await supabase
+      .from("fluxo_sessoes")
+      .select("*")
+      .eq("lead_id", leadId)
+      .in("status", ["active", "waiting"])
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // 2. Selecionar fluxo:
+    //    - sessão ativa → continua com o primeiro fluxo ativo do canal
+    //    - nova sessão → tenta casar pela palavra_chave; fallback: primeiro ativo
+    let fluxo: { id: string; fluxo_json: any } | null = null;
+
+    if (sessao) {
+      const { data } = await supabase
+        .from("fluxos_bot")
+        .select("id, fluxo_json")
+        .eq("ativo", true)
+        .eq("empresa_id", empresaId)
+        .contains("canal_ids", [canalId])
+        .limit(1)
+        .maybeSingle();
+      fluxo = data;
+    } else {
+      const { data: fluxosAtivos } = await supabase
+        .from("fluxos_bot")
+        .select("id, fluxo_json, palavra_chave")
+        .eq("ativo", true)
+        .eq("empresa_id", empresaId)
+        .contains("canal_ids", [canalId]);
+
+      if (fluxosAtivos && fluxosAtivos.length > 0) {
+        const msgNorm = lastMsg.toLowerCase().trim();
+        const matched = fluxosAtivos.find(
+          f => f.palavra_chave && msgNorm === f.palavra_chave.toLowerCase().trim()
+        );
+        fluxo = matched ?? fluxosAtivos[0];
+      }
+    }
 
     if (!fluxo) {
       return new Response(JSON.stringify({ ok: true, msg: "sem fluxo" }), {
@@ -141,7 +173,7 @@ Deno.serve(async (req) => {
 
     const fj = fluxo.fluxo_json as FluxoJson;
 
-    // 2. Dados do canal
+    // 3. Dados do canal
     const { data: canal } = await supabase
       .from("canais_crm")
       .select("evolution_url, evolution_token, evolution_instancia")
@@ -153,16 +185,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // 3. Sessão ativa ou em espera
-    const { data: sessao } = await supabase
-      .from("fluxo_sessoes")
-      .select("*")
-      .eq("lead_id", leadId)
-      .in("status", ["active", "waiting"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
 
     let currentNodeId: string;
     let isNew = false;
