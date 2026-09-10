@@ -456,12 +456,12 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Salvar resposta em</Label>
               <Select
-                value={d.save_to ?? ""}
-                onValueChange={(v) => up({ save_to: v || undefined })}
+                value={d.save_to ?? "none"}
+                onValueChange={(v) => up({ save_to: v === "none" ? undefined : v })}
               >
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Não salvar" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
-                  <SelectItem value="">Não salvar</SelectItem>
+                  <SelectItem value="none">Não salvar</SelectItem>
                   <SelectItem value="nome">Nome do lead</SelectItem>
                   <SelectItem value="email">E-mail do lead</SelectItem>
                   <SelectItem value="cidade">Cidade (variável {"{cidade}"})</SelectItem>
