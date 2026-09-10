@@ -70,6 +70,7 @@ type FluxoBot = {
   canal_ids: string[];
   created_at: string;
   palavra_chave: string | null;
+  texto_inicio: string | null;
 };
 
 const MODELOS = [
@@ -132,13 +133,17 @@ export function AgentesBotSection() {
   // Configurar link (palavra_chave) do fluxo
   const [linkFluxo, setLinkFluxo] = useState<FluxoBot | null>(null);
   const [linkPalavra, setLinkPalavra] = useState("");
+  const [linkTexto, setLinkTexto] = useState("");
   const [copiado, setCopiado] = useState(false);
 
   const salvarPalavraChave = useMutation({
-    mutationFn: async ({ id, palavra_chave }: { id: string; palavra_chave: string }) => {
+    mutationFn: async ({ id, palavra_chave, texto_inicio }: { id: string; palavra_chave: string; texto_inicio: string }) => {
       const { error } = await supabase
         .from("fluxos_bot")
-        .update({ palavra_chave: palavra_chave.trim().toUpperCase() || null })
+        .update({
+          palavra_chave: palavra_chave.trim().toUpperCase() || null,
+          texto_inicio: texto_inicio.trim() || null,
+        })
         .eq("id", id);
       if (error) throw error;
     },
@@ -169,7 +174,7 @@ export function AgentesBotSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("fluxos_bot")
-        .select("id, nome, ativo, canal_ids, created_at, palavra_chave")
+        .select("id, nome, ativo, canal_ids, created_at, palavra_chave, texto_inicio")
         .eq("empresa_id", empresaId!)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -539,7 +544,7 @@ export function AgentesBotSection() {
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           title="Configurar link do site"
-                          onClick={() => { setLinkFluxo(f); setLinkPalavra(f.palavra_chave ?? ""); setCopiado(false); }}
+                          onClick={() => { setLinkFluxo(f); setLinkPalavra(f.palavra_chave ?? ""); setLinkTexto(f.texto_inicio ?? ""); setCopiado(false); }}
                         >
                           <Link2 className="h-3.5 w-3.5" />
                         </Button>
@@ -900,19 +905,32 @@ export function AgentesBotSection() {
             <div className="space-y-1.5">
               <Label>Palavra-chave (gatilho)</Label>
               <Input
-                placeholder="Ex: CURSO, EVENTO, ORCAMENTO"
+                placeholder="Ex: OPEX, LIDERANÇA, WORKSHOP"
                 value={linkPalavra}
                 onChange={(e) => { setLinkPalavra(e.target.value.toUpperCase()); setCopiado(false); }}
               />
               <p className="text-xs text-muted-foreground">
-                Quando o lead clicar no botão do site e enviar esta mensagem, este fluxo será iniciado automaticamente.
+                O bot detecta essa palavra na mensagem e inicia este fluxo. Use algo único para cada fluxo.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Texto pré-preenchido no WhatsApp</Label>
+              <Input
+                placeholder={`Ex: Olá, gostaria de saber mais sobre o Método "${linkPalavra || "OPEX"}"`}
+                value={linkTexto}
+                onChange={(e) => { setLinkTexto(e.target.value); setCopiado(false); }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Mensagem que aparece escrita no WhatsApp quando a pessoa clica no botão do site. Deve conter a palavra-chave acima.
               </p>
             </div>
 
             {linkPalavra.trim() && (() => {
               const canal = canais.find(c => (linkFluxo?.canal_ids ?? []).includes(c.id));
-              const numero = canal?.identificador?.replace(/\D/g, "") || "55449XXXXXXX";
-              const link = `https://wa.me/${numero}?text=${encodeURIComponent(linkPalavra.trim())}`;
+              const numero = canal?.identificador?.replace(/\D/g, "") || "554498390633";
+              const textoLink = linkTexto.trim() || linkPalavra.trim();
+              const link = `https://wa.me/${numero}?text=${encodeURIComponent(textoLink)}`;
               return (
                 <div className="space-y-1.5">
                   <Label>Link gerado</Label>
@@ -934,13 +952,8 @@ export function AgentesBotSection() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Cole este link no botão do seu site. Quando clicado, abre o WhatsApp com a mensagem "{linkPalavra.trim()}" pré-preenchida.
+                    Cole este link no botão do site. A pessoa clica → WhatsApp abre com o texto já escrito → aperta enviar → fluxo inicia.
                   </p>
-                  {!canal?.identificador && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      ⚠ Substitua <code>55449XXXXXXX</code> pelo número do WhatsApp do canal.
-                    </p>
-                  )}
                 </div>
               );
             })()}
@@ -948,7 +961,7 @@ export function AgentesBotSection() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkFluxo(null)}>Cancelar</Button>
             <Button
-              onClick={() => linkFluxo && salvarPalavraChave.mutate({ id: linkFluxo.id, palavra_chave: linkPalavra })}
+              onClick={() => linkFluxo && salvarPalavraChave.mutate({ id: linkFluxo.id, palavra_chave: linkPalavra, texto_inicio: linkTexto })}
               disabled={salvarPalavraChave.isPending}
             >
               {salvarPalavraChave.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
