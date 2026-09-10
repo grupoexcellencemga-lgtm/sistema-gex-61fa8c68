@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, GitBranch, Workflow, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, Workflow, BookOpen, BarChart2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
@@ -118,8 +119,6 @@ export function AgentesBotSection() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Type selector modal
-  const [typeSelectorOpen, setTypeSelectorOpen] = useState(false);
 
   // Fluxo editor: null = hidden, '' = new, uuid = editing
   const [editingFluxo, setEditingFluxo] = useState<string | null>(null);
@@ -220,10 +219,6 @@ export function AgentesBotSection() {
     onError: () => toast.error("Erro ao remover fluxo"),
   });
 
-  function openNew() {
-    setTypeSelectorOpen(true);
-  }
-
   function openEdit(a: AgenteBot) {
     setEditing(a);
     setForm({
@@ -293,8 +288,8 @@ export function AgentesBotSection() {
     }));
   }
 
-  const isLoading = loadingAgentes || loadingFluxos;
-  const hasItems = agentes.length > 0 || fluxos.length > 0;
+  const isLoadingAgentes = loadingAgentes;
+  const isLoadingFluxos = loadingFluxos;
 
   // Full-screen FluxoEditor overlay
   if (editingFluxo !== null) {
@@ -312,207 +307,234 @@ export function AgentesBotSection() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-primary" />
-                Agentes IA / BOT
-              </CardTitle>
-              <CardDescription>
-                Configure bots com IA (Agente IA) ou fluxos visuais condicionais (Bot com Fluxo) para atendimento automático no WhatsApp.
-              </CardDescription>
-            </div>
-            <Button onClick={openNew} size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              Novo Agente
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : !hasItems ? (
-            <div className="text-center py-10 text-muted-foreground space-y-2">
-              <Bot className="h-10 w-10 mx-auto opacity-20" />
-              <p className="text-sm">Nenhum agente ou fluxo configurado.</p>
-              <p className="text-xs">Crie um agente IA ou um bot com fluxo visual para automatizar o atendimento.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Agentes IA */}
-              {agentes.map((a) => (
-                <div key={a.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
-                  <div className={cn(
-                    "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                    a.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                  )}>
-                    <Bot className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{a.nome}</p>
-                      <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
-                        {a.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
-                        Agente IA
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px]">
-                        {MODELOS.find(m => m.value === a.modelo)?.label.split(" ")[1] ?? a.modelo}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.instrucao}</p>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {a.ativo_24h ? "24h" : `${a.horario_inicio}–${a.horario_fim}`}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Zap className="h-3 w-3" />
-                        Assume em {a.tempo_espera_minutos}min
-                      </span>
-                      {canais.filter(c => a.canais_ids.includes(c.id)).map(c => (
-                        <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      checked={a.ativo}
-                      onCheckedChange={(v) => toggleAtivo.mutate({ id: a.id, ativo: v })}
-                    />
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      title="Base de Conhecimento"
-                      onClick={() => setBaseConhecimentoAgente(a)}
-                    >
-                      <BookOpen className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteId(a.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+      <Tabs defaultValue="agentes-ia" className="space-y-4">
+        <TabsList className="h-10">
+          <TabsTrigger value="agentes-ia" className="gap-1.5">
+            <Bot className="h-4 w-4" />
+            Agentes IA
+          </TabsTrigger>
+          <TabsTrigger value="bots-fluxo" className="gap-1.5">
+            <Workflow className="h-4 w-4" />
+            Bots com Fluxo
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-1.5">
+            <BarChart2 className="h-4 w-4" />
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="leads" className="gap-1.5">
+            <Users className="h-4 w-4" />
+            Leads atendidos
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Aba: Agentes IA ── */}
+        <TabsContent value="agentes-ia" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5 text-primary" />
+                    Agentes IA
+                  </CardTitle>
+                  <CardDescription>
+                    Bots com IA (Claude) que respondem automaticamente usando linguagem natural.
+                  </CardDescription>
                 </div>
-              ))}
-
-              {/* Fluxos Bot */}
-              {fluxos.map((f) => (
-                <div key={f.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
-                  <div className={cn(
-                    "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                    f.ativo ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400" : "bg-muted text-muted-foreground"
-                  )}>
-                    <Workflow className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{f.nome}</p>
-                      <Badge variant={f.ativo ? "default" : "secondary"} className="text-[10px]">
-                        {f.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] border-violet-400 text-violet-600 dark:text-violet-400">
-                        Bot com Fluxo
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      {canais.filter(c => (f.canal_ids ?? []).includes(c.id)).map(c => (
-                        <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
-                      ))}
-                      {(f.canal_ids ?? []).length === 0 && (
-                        <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      checked={f.ativo}
-                      onCheckedChange={(v) => toggleFluxoAtivo.mutate({ id: f.id, ativo: v })}
-                    />
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingFluxo(f.id)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteFluxoId(f.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                <Button
+                  onClick={() => { setEditing(null); setForm(emptyAgente); setDialogOpen(true); }}
+                  size="sm"
+                  className="gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Novo Agente IA
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAgentes ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : agentes.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground space-y-2">
+                  <Bot className="h-10 w-10 mx-auto opacity-20" />
+                  <p className="text-sm">Nenhum agente IA configurado.</p>
+                  <p className="text-xs">Crie um agente para automatizar o atendimento com IA.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {agentes.map((a) => (
+                    <div key={a.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
+                      <div className={cn(
+                        "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                        a.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                      )}>
+                        <Bot className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{a.nome}</p>
+                          <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
+                            {a.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+                            Agente IA
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {MODELOS.find(m => m.value === a.modelo)?.label.split(" ")[1] ?? a.modelo}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.instrucao}</p>
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {a.ativo_24h ? "24h" : `${a.horario_inicio}–${a.horario_fim}`}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Zap className="h-3 w-3" />
+                            Assume em {a.tempo_espera_minutos}min
+                          </span>
+                          {canais.filter(c => a.canais_ids.includes(c.id)).map(c => (
+                            <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Switch
+                          checked={a.ativo}
+                          onCheckedChange={(v) => toggleAtivo.mutate({ id: a.id, ativo: v })}
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Base de Conhecimento"
+                          onClick={() => setBaseConhecimentoAgente(a)}
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(a.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <FluxoSessoesPanel />
-      <FluxoRelatorioCard />
-      <BotIARelatorioCard />
-      <BotLeadsRelatorioCard />
+        {/* ── Aba: Bots com Fluxo ── */}
+        <TabsContent value="bots-fluxo" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Workflow className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                    Bots com Fluxo
+                  </CardTitle>
+                  <CardDescription>
+                    Fluxos visuais condicionais com mensagens e nós arrastáveis para atendimento automático.
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setEditingFluxo("")}
+                  size="sm"
+                  className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  <Plus className="h-4 w-4" />
+                  Novo Fluxo
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingFluxos ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : fluxos.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground space-y-2">
+                  <Workflow className="h-10 w-10 mx-auto opacity-20" />
+                  <p className="text-sm">Nenhum bot com fluxo configurado.</p>
+                  <p className="text-xs">Crie um fluxo visual para automação condicional do atendimento.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {fluxos.map((f) => (
+                    <div key={f.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
+                      <div className={cn(
+                        "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                        f.ativo ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400" : "bg-muted text-muted-foreground"
+                      )}>
+                        <Workflow className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{f.nome}</p>
+                          <Badge variant={f.ativo ? "default" : "secondary"} className="text-[10px]">
+                            {f.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] border-violet-400 text-violet-600 dark:text-violet-400">
+                            Bot com Fluxo
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {canais.filter(c => (f.canal_ids ?? []).includes(c.id)).map(c => (
+                            <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
+                          ))}
+                          {(f.canal_ids ?? []).length === 0 && (
+                            <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Switch
+                          checked={f.ativo}
+                          onCheckedChange={(v) => toggleFluxoAtivo.mutate({ id: f.id, ativo: v })}
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingFluxo(f.id)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteFluxoId(f.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <FluxoSessoesPanel />
+        </TabsContent>
 
-      {/* Modal de seleção de tipo */}
-      <Dialog open={typeSelectorOpen} onOpenChange={setTypeSelectorOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Escolha o tipo de bot</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <button
-              onClick={() => {
-                setTypeSelectorOpen(false);
-                setEditing(null);
-                setForm(emptyAgente);
-                setDialogOpen(true);
-              }}
-              className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 hover:border-primary hover:bg-primary/5 transition-all text-center group"
-            >
-              <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Bot className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm">Agente IA</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Bot com IA (Claude) que responde automaticamente usando linguagem natural
-                </p>
-              </div>
-            </button>
+        {/* ── Aba: Analytics ── */}
+        <TabsContent value="analytics" className="space-y-6">
+          <BotIARelatorioCard />
+          <FluxoRelatorioCard />
+        </TabsContent>
 
-            <button
-              onClick={() => {
-                setTypeSelectorOpen(false);
-                setEditingFluxo("");
-              }}
-              className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-all text-center group"
-            >
-              <div className="h-12 w-12 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <GitBranch className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm">Bot com Fluxo</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Fluxo visual com condições, mensagens e nós arrastáveis (estilo n8n)
-                </p>
-              </div>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        {/* ── Aba: Leads atendidos ── */}
+        <TabsContent value="leads">
+          <BotLeadsRelatorioCard />
+        </TabsContent>
+      </Tabs>
 
       {/* Dialog criar/editar Agente IA */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
