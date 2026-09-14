@@ -70,6 +70,11 @@ export function LeadCard({ lead, comercialNome, onClick, onDelete, isOverlay }: 
           {lead.produto_interesse && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{lead.produto_interesse}</p>
           )}
+          {(lead as any).valor > 0 && (
+            <p className="text-xs font-semibold text-green-700 dark:text-green-400 mt-0.5">
+              {Number((lead as any).valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {lead.origem && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{lead.origem}</Badge>}
             {lead.cidade && (

@@ -43,6 +43,7 @@ const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Tarefas = lazy(() => import("./pages/Tarefas"));
 const Divulgacao = lazy(() => import("./pages/Divulgacao"));
 const Funil = lazy(() => import("./pages/Funil"));
+const CrmDashboard = lazy(() => import("./pages/CrmDashboard"));
 const ConsorcioPipeline = lazy(() => import("./pages/consorcios/Pipeline"));
 const ConsorcioLeads = lazy(() => import("./pages/consorcios/Leads"));
 const ConsorcioDashboard = lazy(() => import("./pages/consorcios/Dashboard"));
@@ -138,6 +139,7 @@ const AppRoutes = () => {
               <Route path="/tarefas" element={<PR path="/tarefas"><Tarefas /></PR>} />
               <Route path="/divulgacao" element={<PR path="/divulgacao"><Divulgacao /></PR>} />
               <Route path="/funil" element={<PR path="/funil"><Funil /></PR>} />
+              <Route path="/crm/dashboard" element={<PR path="/crm/dashboard"><CrmDashboard /></PR>} />
               <Route path="/consorcios/dashboard" element={<PR path="/consorcios/dashboard"><ConsorcioDashboard /></PR>} />
               <Route path="/consorcios/pipeline" element={<PR path="/consorcios/pipeline"><ConsorcioPipeline /></PR>} />
               <Route path="/consorcios/leads" element={<PR path="/consorcios/leads"><ConsorcioLeads /></PR>} />

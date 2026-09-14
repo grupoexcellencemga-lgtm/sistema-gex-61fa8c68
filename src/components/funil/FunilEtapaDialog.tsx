@@ -17,7 +17,7 @@ import { ETAPA_CORES, ETAPA_CORES_LIST, TIPO_ETAPA_LABELS, type FunilEtapa } fro
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSave: (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string }) => Promise<void>;
+  onSave: (data: { nome: string; cor: string; tipo: FunilEtapa["tipo"]; observacoes: string; meta_valor: number | null }) => Promise<void>;
   initialData?: FunilEtapa | null;
 }
 
@@ -26,6 +26,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
   const [cor, setCor] = useState("slate");
   const [tipo, setTipo] = useState<FunilEtapa["tipo"]>("em_andamento");
   const [observacoes, setObservacoes] = useState("");
+  const [metaValor, setMetaValor] = useState("");
   const [loading, setLoading] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
 
@@ -35,6 +36,7 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
       setCor(initialData?.cor ?? "slate");
       setTipo(initialData?.tipo ?? "em_andamento");
       setObservacoes(initialData?.observacoes ?? "");
+      setMetaValor(initialData?.meta_valor != null ? String(initialData.meta_valor) : "");
       setEditorKey((k) => k + 1); // força remount do editor a cada abertura
     }
   }, [open, initialData]);
@@ -42,8 +44,9 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
   const handleSubmit = async () => {
     if (!nome.trim()) return;
     setLoading(true);
+    const meta = metaValor.trim() ? Number(metaValor.replace(",", ".")) : null;
     try {
-      await onSave({ nome: nome.trim(), cor, tipo, observacoes });
+      await onSave({ nome: nome.trim(), cor, tipo, observacoes, meta_valor: Number.isFinite(meta!) ? meta : null });
       onClose();
     } finally {
       setLoading(false);
@@ -100,6 +103,21 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
             <p className="text-[11px] text-muted-foreground mt-1">
               Usado nas métricas e no dashboard (conversão, perdidos, pipeline em aberto) —
               não muda o que aparece na coluna, só como ela conta nos números.
+            </p>
+          </div>
+
+          <div>
+            <Label>Meta de valor (R$)</Label>
+            <Input
+              value={metaValor}
+              onChange={(e) => setMetaValor(e.target.value)}
+              placeholder="Ex: 50000 (opcional)"
+              className="mt-1"
+              type="number"
+              min={0}
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Quando definida, a coluna mostra uma barra de progresso em relação ao total de valor dos leads.
             </p>
           </div>
 

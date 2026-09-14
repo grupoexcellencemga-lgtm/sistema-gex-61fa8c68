@@ -80,9 +80,23 @@ export function FunilColumn({
           {(() => {
             const total = leads.reduce((acc, l) => acc + ((l as any).valor ?? 0), 0);
             if (total <= 0) return null;
+            const meta = etapa.meta_valor ?? 0;
+            const pct = meta > 0 ? Math.min(100, Math.round((total / meta) * 100)) : 0;
             return (
-              <span className="text-[10px] text-muted-foreground font-medium shrink-0">
-                {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+              <span className="flex items-center gap-1 shrink-0">
+                <span className={`text-[10px] font-medium ${meta > 0 && total >= meta ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
+                  {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                </span>
+                {meta > 0 && (
+                  <span title={`Meta: ${meta.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })} (${pct}%)`}>
+                    <span className="inline-block w-12 h-1.5 rounded-full bg-muted overflow-hidden align-middle">
+                      <span
+                        className={`block h-full rounded-full ${pct >= 100 ? "bg-green-500" : pct >= 70 ? "bg-amber-400" : "bg-blue-400"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </span>
+                  </span>
+                )}
               </span>
             );
           })()}

@@ -28,6 +28,7 @@ export const ALL_PAGES = [
   { key: "tarefas", label: "Tarefas", path: "/tarefas" },
   { key: "divulgacao", label: "Divulgação", path: "/divulgacao" },
   { key: "funil", label: "Funil de Vendas", path: "/funil" },
+  { key: "crm-dashboard", label: "Dashboard CRM", path: "/crm/dashboard" },
   { key: "consorcios-dashboard", label: "Dashboard — Consórcio", path: "/consorcios/dashboard" },
   { key: "consorcios-pipeline", label: "Pipeline — Consórcio", path: "/consorcios/pipeline" },
   { key: "consorcios-leads", label: "Leads — Consórcio", path: "/consorcios/leads" },

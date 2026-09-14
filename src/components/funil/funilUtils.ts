@@ -27,6 +27,7 @@ export interface FunilEtapa {
   tipo: "em_andamento" | "ganho" | "perdido";
   observacoes?: string | null;
   quadro_id?: string;
+  meta_valor?: number | null;
 }
 
 export const origens = [

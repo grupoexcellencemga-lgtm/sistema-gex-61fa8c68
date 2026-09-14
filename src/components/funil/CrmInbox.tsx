@@ -15,6 +15,7 @@ import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
   ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
   FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
+  Tag, Zap, Reply, X, ArrowRightLeft,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -31,11 +32,17 @@ type Mensagem = {
   media_url: string | null;
   media_mime: string | null;
   media_nome: string | null;
+  quoted_message_id: string | null;
+  quoted_conteudo: string | null;
+  quoted_tipo: string | null;
+  is_nota_interna: boolean;
   direcao: "entrada" | "saida";
   canal: string;
   lido: boolean | null;
   created_at: string;
 };
+type TagCrm = { id: string; nome: string; cor: string };
+type RespostaRapida = { id: string; titulo: string; conteudo: string; atalho: string | null };
 
 type Protocolo = {
   id: string;
@@ -97,6 +104,26 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [sendingMedia, setSendingMedia] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<{ file: File; url: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Resposta citada
+  const [quotedMsg, setQuotedMsg] = useState<Mensagem | null>(null);
+  // Notas internas
+  const [isNota, setIsNota] = useState(false);
+  // Busca na conversa
+  const [msgSearch, setMsgSearch] = useState("");
+  const [showMsgSearch, setShowMsgSearch] = useState(false);
+  // Respostas rápidas
+  const [showRespostas, setShowRespostas] = useState(false);
+  // Tags
+  const [tagManageLeadId, setTagManageLeadId] = useState<string | null>(null);
+  const [newTagNome, setNewTagNome] = useState("");
+  const [newTagCor, setNewTagCor] = useState("#6366f1");
+  const [savingTag, setSavingTag] = useState(false);
+  // Transferência
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferAgentId, setTransferAgentId] = useState("");
+  const [transferindo, setTransferindo] = useState(false);
+  // Distribuição automática
+  const [distributing, setDistributing] = useState(false);
   const [busca, setBusca] = useState("");
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
@@ -274,6 +301,36 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       })) as FunilCardInfo[];
     },
     enabled: !!selectedLeadId && aba !== "finalizadas",
+  });
+
+  // Tags da empresa
+  const { data: tagsEmpresa = [], refetch: refetchTags } = useQuery<TagCrm[]>({
+    queryKey: ["tags-crm", empresaId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("tags_crm").select("id, nome, cor").eq("empresa_id", empresaId!).order("nome");
+      return (data ?? []) as TagCrm[];
+    },
+    enabled: !!empresaId,
+  });
+
+  // Tags do lead selecionado
+  const { data: leadTagIds = [], refetch: refetchLeadTags } = useQuery<string[]>({
+    queryKey: ["lead-tags", selectedLeadId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("lead_tags").select("tag_id").eq("lead_id", selectedLeadId!);
+      return (data ?? []).map((r: any) => r.tag_id as string);
+    },
+    enabled: !!selectedLeadId,
+  });
+
+  // Respostas rápidas
+  const { data: respostasRapidas = [] } = useQuery<RespostaRapida[]>({
+    queryKey: ["respostas-rapidas", empresaId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("respostas_rapidas").select("id, titulo, conteudo, atalho").eq("empresa_id", empresaId!).order("ordem");
+      return (data ?? []) as RespostaRapida[];
+    },
+    enabled: !!empresaId,
   });
 
   // Leads: fila e minhas abas
@@ -534,28 +591,54 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   async function handleSend() {
     if (!replyText.trim() || !selectedLeadId) return;
     const texto = replyText.trim();
+    const nota = isNota;
+    const quoted = quotedMsg;
     setSending(true);
     setReplyText("");
+    setQuotedMsg(null);
 
     const tempId = `temp-${Date.now()}`;
     queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
       ...old,
-      { id: tempId, conteudo: texto, direcao: "saida" as const, canal: "whatsapp", lido: null, created_at: new Date().toISOString() },
+      {
+        id: tempId, conteudo: texto, tipo: "texto" as const,
+        media_url: null, media_mime: null, media_nome: null,
+        quoted_message_id: quoted?.id ?? null,
+        quoted_conteudo: quoted?.conteudo ?? null,
+        quoted_tipo: quoted?.tipo ?? null,
+        is_nota_interna: nota,
+        direcao: "saida" as const, canal: "whatsapp", lido: null,
+        created_at: new Date().toISOString(),
+      },
     ]);
 
     try {
-      const { error } = await supabase.functions.invoke("enviar-mensagem", {
-        body: { lead_id: selectedLeadId, mensagem: texto },
-      });
-      if (error) throw error;
+      if (nota) {
+        // Nota interna: salva só no DB, não envia pelo WhatsApp
+        const { data: protocolo } = await (supabase as any).from("protocolos_atendimento").select("id").eq("lead_id", selectedLeadId).eq("status", "ativo").maybeSingle();
+        await (supabase as any).from("mensagens_crm").insert({
+          lead_id: selectedLeadId, empresa_id: empresaId,
+          conteudo: texto, tipo: "texto", is_nota_interna: true,
+          direcao: "saida", canal: "whatsapp",
+          protocolo_id: protocolo?.id ?? null,
+        });
+      } else {
+        const { error } = await supabase.functions.invoke("enviar-mensagem", {
+          body: {
+            lead_id: selectedLeadId, mensagem: texto,
+            quoted_message_id: quoted?.id ?? null,
+            quoted_conteudo: quoted?.conteudo ?? null,
+            quoted_tipo: quoted?.tipo ?? null,
+          },
+        });
+        if (error) throw error;
+        await (supabase as any).from("leads").update({
+          tem_mensagem_nova: false, mensagens_nao_lidas: 0,
+          ultima_mensagem_em: new Date().toISOString(), bot_ativo: false,
+        }).eq("id", selectedLeadId);
+        queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+      }
       queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
-      await (supabase as any).from("leads").update({
-        tem_mensagem_nova: false,
-        mensagens_nao_lidas: 0,
-        ultima_mensagem_em: new Date().toISOString(),
-        bot_ativo: false,
-      }).eq("id", selectedLeadId);
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
     } catch (err: any) {
       queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) =>
         old.filter((m) => m.id !== tempId)
@@ -609,6 +692,85 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       setMediaPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  async function handleTransfer() {
+    if (!transferAgentId || !selectedLeadId) return;
+    setTransferindo(true);
+    try {
+      await (supabase as any).from("leads").update({ atendente_id: transferAgentId, status_atendimento: "em_atendimento" }).eq("id", selectedLeadId);
+      await (supabase as any).from("mensagens_crm").insert({
+        lead_id: selectedLeadId, empresa_id: empresaId,
+        conteudo: `🔄 Transferido para ${usuariosMap[transferAgentId] ?? "agente"}`,
+        tipo: "texto", is_nota_interna: true, direcao: "saida", canal: "whatsapp",
+      });
+      toast.success("Atendimento transferido!");
+      setTransferOpen(false);
+      setTransferAgentId("");
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
+    } catch (err: any) {
+      toast.error("Erro ao transferir: " + err.message);
+    } finally {
+      setTransferindo(false);
+    }
+  }
+
+  async function handleDistribuir() {
+    const filaLeads = leads.filter((l) => (l as any).status_atendimento === "fila");
+    if (!filaLeads.length) { toast.info("Nenhum lead na fila para distribuir."); return; }
+    const agentes = Object.keys(usuariosMap);
+    if (!agentes.length) { toast.error("Nenhum agente disponível."); return; }
+    setDistributing(true);
+    try {
+      for (let i = 0; i < filaLeads.length; i++) {
+        const agente = agentes[i % agentes.length];
+        await (supabase as any).from("leads").update({ atendente_id: agente, status_atendimento: "em_atendimento" }).eq("id", filaLeads[i].id);
+      }
+      toast.success(`${filaLeads.length} lead${filaLeads.length !== 1 ? "s" : ""} distribuído${filaLeads.length !== 1 ? "s" : ""}!`);
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao distribuir: " + err.message);
+    } finally {
+      setDistributing(false);
+    }
+  }
+
+  async function toggleLeadTag(tagId: string) {
+    if (!selectedLeadId) return;
+    const has = leadTagIds.includes(tagId);
+    if (has) {
+      await (supabase as any).from("lead_tags").delete().eq("lead_id", selectedLeadId).eq("tag_id", tagId);
+    } else {
+      await (supabase as any).from("lead_tags").insert({ lead_id: selectedLeadId, tag_id: tagId });
+    }
+    refetchLeadTags();
+  }
+
+  async function handleCreateTag() {
+    if (!newTagNome.trim() || !empresaId) return;
+    setSavingTag(true);
+    try {
+      await (supabase as any).from("tags_crm").insert({ empresa_id: empresaId, nome: newTagNome.trim(), cor: newTagCor });
+      setNewTagNome("");
+      setNewTagCor("#6366f1");
+      refetchTags();
+    } catch (err: any) {
+      toast.error("Erro ao criar tag: " + err.message);
+    } finally {
+      setSavingTag(false);
+    }
+  }
+
+  function slaLabel(lead: any): { text: string; color: string } | null {
+    if (lead.ultima_mensagem_direcao !== "entrada" || !lead.ultima_mensagem_em) return null;
+    const minutos = Math.floor((Date.now() - new Date(lead.ultima_mensagem_em).getTime()) / 60000);
+    const slaLimite = lead.sla_minutos ?? 60;
+    if (minutos < 30) return { text: `${minutos}m`, color: "text-green-600 dark:text-green-400" };
+    if (minutos < slaLimite) return { text: `${minutos}m`, color: "text-amber-600 dark:text-amber-400" };
+    const h = Math.floor(minutos / 60);
+    const m = minutos % 60;
+    return { text: h > 0 ? `${h}h${m > 0 ? m + "m" : ""}` : `${m}m`, color: "text-red-600 dark:text-red-400 font-bold" };
   }
 
   function formatTime(iso: string) {
@@ -688,6 +850,23 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " +
       d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
+
+  function highlightText(text: string, query: string) {
+    if (!query.trim()) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  }
+
+  const mensagensFiltradas = msgSearch.trim()
+    ? mensagens.filter((m) => m.conteudo.toLowerCase().includes(msgSearch.toLowerCase()))
+    : mensagens;
 
   const abaConfig: { key: AbaAtendimento; label: string; icon: React.ReactNode }[] = [
     { key: "fila", label: "Fila", icon: <Clock className="h-3.5 w-3.5" /> },
@@ -831,6 +1010,20 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
             )}
+            {isAdmin && aba === "fila" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleDistribuir}
+                    disabled={distributing}
+                    className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    {distributing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">Distribuir para agentes</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -927,11 +1120,20 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                             {(lead as any).ultima_mensagem_texto}
                           </p>
                         )}
-                        {/* Linha 4: atendente (só em andamento) */}
-                        {atendente && usuariosMap[atendente] && (
-                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                            <Users className="h-2.5 w-2.5 shrink-0" />{usuariosMap[atendente]}
-                          </p>
+                        {/* Linha 4: atendente + SLA */}
+                        {(atendente && usuariosMap[atendente] || slaLabel(lead)) && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {atendente && usuariosMap[atendente] && (
+                              <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                                <Users className="h-2.5 w-2.5 shrink-0" />{usuariosMap[atendente]}
+                              </p>
+                            )}
+                            {slaLabel(lead) && (
+                              <span className={`text-[10px] shrink-0 flex items-center gap-0.5 ${slaLabel(lead)!.color}`}>
+                                <Clock className="h-2.5 w-2.5" />{slaLabel(lead)!.text}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </button>
@@ -1117,8 +1319,44 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
                       <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />Mover para quadro
                     </DropdownMenuItem>
+                    {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setTransferOpen(true)}>
+                          <ArrowRightLeft className="h-4 w-4 mr-2 text-muted-foreground" />Transferir atendimento
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {/* Busca na conversa */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={showMsgSearch ? "default" : "ghost"}
+                      className="h-7 w-7 p-0"
+                      onClick={() => { setShowMsgSearch(!showMsgSearch); if (showMsgSearch) setMsgSearch(""); }}
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Buscar na conversa</TooltipContent>
+                </Tooltip>
+                {/* Tags */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={tagManageLeadId === selectedLeadId ? "default" : "ghost"}
+                      className="h-7 w-7 p-0"
+                      onClick={() => setTagManageLeadId(tagManageLeadId === selectedLeadId ? null : (selectedLeadId ?? null))}
+                    >
+                      <Tag className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Tags do contato</TooltipContent>
+                </Tooltip>
                 <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
               </div>
             )}
@@ -1127,6 +1365,81 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
             )}
           </div>
+
+          {/* Barra de busca na conversa */}
+          {aba !== "finalizadas" && showMsgSearch && (
+            <div className="px-3 py-2 border-b flex items-center gap-2 bg-card">
+              <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Input
+                value={msgSearch}
+                onChange={(e) => setMsgSearch(e.target.value)}
+                placeholder="Buscar na conversa..."
+                className="h-7 text-xs flex-1"
+                autoFocus
+              />
+              <button
+                onClick={() => { setShowMsgSearch(false); setMsgSearch(""); }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Tags do contato */}
+          {aba !== "finalizadas" && tagManageLeadId === selectedLeadId && selectedLeadId && (
+            <div className="border-b bg-card px-3 py-2">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Tags
+                </span>
+              </div>
+              {/* Tags da empresa (toggle) */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {tagsEmpresa.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">Nenhuma tag criada.</p>
+                )}
+                {tagsEmpresa.map((tag) => {
+                  const ativo = leadTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => toggleLeadTag(tag.id)}
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity"
+                      style={{
+                        backgroundColor: ativo ? tag.cor + "33" : "transparent",
+                        color: tag.cor,
+                        border: `1px solid ${tag.cor}${ativo ? "99" : "44"}`,
+                        opacity: ativo ? 1 : 0.5,
+                      }}
+                    >
+                      {tag.nome}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Criar nova tag */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="color"
+                  value={newTagCor}
+                  onChange={(e) => setNewTagCor(e.target.value)}
+                  className="h-6 w-6 rounded cursor-pointer border-0 p-0"
+                  title="Cor da tag"
+                />
+                <Input
+                  value={newTagNome}
+                  onChange={(e) => setNewTagNome(e.target.value)}
+                  placeholder="Nova tag..."
+                  className="h-6 text-xs flex-1"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateTag(); }}
+                />
+                <Button size="sm" className="h-6 text-xs px-2" onClick={handleCreateTag} disabled={savingTag || !newTagNome.trim()}>
+                  {savingTag ? <Loader2 className="h-3 w-3 animate-spin" /> : "Criar"}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Painel de Funis (só para leads ativos, não finalizados) */}
           {aba !== "finalizadas" && selectedLead && (
@@ -1220,14 +1533,45 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             ) : mensagens.length === 0 ? (
               <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem neste protocolo.</p>
             ) : (
-              mensagens.map((msg) => (
-                <div key={msg.id} className={cn("flex", msg.direcao === "saida" ? "justify-end" : "justify-start")}>
+              mensagensFiltradas.map((msg) => (
+                <div key={msg.id} className={cn("flex group", msg.direcao === "saida" ? "justify-end" : "justify-start")}>
+                  {/* Botão de citar — lado esquerdo para mensagens enviadas */}
+                  {msg.direcao === "saida" && aba !== "finalizadas" && canReply && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity mr-1 self-center text-muted-foreground hover:text-foreground"
+                      onClick={() => setQuotedMsg(msg)}
+                      title="Citar mensagem"
+                    >
+                      <Reply className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   <div className={cn(
                     "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                    msg.direcao === "saida"
+                    msg.is_nota_interna
+                      ? "bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 rounded-br-sm"
+                      : msg.direcao === "saida"
                       ? "bg-primary text-primary-foreground rounded-br-sm"
                       : "bg-card border rounded-bl-sm"
                   )}>
+                    {/* Nota interna badge */}
+                    {msg.is_nota_interna && (
+                      <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-0.5">
+                        <Tag className="h-2.5 w-2.5" /> Nota interna
+                      </p>
+                    )}
+                    {/* Mensagem citada */}
+                    {msg.quoted_conteudo && (
+                      <div className={cn(
+                        "border-l-2 pl-2 mb-1.5 rounded-r text-xs opacity-80 py-0.5",
+                        msg.is_nota_interna
+                          ? "border-amber-400"
+                          : msg.direcao === "saida"
+                          ? "border-primary-foreground/40 bg-primary-foreground/10"
+                          : "border-border bg-muted/40"
+                      )}>
+                        <p className="truncate">{msg.quoted_conteudo}</p>
+                      </div>
+                    )}
                     {/* Mídia */}
                     {msg.media_url && (msg.tipo === "imagem" || msg.tipo === "sticker") && (
                       <img
@@ -1251,7 +1595,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         rel="noopener noreferrer"
                         className={cn(
                           "flex items-center gap-2 rounded-lg px-2 py-1.5 mb-1 text-xs font-medium underline underline-offset-2",
-                          msg.direcao === "saida" ? "text-primary-foreground/90" : "text-foreground"
+                          msg.direcao === "saida" && !msg.is_nota_interna ? "text-primary-foreground/90" : "text-foreground"
                         )}
                       >
                         📄 {msg.media_nome ?? "Documento"}
@@ -1259,19 +1603,36 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     )}
                     {/* Legenda ou texto */}
                     {msg.conteudo && !["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
-                      <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                      <p className="whitespace-pre-wrap break-words">{highlightText(msg.conteudo, msgSearch)}</p>
                     )}
                     {/* Fallback: sem mídia e sem texto útil */}
                     {!msg.media_url && ["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
                       <p className="whitespace-pre-wrap break-words italic opacity-70">{msg.conteudo}</p>
                     )}
-                    {!msg.media_url && msg.tipo === "texto" && (
+                    {!msg.media_url && msg.tipo === "texto" && !msg.conteudo && (
                       <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
                     )}
-                    <p className={cn("text-[10px] mt-1", msg.direcao === "saida" ? "text-primary-foreground/70 text-right" : "text-muted-foreground")}>
+                    <p className={cn(
+                      "text-[10px] mt-1",
+                      msg.is_nota_interna
+                        ? "text-amber-600/70 dark:text-amber-400/70 text-right"
+                        : msg.direcao === "saida"
+                        ? "text-primary-foreground/70 text-right"
+                        : "text-muted-foreground"
+                    )}>
                       {formatTime(msg.created_at)}
                     </p>
                   </div>
+                  {/* Botão de citar — lado direito para mensagens recebidas */}
+                  {msg.direcao === "entrada" && aba !== "finalizadas" && canReply && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 self-center text-muted-foreground hover:text-foreground"
+                      onClick={() => setQuotedMsg(msg)}
+                      title="Citar mensagem"
+                    >
+                      <Reply className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))
             )}
@@ -1282,6 +1643,64 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           {canal === "whatsapp" && aba !== "finalizadas" ? (
             canReply ? (
               <div className="border-t bg-card">
+                {/* Preview de mensagem citada */}
+                {quotedMsg && (
+                  <div className="flex items-start gap-2 px-3 pt-2 pb-0">
+                    <div className="flex-1 border-l-2 border-primary pl-2 py-0.5">
+                      <p className="text-xs text-muted-foreground truncate">
+                        Respondendo: {quotedMsg.conteudo}
+                      </p>
+                    </div>
+                    <button onClick={() => setQuotedMsg(null)} className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                {/* Toolbar: nota interna + respostas rápidas */}
+                <div className="px-3 pt-2 flex items-center gap-2">
+                  <div className="flex rounded-md overflow-hidden border text-xs">
+                    <button
+                      onClick={() => setIsNota(false)}
+                      className={cn("px-2.5 py-0.5 transition-colors", !isNota ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    >
+                      Mensagem
+                    </button>
+                    <button
+                      onClick={() => setIsNota(true)}
+                      className={cn("px-2.5 py-0.5 transition-colors", isNota ? "bg-amber-500 text-white" : "text-muted-foreground hover:bg-muted")}
+                    >
+                      Nota interna
+                    </button>
+                  </div>
+                  {/* Respostas rápidas */}
+                  <div className="relative">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={cn("h-6 gap-1 text-xs px-2", showRespostas && "bg-muted")}
+                      onClick={() => setShowRespostas(!showRespostas)}
+                      disabled={respostasRapidas.length === 0}
+                      title={respostasRapidas.length === 0 ? "Nenhuma resposta rápida cadastrada" : "Respostas rápidas"}
+                    >
+                      <Zap className="h-3 w-3" />
+                      <span className="hidden sm:inline">Rápidas</span>
+                    </Button>
+                    {showRespostas && respostasRapidas.length > 0 && (
+                      <div className="absolute bottom-full left-0 mb-1 bg-card border rounded-md shadow-lg z-20 min-w-[220px] max-h-52 overflow-y-auto">
+                        {respostasRapidas.map((r) => (
+                          <button
+                            key={r.id}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b last:border-0"
+                            onClick={() => { setReplyText(r.conteudo); setShowRespostas(false); }}
+                          >
+                            <p className="font-medium">{r.titulo}</p>
+                            <p className="text-muted-foreground truncate mt-0.5">{r.conteudo}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 {/* Preview de arquivo selecionado */}
                 {mediaPreview && (
                   <div className="flex items-center gap-2 px-3 pt-2 pb-1">
@@ -1328,8 +1747,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   <Input
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Digite uma mensagem..."
-                    className="flex-1"
+                    placeholder={isNota ? "Escreva uma nota interna..." : "Digite uma mensagem..."}
+                    className={cn("flex-1", isNota && "border-amber-400 focus-visible:ring-amber-400 bg-amber-50 dark:bg-amber-950/30")}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                     disabled={sending || sendingMedia}
                   />
@@ -1409,6 +1828,36 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancelar</Button>
             <Button onClick={handleMover} disabled={moving || !moveQuadroId || !moveEtapaId}>
               {moving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Mover lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — Transferir atendimento */}
+      <Dialog open={transferOpen} onOpenChange={(v) => { setTransferOpen(v); if (!v) setTransferAgentId(""); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4 text-primary" />Transferir atendimento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Selecione o agente para transferir a conversa de <strong>{selectedLead?.nome}</strong>.
+            </p>
+            <Select value={transferAgentId} onValueChange={setTransferAgentId}>
+              <SelectTrigger><SelectValue placeholder="Selecione o agente..." /></SelectTrigger>
+              <SelectContent>
+                {usuarios.filter((u) => u.user_id !== userId).map((u) => (
+                  <SelectItem key={u.user_id} value={u.user_id}>{u.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferOpen(false)}>Cancelar</Button>
+            <Button onClick={handleTransfer} disabled={transferindo || !transferAgentId}>
+              {transferindo && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Transferir
             </Button>
           </DialogFooter>
         </DialogContent>
