@@ -13,9 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
-  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot,
+  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
@@ -69,6 +71,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [moveEtapaId, setMoveEtapaId] = useState("");
   const [moving, setMoving] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
+  const [busca, setBusca] = useState("");
+  const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
   const [togglingBot, setTogglingBot] = useState(false);
   const [listWidth, setListWidth] = useState(() => {
@@ -107,6 +111,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     setSelectedProtocolo(null);
     setFiltroCanal("todos");
     setReplyText("");
+    setBusca("");
   }
 
   // Usuários da empresa (dropdown de atribuição)
@@ -238,9 +243,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     refetchInterval: 30000,
   });
 
-  const leadsFiltered = filtroCanal === "todos"
-    ? leads
-    : leads.filter((l) => (l as any).canal_id === filtroCanal);
+  const buscaTrimmed = busca.toLowerCase().trim();
+  const leadsFiltered = (filtroCanal === "todos" ? leads : leads.filter((l) => (l as any).canal_id === filtroCanal))
+    .filter((l) => !buscaTrimmed || l.nome?.toLowerCase().includes(buscaTrimmed) || ((l as any).contato_id ?? "").includes(buscaTrimmed));
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) ?? null;
   const selectedStatus: string = (selectedLead as any)?.status_atendimento ?? "fila";
@@ -482,6 +487,28 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  function formatPhone(raw: string | null): string {
+    if (!raw) return "";
+    const digits = raw.replace(/\D/g, "");
+    const local = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+    if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+    return raw;
+  }
+
+  function formatRelative(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMins = Math.floor((now.getTime() - d.getTime()) / 60000);
+    if (diffMins < 1) return "agora";
+    if (diffMins < 60) return `${diffMins}min`;
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return "ontem";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  }
+
   function formatDate(iso: string | null) {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -569,29 +596,69 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
         )}
 
-        <div className="p-3 border-b flex items-center justify-between">
+        {/* Campo de busca */}
+        {aba !== "finalizadas" && (
+          <div className="px-3 py-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome ou telefone..."
+                className="pl-8 h-8 text-xs"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="px-3 py-2 border-b flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {aba === "finalizadas"
               ? `${protocolos.length} protocolo${protocolos.length !== 1 ? "s" : ""}`
               : `${leadsFiltered.length} conversa${leadsFiltered.length !== 1 ? "s" : ""}`}
           </p>
-          {aba !== "finalizadas" && (
-            <button
-              title="Atualizar fotos de perfil"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              onClick={async () => {
-                const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
-                queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
-                if (error) toast.error("Erro ao buscar fotos: " + error.message);
-                else {
-                  const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
-                  toast.success(ok > 0 ? `${ok} foto${ok !== 1 ? "s" : ""} atualizada${ok !== 1 ? "s" : ""}` : "Nenhuma foto nova encontrada");
-                }
-              }}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {/* Botão de notificações push */}
+            {pushStatus !== "unsupported" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={pushStatus === "active" ? deactivatePush : activatePush}
+                    disabled={pushLoading || pushStatus === "denied"}
+                    className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    {pushLoading
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : pushStatus === "active"
+                        ? <Bell className="h-3.5 w-3.5 text-green-500" />
+                        : <BellOff className="h-3.5 w-3.5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {pushStatus === "active" ? "Notificações ativas — clique para desativar" :
+                   pushStatus === "denied" ? "Notificações bloqueadas no navegador" :
+                   "Ativar notificações de novas mensagens"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {aba !== "finalizadas" && (
+              <button
+                title="Atualizar fotos de perfil"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                onClick={async () => {
+                  const { data, error } = await supabase.functions.invoke("buscar-fotos-perfil", {});
+                  queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+                  if (error) toast.error("Erro ao buscar fotos: " + error.message);
+                  else {
+                    const ok = data?.resultados?.filter((r: any) => r.ok).length ?? 0;
+                    toast.success(ok > 0 ? `${ok} foto${ok !== 1 ? "s" : ""} atualizada${ok !== 1 ? "s" : ""}` : "Nenhuma foto nova encontrada");
+                  }
+                }}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <ScrollArea className="flex-1">
@@ -642,8 +709,19 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className={cn("text-sm truncate", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>{lead.nome}</p>
+                        {/* Linha 1: nome + horário */}
+                        <div className="flex items-start justify-between gap-1 min-w-0">
+                          <p className={cn("text-sm truncate leading-tight", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>
+                            {lead.nome}
+                          </p>
+                          {(lead as any).ultima_mensagem_em && (
+                            <span className="text-[10px] text-muted-foreground shrink-0 leading-tight mt-px">
+                              {formatRelative((lead as any).ultima_mensagem_em)}
+                            </span>
+                          )}
+                        </div>
+                        {/* Linha 2: canal + telefone */}
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                           {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
                             <span
                               className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
@@ -656,15 +734,30 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                               {canaisMap[(lead as any).canal_id].nome}
                             </span>
                           )}
+                          {(lead as any).contato_id && (
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-0.5">
+                              <Phone className="h-2.5 w-2.5 shrink-0" />{formatPhone((lead as any).contato_id)}
+                            </p>
+                          )}
                         </div>
-                        {(lead as any).contato_id && (
-                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                            <Phone className="h-2.5 w-2.5" />{(lead as any).contato_id}
+                        {/* Linha 3: prévia da última mensagem */}
+                        {(lead as any).ultima_mensagem_texto && (
+                          <p className={cn(
+                            "text-xs truncate mt-0.5 leading-tight",
+                            (lead as any).ultima_mensagem_direcao === "entrada"
+                              ? "text-amber-600 dark:text-amber-400 font-medium"
+                              : "text-muted-foreground"
+                          )}>
+                            {(lead as any).ultima_mensagem_direcao === "saida" && (
+                              <span className="mr-0.5 opacity-60">Você: </span>
+                            )}
+                            {(lead as any).ultima_mensagem_texto}
                           </p>
                         )}
+                        {/* Linha 4: atendente (só em andamento) */}
                         {atendente && usuariosMap[atendente] && (
                           <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                            <Users className="h-2.5 w-2.5" />{usuariosMap[atendente]}
+                            <Users className="h-2.5 w-2.5 shrink-0" />{usuariosMap[atendente]}
                           </p>
                         )}
                       </div>
@@ -701,23 +794,27 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         : <User className="h-5 w-5 text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{proto.leads?.nome ?? "—"}</p>
+                      <div className="flex items-start justify-between gap-1 min-w-0">
+                        <p className="text-sm font-medium truncate leading-tight">{proto.leads?.nome ?? "—"}</p>
+                        <span className="text-[10px] text-muted-foreground shrink-0 leading-tight mt-px">
+                          {formatRelative(proto.finalizado_em)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 flex items-center gap-0.5">
                           <Hash className="h-2.5 w-2.5" />{proto.numero_protocolo}
                         </Badge>
+                        {proto.leads?.contato_id && (
+                          <p className="text-xs text-muted-foreground truncate flex items-center gap-0.5">
+                            <Phone className="h-2.5 w-2.5 shrink-0" />{formatPhone(proto.leads.contato_id)}
+                          </p>
+                        )}
                       </div>
-                      {proto.leads?.contato_id && (
-                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                          <Phone className="h-2.5 w-2.5" />{proto.leads.contato_id}
+                      {proto.atendente_id && usuariosMap[proto.atendente_id] && (
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                          <Users className="h-2.5 w-2.5 shrink-0" />{usuariosMap[proto.atendente_id]}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                        {proto.atendente_id && usuariosMap[proto.atendente_id]
-                          ? <><Users className="h-2.5 w-2.5" />{usuariosMap[proto.atendente_id]}</>
-                          : null}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(proto.finalizado_em)}</p>
                     </div>
                   </button>
                 ))}

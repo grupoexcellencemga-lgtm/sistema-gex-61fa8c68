@@ -59,6 +59,12 @@ Deno.serve(async (req) => {
       protocolo_id: protocolo?.id ?? null,
     });
 
+    await supabase.from("leads").update({
+      ultima_mensagem_em: new Date().toISOString(),
+      ultima_mensagem_texto: mensagem.trim().substring(0, 200),
+      ultima_mensagem_direcao: "saida",
+    }).eq("id", lead.id);
+
     const evoUrl = `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`;
     const evoRes = await fetch(evoUrl, {
       method: "POST",

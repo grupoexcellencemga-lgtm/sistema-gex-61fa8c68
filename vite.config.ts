@@ -30,45 +30,16 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       // "prompt": o service worker novo fica em espera e avisamos o usuário
       // (banner "Nova versão disponível") em vez de trocar por baixo dos panos.
-      // NÃO use skipWaiting aqui: ele pula a fase de espera e faz o aviso nunca
-      // disparar, deixando o usuário preso na versão antiga a cada deploy.
       registerType: "prompt",
-      includeAssets: ["apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
-      workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
+      // injectManifest: usa SW customizado (src/sw.ts) com suporte a push notifications
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/~oauth/, /^\/auth/, /^\/rest/, /^\/api/],
-        // Never cache Supabase API calls
-        navigateFallbackAllowlist: [/^\/(?!.*supabase)/],
-        runtimeCaching: [
-          {
-            // Never cache Supabase API requests
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: "NetworkOnly",
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-cache",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "gstatic-fonts-cache",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
+      includeAssets: ["apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
         name: "Sistema GEx – Grupo Excellence",
         short_name: "GEx",

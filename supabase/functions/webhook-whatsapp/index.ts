@@ -74,6 +74,8 @@ Deno.serve(async (req) => {
       const texto: string =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
+        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        msg.message?.buttonsResponseMessage?.selectedButtonId ||
         msg.message?.imageMessage?.caption ||
         "[Mídia]";
 
@@ -136,7 +138,11 @@ Deno.serve(async (req) => {
           canal: "whatsapp",
           protocolo_id: protocoloAtivo?.id ?? null,
         });
-        await supabase.from("leads").update({ ultima_mensagem_em: new Date().toISOString() }).eq("id", leadId);
+        await supabase.from("leads").update({
+          ultima_mensagem_em: new Date().toISOString(),
+          ultima_mensagem_texto: texto.substring(0, 200),
+          ultima_mensagem_direcao: "saida",
+        }).eq("id", leadId);
 
       } else {
         // --- Mensagem de entrada ---
@@ -165,17 +171,8 @@ Deno.serve(async (req) => {
         if (protocoloExistente) {
           protocoloId = protocoloExistente.id;
         } else {
-          const { data: ultimoProtocolo } = await supabase
-            .from("protocolos_atendimento")
-            .select("numero_protocolo")
-            .eq("empresa_id", empresaId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          const proximoNum = ultimoProtocolo
-            ? parseInt(ultimoProtocolo.numero_protocolo.replace("P", ""), 10) + 1
-            : 1;
-          const numeroProtocolo = `P${String(proximoNum).padStart(6, "0")}`;
+          // Usa a sequência do banco (atômica) para evitar duplicatas
+          const { data: numeroProtocolo } = await supabase.rpc("gerar_numero_protocolo");
           const { data: novoProtocolo } = await supabase
             .from("protocolos_atendimento")
             .insert({ lead_id: leadId, empresa_id: empresaId, status: "ativo", numero_protocolo: numeroProtocolo })
@@ -220,11 +217,29 @@ Deno.serve(async (req) => {
             .like("nome", telefone);
         }
 
+        await supabase.from("leads").update({
+          ultima_mensagem_texto: texto.substring(0, 200),
+          ultima_mensagem_direcao: "entrada",
+        }).eq("id", leadId);
+
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
 
-        // 6. Dispara fluxo e bot
+        // 6. Notificação push para a equipe
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        fetch(`${supabaseUrl}/functions/v1/enviar-push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            empresa_id: empresaId,
+            title: `💬 ${nomeContato}`,
+            body: texto.length > 100 ? texto.substring(0, 97) + "..." : texto,
+            lead_id: leadId,
+            url: "/",
+          }),
+        }).catch(e => console.error("[webhook] erro enviar-push:", e));
+
+        // 7. Dispara fluxo e bot
         fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
