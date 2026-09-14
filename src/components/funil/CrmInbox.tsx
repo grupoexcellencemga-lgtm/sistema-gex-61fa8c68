@@ -766,11 +766,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     if (lead.ultima_mensagem_direcao !== "entrada" || !lead.ultima_mensagem_em) return null;
     const minutos = Math.floor((Date.now() - new Date(lead.ultima_mensagem_em).getTime()) / 60000);
     const slaLimite = lead.sla_minutos ?? 60;
-    if (minutos < 30) return { text: `${minutos}m`, color: "text-green-600 dark:text-green-400" };
-    if (minutos < slaLimite) return { text: `${minutos}m`, color: "text-amber-600 dark:text-amber-400" };
-    const h = Math.floor(minutos / 60);
-    const m = minutos % 60;
-    return { text: h > 0 ? `${h}h${m > 0 ? m + "m" : ""}` : `${m}m`, color: "text-red-600 dark:text-red-400 font-bold" };
+    function formatDuracao(min: number): string {
+      if (min < 60) return `${min}m`;
+      const dias = Math.floor(min / 1440);
+      const horas = Math.floor((min % 1440) / 60);
+      const mins = min % 60;
+      if (dias > 0) return horas > 0 ? `${dias}d ${horas}h` : `${dias}d`;
+      return mins > 0 ? `${horas}h ${mins}m` : `${horas}h`;
+    }
+    if (minutos < 30) return { text: formatDuracao(minutos), color: "text-green-600 dark:text-green-400" };
+    if (minutos < slaLimite) return { text: formatDuracao(minutos), color: "text-amber-600 dark:text-amber-400" };
+    return { text: formatDuracao(minutos), color: "text-red-600 dark:text-red-400 font-bold" };
   }
 
   function formatTime(iso: string) {
