@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
   ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
+  FolderKanban, Plus, ChevronRight,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -52,6 +53,19 @@ interface CrmInboxProps {
   onLeadClick?: (lead: LeadRow) => void;
 }
 
+// Subcomponente que carrega etapas de um quadro para o Select inline
+function EtapasCardOptions({ quadroId }: { quadroId: string }) {
+  const { data: etapas = [] } = useQuery<{ id: string; nome: string; ordem: number }[]>({
+    queryKey: ["etapas-card-opts", quadroId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("funil_etapas").select("id, nome, ordem").eq("quadro_id", quadroId).order("ordem");
+      return data || [];
+    },
+    staleTime: 60000,
+  });
+  return <>{etapas.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</>;
+}
+
 export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps) {
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
@@ -70,6 +84,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [moveQuadroId, setMoveQuadroId] = useState("");
   const [moveEtapaId, setMoveEtapaId] = useState("");
   const [moving, setMoving] = useState(false);
+  const [addFunilOpen, setAddFunilOpen] = useState(false);
+  const [addFunilQuadroId, setAddFunilQuadroId] = useState("");
+  const [addFunilEtapaId, setAddFunilEtapaId] = useState("");
+  const [addingFunil, setAddingFunil] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
   const [busca, setBusca] = useState("");
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
@@ -192,6 +210,62 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       return data as Etapa[];
     },
     enabled: !!moveQuadroId,
+  });
+
+  // Quadros normais (não-inbox) para adicionar ao funil
+  type QuadroNormal = { id: string; nome: string };
+  const { data: quadrosNormais = [] } = useQuery<QuadroNormal[]>({
+    queryKey: ["quadros-normais", empresaId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_quadros")
+        .select("id, nome")
+        .eq("empresa_id", empresaId!)
+        .is("deleted_at", null)
+        .or("fixo.is.null,fixo.eq.false")
+        .is("canal", null)
+        .order("nome");
+      if (error) throw error;
+      return data as QuadroNormal[];
+    },
+    enabled: !!empresaId,
+  });
+
+  // Etapas do quadro selecionado para "adicionar ao funil"
+  const { data: etapasAddFunil = [] } = useQuery<Etapa[]>({
+    queryKey: ["etapas-add-funil", addFunilQuadroId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_etapas")
+        .select("id, nome, ordem")
+        .eq("quadro_id", addFunilQuadroId)
+        .order("ordem");
+      if (error) throw error;
+      return data as Etapa[];
+    },
+    enabled: !!addFunilQuadroId,
+  });
+
+  // Cards do funil para o lead selecionado
+  type FunilCardInfo = { id: string; quadro_id: string; etapa_id: string; quadro_nome: string; etapa_nome: string };
+  const { data: funilCards = [], refetch: refetchFunilCards } = useQuery<FunilCardInfo[]>({
+    queryKey: ["funil-cards-lead", selectedLeadId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("funil_cards")
+        .select("id, quadro_id, etapa_id, funil_quadros(nome), funil_etapas(nome)")
+        .eq("lead_id", selectedLeadId!)
+        .eq("status", "ativo");
+      if (error) throw error;
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        quadro_id: c.quadro_id,
+        etapa_id: c.etapa_id,
+        quadro_nome: c.funil_quadros?.nome ?? "—",
+        etapa_nome: c.funil_etapas?.nome ?? "—",
+      })) as FunilCardInfo[];
+    },
+    enabled: !!selectedLeadId && aba !== "finalizadas",
   });
 
   // Leads: fila e minhas abas
@@ -420,20 +494,28 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   }
 
   async function handleMover() {
-    if (!moveEtapaId || !selectedLeadId) return;
+    if (!moveEtapaId || !moveQuadroId || !selectedLeadId || !empresaId) return;
     setMoving(true);
     try {
       const { error } = await (supabase as any)
-        .from("leads")
-        .update({ etapa_id: moveEtapaId })
-        .eq("id", selectedLeadId);
+        .from("funil_cards")
+        .upsert(
+          {
+            lead_id: selectedLeadId,
+            quadro_id: moveQuadroId,
+            etapa_id: moveEtapaId,
+            empresa_id: empresaId,
+            status: "ativo",
+          },
+          { onConflict: "lead_id,quadro_id" }
+        );
       if (error) throw error;
-      toast.success("Lead movido para o quadro!");
+      toast.success("Lead adicionado ao funil!");
       setMoveOpen(false);
       setMoveQuadroId("");
       setMoveEtapaId("");
       setSelectedLeadId(null);
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["funil-cards"] });
     } catch (err: any) {
       toast.error("Erro ao mover: " + err.message);
     } finally {
@@ -485,6 +567,45 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     }
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " +
       d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function addLeadToFunil() {
+    if (!selectedLeadId || !addFunilQuadroId || !addFunilEtapaId || !empresaId) return;
+    setAddingFunil(true);
+    try {
+      const { error } = await (supabase as any).from("funil_cards").upsert({
+        lead_id: selectedLeadId,
+        quadro_id: addFunilQuadroId,
+        etapa_id: addFunilEtapaId,
+        empresa_id: empresaId,
+        status: "ativo",
+      }, { onConflict: "lead_id,quadro_id" });
+      if (error) throw error;
+      toast.success("Lead adicionado ao funil!");
+      setAddFunilOpen(false);
+      setAddFunilQuadroId("");
+      setAddFunilEtapaId("");
+      refetchFunilCards();
+    } catch (err: any) {
+      toast.error("Erro: " + err.message);
+    } finally {
+      setAddingFunil(false);
+    }
+  }
+
+  async function moveCardEtapa(cardId: string, novaEtapaId: string) {
+    const { error } = await (supabase as any).from("funil_cards").update({ etapa_id: novaEtapaId }).eq("id", cardId);
+    if (error) { toast.error("Erro ao mover etapa"); return; }
+    refetchFunilCards();
+    queryClient.invalidateQueries({ queryKey: ["funil-cards"] });
+  }
+
+  async function removeFromFunil(cardId: string, quadroNome: string) {
+    if (!confirm(`Remover este lead do funil "${quadroNome}"?`)) return;
+    const { error } = await (supabase as any).from("funil_cards").delete().eq("id", cardId);
+    if (error) { toast.error("Erro ao remover"); return; }
+    refetchFunilCards();
+    queryClient.invalidateQueries({ queryKey: ["funil-cards"] });
   }
 
   function formatPhone(raw: string | null): string {
@@ -954,6 +1075,91 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
             )}
           </div>
+
+          {/* Painel de Funis (só para leads ativos, não finalizados) */}
+          {aba !== "finalizadas" && selectedLead && (
+            <div className="border-b bg-card px-3 py-2">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <FolderKanban className="h-3 w-3" /> Funis
+                </span>
+                <button
+                  onClick={() => { setAddFunilOpen(true); setAddFunilQuadroId(""); setAddFunilEtapaId(""); }}
+                  className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="h-3 w-3" />Adicionar
+                </button>
+              </div>
+
+              {funilCards.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Não está em nenhum funil.</p>
+              ) : (
+                <div className="space-y-1">
+                  {funilCards.map((card) => {
+                    const etapasDoCard = quadrosNormais.find(q => q.id === card.quadro_id) ? [] : [];
+                    return (
+                      <div key={card.id} className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-medium truncate shrink-0 max-w-[90px]" title={card.quadro_nome}>{card.quadro_nome}</span>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <Select
+                          value={card.etapa_id}
+                          onValueChange={(v) => moveCardEtapa(card.id, v)}
+                        >
+                          <SelectTrigger className="h-6 text-xs flex-1 min-w-0 px-2">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <EtapasCardOptions quadroId={card.quadro_id} />
+                          </SelectContent>
+                        </Select>
+                        <button
+                          onClick={() => removeFromFunil(card.id, card.quadro_nome)}
+                          className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                          title="Remover do funil"
+                        >
+                          <ArrowRightFromLine className="h-3 w-3 rotate-180" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Dialog adicionar ao funil */}
+              {addFunilOpen && (
+                <div className="mt-2 p-2 rounded-md border bg-muted/30 space-y-1.5">
+                  <Select value={addFunilQuadroId} onValueChange={(v) => { setAddFunilQuadroId(v); setAddFunilEtapaId(""); }}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="Selecione o funil..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {quadrosNormais.filter(q => !funilCards.some(c => c.quadro_id === q.id)).map(q => (
+                        <SelectItem key={q.id} value={q.id}>{q.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {addFunilQuadroId && (
+                    <Select value={addFunilEtapaId} onValueChange={setAddFunilEtapaId}>
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue placeholder="Etapa inicial..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {etapasAddFunil.map(e => (
+                          <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="flex gap-1.5">
+                    <Button size="sm" className="h-6 text-xs flex-1" onClick={addLeadToFunil} disabled={addingFunil || !addFunilEtapaId}>
+                      {addingFunil ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirmar"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setAddFunilOpen(false)}>Cancelar</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Mensagens */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-muted/20">

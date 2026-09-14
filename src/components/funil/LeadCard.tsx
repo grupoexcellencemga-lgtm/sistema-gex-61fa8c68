@@ -16,8 +16,9 @@ interface Props {
 }
 
 export function LeadCard({ lead, comercialNome, onClick, onDelete, isOverlay }: Props) {
+  const dragId = (lead as any).funil_card_id ?? lead.id;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: lead.id,
+    id: dragId,
     data: { lead },
     disabled: isOverlay,
   });

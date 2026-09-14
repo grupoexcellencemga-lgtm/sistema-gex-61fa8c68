@@ -116,14 +116,28 @@ const Funil = () => {
     [quadros, selectedQuadroId]
   );
 
-  const { data: leads = [], isLoading } = useQuery<LeadRow[]>({
-    queryKey: ["leads", empresaId],
+  type FunilCardRow = LeadRow & { funil_card_id: string };
+
+  const isInboxQuadro = !!(selectedQuadro?.fixo || selectedQuadro?.canal);
+
+  const { data: cards = [], isLoading } = useQuery<FunilCardRow[]>({
+    queryKey: ["funil-cards", selectedQuadroId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("leads").select("*").eq("empresa_id", empresaId!).is("deleted_at", null).order("created_at", { ascending: false });
+      if (!selectedQuadroId || isInboxQuadro) return [];
+      const { data, error } = await (supabase as any)
+        .from("funil_cards")
+        .select("id, etapa_id, leads(*)")
+        .eq("quadro_id", selectedQuadroId)
+        .eq("status", "ativo");
       if (error) throw error;
-      return data;
+      return (data || []).map((c: any) => ({
+        ...c.leads,
+        etapa_id: c.etapa_id,
+        funil_card_id: c.id,
+      })) as FunilCardRow[];
     },
-    enabled: !!empresaId,
+    enabled: !!selectedQuadroId && !!empresaId && !isInboxQuadro,
+    refetchInterval: 30000,
   });
 
   const { data: etapas = [], isLoading: etapasLoading } = useQuery<FunilEtapa[]>({
@@ -229,15 +243,10 @@ const Funil = () => {
   const comerciaisMap = useMemo(() => new Map(comerciais.map((c) => [c.id, c.nome])), [comerciais]);
   const etapasMap = useMemo(() => new Map(etapas.map((e) => [e.id, e])), [etapas]);
 
-  // Leads do quadro selecionado (via etapa_id pertencente ao quadro)
-  const currentEtapaIds = useMemo(() => new Set(etapas.map((e) => e.id)), [etapas]);
-  const quadroLeads = useMemo(
-    () => leads.filter((l: any) => currentEtapaIds.has(l.etapa_id)),
-    [leads, currentEtapaIds]
-  );
+  const quadroLeads = cards;
 
   const filteredLeads = useMemo(() => {
-    return quadroLeads.filter((l) => {
+    return cards.filter((l) => {
       if (debouncedSearch && !l.nome.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
       if (filters.responsavel_id !== "todos") {
         if (filters.responsavel_id === "sem") { if (l.responsavel_id) return false; }
@@ -249,9 +258,9 @@ const Funil = () => {
       if (filters.data && l.created_at.slice(0, 10) !== filters.data) return false;
       return true;
     });
-  }, [quadroLeads, debouncedSearch, filters]);
+  }, [cards, debouncedSearch, filters]);
 
-  const getLeadsByEtapa = (etapaId: string) => filteredLeads.filter((l: any) => l.etapa_id === etapaId);
+  const getLeadsByEtapa = (etapaId: string) => filteredLeads.filter((l) => l.etapa_id === etapaId);
 
   const boardWidth = Math.max(etapas.length * 296, 1);
   const syncScroll = (from: "top" | "board") => {
@@ -305,8 +314,11 @@ const Funil = () => {
         }
 
         if (contacts.length > 0) {
+          // Check existing phones from DB to avoid duplicates on import
+          const { data: existingLeads } = await (supabase as any)
+            .from("leads").select("telefone").eq("empresa_id", empresaId!).not("telefone", "is", null);
           const existingPhones = new Set(
-            (leads as any[]).filter((l) => l.telefone).map((l) => l.telefone?.trim())
+            (existingLeads || []).map((l: any) => l.telefone?.trim())
           );
           const novos = contacts.filter(
             (c) => !c.telefone?.trim() || !existingPhones.has(c.telefone.trim())
@@ -323,7 +335,7 @@ const Funil = () => {
               .single();
 
             if (primeiraEtapa?.id) {
-              await (supabase as any).from("leads").insert(
+              const { data: newLeads } = await (supabase as any).from("leads").insert(
                 novos.map((c) => ({
                   nome: c.nome.trim(),
                   telefone: c.telefone?.trim() || null,
@@ -331,7 +343,17 @@ const Funil = () => {
                   etapa_id: primeiraEtapa.id,
                   empresa_id: empresaId,
                 }))
-              );
+              ).select("id");
+              if (newLeads?.length) {
+                await (supabase as any).from("funil_cards").insert(
+                  newLeads.map((l: any) => ({
+                    lead_id: l.id,
+                    quadro_id: quadro.id,
+                    etapa_id: primeiraEtapa.id,
+                    empresa_id: empresaId,
+                  }))
+                );
+              }
             }
           }
         }
@@ -342,7 +364,7 @@ const Funil = () => {
     onSuccess: ({ id, importResult }) => {
       queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
       queryClient.invalidateQueries({ queryKey: ["funil-etapas", id] });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["funil-cards", id] });
       setNewQuadroName("");
       setImportOpen(false);
       setImportEventoId("");
@@ -380,9 +402,13 @@ const Funil = () => {
       const etapaIdsList = (quadroEtapas || []).map((e: any) => e.id as string);
       const quadroEtapaIds = new Set(etapaIdsList);
 
-      // Block if there are active (visible) leads
-      const leadCount = leads.filter((l: any) => quadroEtapaIds.has(l.etapa_id)).length;
-      if (leadCount > 0) throw new Error(`Mova os ${leadCount} lead(s) deste quadro antes de excluí-lo.`);
+      // Block if there are active cards in this quadro
+      const { count: cardCount } = await (supabase as any)
+        .from("funil_cards")
+        .select("id", { count: "exact", head: true })
+        .eq("quadro_id", quadro.id)
+        .eq("status", "ativo");
+      if ((cardCount ?? 0) > 0) throw new Error(`Mova os ${cardCount} lead(s) deste quadro antes de excluí-lo.`);
 
       if (etapaIdsList.length > 0) {
         // Fetch all leads in these etapas (including soft-deleted)
@@ -413,11 +439,11 @@ const Funil = () => {
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
 
-  // ── Mutations: leads ──
+  // ── Mutations: leads / funil_cards ──
   const insertMutation = useMutation({
     mutationFn: async (data: LeadForm) => {
       if (!data.etapa_id) throw new Error("Selecione uma coluna no funil antes de cadastrar.");
-      const { error } = await supabase.from("leads").insert({
+      const { data: newLead, error } = await supabase.from("leads").insert({
         empresa_id: empresaId,
         nome: data.nome,
         email: data.email || null,
@@ -429,11 +455,18 @@ const Funil = () => {
         responsavel_id: data.responsavel_id && data.responsavel_id !== "none" ? data.responsavel_id : null,
         etapa_id: data.etapa_id,
         valor: data.valor ? Number(data.valor) : null,
-      } as any);
+      } as any).select("id").single();
       if (error) throw error;
+      const { error: cardErr } = await (supabase as any).from("funil_cards").insert({
+        lead_id: newLead.id,
+        quadro_id: selectedQuadroId,
+        etapa_id: data.etapa_id,
+        empresa_id: empresaId,
+      });
+      if (cardErr) throw cardErr;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["funil-cards", selectedQuadroId] });
       toast.success("Lead cadastrado");
       setDialogOpen(false);
       setForm(emptyLeadForm);
@@ -442,25 +475,27 @@ const Funil = () => {
   });
 
   const moveEtapaMutation = useMutation({
-    mutationFn: async ({ id, fromEtapaId, toEtapaId }: { id: string; fromEtapaId: string; toEtapaId: string }) => {
-      const { error } = await supabase.from("leads").update({ etapa_id: toEtapaId } as any).eq("id", id);
+    mutationFn: async ({ id, fromEtapaId, toEtapaId, leadId }: { id: string; fromEtapaId: string; toEtapaId: string; leadId: string }) => {
+      // id = funil_card_id
+      const { error } = await (supabase as any).from("funil_cards").update({ etapa_id: toEtapaId }).eq("id", id);
       if (error) throw error;
       await logActivity({
         tipo: "avanco_etapa",
         descricao: `Lead movido de ${etapasMap.get(fromEtapaId)?.nome || fromEtapaId} para ${etapasMap.get(toEtapaId)?.nome || toEtapaId}`,
-        lead_id: id,
+        lead_id: leadId,
       });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["leads"] }); toast.success("Lead movido"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-cards", selectedQuadroId] }); toast.success("Lead movido"); },
     onError: (err: Error) => toast.error("Erro ao mover: " + err.message),
   });
 
   const deleteLeadMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("leads").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+    mutationFn: async (funil_card_id: string) => {
+      // Remove the card from this funnel
+      const { error } = await (supabase as any).from("funil_cards").delete().eq("id", funil_card_id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["leads"] }); toast.success("Lead excluído"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-cards", selectedQuadroId] }); toast.success("Lead removido do funil"); },
     onError: (err: Error) => toast.error("Erro ao excluir: " + err.message),
   });
 
@@ -494,7 +529,7 @@ const Funil = () => {
 
   const deleteEtapaMutation = useMutation({
     mutationFn: async (etapa: FunilEtapa) => {
-      const emUso = quadroLeads.filter((l: any) => l.etapa_id === etapa.id).length;
+      const emUso = cards.filter((c) => c.etapa_id === etapa.id).length;
       if (emUso > 0) throw new Error(`Mova os ${emUso} lead(s) desta coluna antes de excluí-la.`);
       const { error } = await (supabase as any).from("funil_etapas").delete().eq("id", etapa.id);
       if (error) throw error;
@@ -543,33 +578,33 @@ const Funil = () => {
   };
 
   const handleBotToggleAll = async (etapaId: string, ativar: boolean) => {
-    const leadIds = leads
-      .filter((l) => (l as any).etapa_id === etapaId)
-      .map((l) => l.id);
+    const leadIds = cards
+      .filter((c) => c.etapa_id === etapaId)
+      .map((c) => c.id);
     if (!leadIds.length) return;
     const { error } = await supabase
       .from("leads")
       .update({ bot_ativo: ativar } as any)
       .in("id", leadIds);
     if (error) { toast.error("Erro ao atualizar bot"); return; }
-    queryClient.invalidateQueries({ queryKey: ["leads"] });
+    queryClient.invalidateQueries({ queryKey: ["funil-cards", selectedQuadroId] });
     toast.success(ativar ? `Bot ativado para ${leadIds.length} lead${leadIds.length !== 1 ? "s" : ""}` : `Bot desativado para ${leadIds.length} lead${leadIds.length !== 1 ? "s" : ""}`);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    const lead = leads.find((l) => l.id === event.active.id) ?? null;
-    setActiveLead(lead);
+    const card = cards.find((c) => c.funil_card_id === event.active.id) ?? null;
+    setActiveLead(card);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveLead(null);
     const { active, over } = event;
     if (!over) return;
-    const leadId = active.id as string;
+    const cardId = active.id as string; // funil_card_id
     const targetEtapaId = over.id as string;
-    const lead = leads.find((l) => l.id === leadId) as any;
-    if (!lead || lead.etapa_id === targetEtapaId) return;
-    moveEtapaMutation.mutate({ id: leadId, fromEtapaId: lead.etapa_id, toEtapaId: targetEtapaId });
+    const card = cards.find((c) => c.funil_card_id === cardId);
+    if (!card || card.etapa_id === targetEtapaId) return;
+    moveEtapaMutation.mutate({ id: cardId, fromEtapaId: card.etapa_id, toEtapaId: targetEtapaId, leadId: card.id });
   };
 
   const saveLead = () => {
@@ -612,7 +647,7 @@ const Funil = () => {
         etapas={etapas}
         onDeleteLead={(id) => deleteLeadMutation.mutate(id)}
         onLeadUpdated={() => {
-          queryClient.invalidateQueries({ queryKey: ["leads"] });
+          queryClient.invalidateQueries({ queryKey: ["funil-cards", selectedQuadroId] });
           if (selectedLead) queryClient.invalidateQueries({ queryKey: ["atividades", undefined, selectedLead.id] });
         }}
       />
@@ -906,7 +941,7 @@ const Funil = () => {
                               leads={getLeadsByEtapa(etapa.id)}
                               comerciaisMap={comerciaisMap}
                               onLeadClick={(lead) => { setSelectedLead(lead); setSheetOpen(true); }}
-                              onDeleteLead={(lead) => deleteLeadMutation.mutate(lead.id)}
+                              onDeleteLead={(lead) => deleteLeadMutation.mutate((lead as any).funil_card_id ?? lead.id)}
                               onEditEtapa={(e) => { setEditEtapa(e); setEtapaDialogOpen(true); }}
                               onDeleteEtapa={handleDeleteEtapa}
                               onMoveEtapa={handleMoveEtapa}
