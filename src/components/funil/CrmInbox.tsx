@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
   ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
-  FolderKanban, Plus, ChevronRight,
+  FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -94,6 +94,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [addingFunil, setAddingFunil] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<{ file: File; url: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [busca, setBusca] = useState("");
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
@@ -561,6 +564,50 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       toast.error("Erro ao enviar: " + (err.message ?? String(err)));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleFileSend(file: File) {
+    if (!selectedLeadId || !empresaId) return;
+    setSendingMedia(true);
+    try {
+      const mime = file.type || "application/octet-stream";
+      const tipo: Mensagem["tipo"] =
+        mime.startsWith("image/") ? "imagem" :
+        mime.startsWith("video/") ? "video" :
+        mime.startsWith("audio/") ? "audio" : "documento";
+
+      const ext = file.name.split(".").pop() ?? "bin";
+      const path = `${empresaId}/${selectedLeadId}/${tipo}-${Date.now()}.${ext}`;
+      const bytes = await file.arrayBuffer();
+
+      const { error: uploadErr } = await supabase.storage
+        .from("midia_crm")
+        .upload(path, bytes, { contentType: mime, upsert: true });
+      if (uploadErr) throw new Error("Erro no upload: " + uploadErr.message);
+
+      const { data: pub } = supabase.storage.from("midia_crm").getPublicUrl(path);
+      const mediaUrl = pub.publicUrl;
+
+      // Otimista: adiciona localmente
+      const tempId = `temp-${Date.now()}`;
+      queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
+        ...old,
+        { id: tempId, conteudo: file.name, tipo, media_url: mediaUrl, media_mime: mime, media_nome: file.name, direcao: "saida", canal: "whatsapp", lido: null, created_at: new Date().toISOString() },
+      ]);
+
+      const { error } = await supabase.functions.invoke("enviar-mensagem", {
+        body: { lead_id: selectedLeadId, tipo, media_url: mediaUrl, media_mime: mime, media_nome: file.name },
+      });
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
+    } catch (err: any) {
+      toast.error("Erro ao enviar mídia: " + (err.message ?? String(err)));
+    } finally {
+      setSendingMedia(false);
+      setMediaPreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -1234,18 +1281,62 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           {/* Caixa de resposta */}
           {canal === "whatsapp" && aba !== "finalizadas" ? (
             canReply ? (
-              <div className="p-3 border-t bg-card flex gap-2">
-                <Input
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Digite uma mensagem..."
-                  className="flex-1"
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  disabled={sending}
-                />
-                <Button size="icon" onClick={handleSend} disabled={sending || !replyText.trim()}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+              <div className="border-t bg-card">
+                {/* Preview de arquivo selecionado */}
+                {mediaPreview && (
+                  <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                    {mediaPreview.file.type.startsWith("image/") ? (
+                      <img src={mediaPreview.url} className="h-12 w-12 rounded object-cover border" />
+                    ) : mediaPreview.file.type.startsWith("audio/") ? (
+                      <Music className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className="text-xs text-muted-foreground truncate flex-1">{mediaPreview.file.name}</span>
+                    <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => { setMediaPreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                      Cancelar
+                    </Button>
+                    <Button size="sm" className="h-6 text-xs px-3" onClick={() => handleFileSend(mediaPreview.file)} disabled={sendingMedia}>
+                      {sendingMedia ? <Loader2 className="h-3 w-3 animate-spin" /> : "Enviar"}
+                    </Button>
+                  </div>
+                )}
+                <div className="p-3 flex gap-2 items-center">
+                  {/* Botão de anexo */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const url = URL.createObjectURL(file);
+                      setMediaPreview({ file, url });
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending || sendingMedia}
+                    title="Enviar arquivo"
+                  >
+                    {sendingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  </Button>
+                  <Input
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Digite uma mensagem..."
+                    className="flex-1"
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    disabled={sending || sendingMedia}
+                  />
+                  <Button size="icon" onClick={handleSend} disabled={sending || sendingMedia || !replyText.trim()}>
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="p-3 border-t bg-card">
