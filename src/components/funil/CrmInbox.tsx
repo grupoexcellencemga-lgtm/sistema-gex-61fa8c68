@@ -93,6 +93,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [addFunilEtapaId, setAddFunilEtapaId] = useState("");
   const [addingFunil, setAddingFunil] = useState(false);
   const [atribuindo, setAtribuindo] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
@@ -1182,14 +1183,13 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   )}>
                     {/* Mídia */}
                     {msg.media_url && (msg.tipo === "imagem" || msg.tipo === "sticker") && (
-                      <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={msg.media_url}
-                          alt={msg.media_nome ?? "imagem"}
-                          className="rounded-lg max-w-full max-h-64 object-contain mb-1"
-                          loading="lazy"
-                        />
-                      </a>
+                      <img
+                        src={msg.media_url}
+                        alt={msg.media_nome ?? "imagem"}
+                        className="rounded-lg max-w-full max-h-64 object-contain mb-1 cursor-zoom-in"
+                        loading="lazy"
+                        onClick={() => setLightboxUrl(msg.media_url!)}
+                      />
                     )}
                     {msg.media_url && msg.tipo === "audio" && (
                       <audio controls src={msg.media_url} className="w-full mb-1" />
@@ -1322,6 +1322,37 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lightbox de imagem */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 rounded-full p-2"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <a
+            href={lightboxUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-4 right-4 text-white/70 hover:text-white text-xs underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Abrir original
+          </a>
+          <img
+            src={lightboxUrl}
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
