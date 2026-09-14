@@ -6,11 +6,100 @@ const supabase = createClient(
 );
 
 const ETAPA_WHATSAPP_ID = "aaaaaaaa-0002-0002-0002-000000000002";
+const EVOLUTION_URL = "http://2.25.125.70:8080";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+type TipoMensagem = "texto" | "imagem" | "audio" | "video" | "documento" | "sticker";
+
+function detectarTipo(message: Record<string, unknown>): TipoMensagem {
+  if (message.imageMessage)    return "imagem";
+  if (message.audioMessage)    return "audio";
+  if (message.videoMessage)    return "video";
+  if (message.documentMessage || message.documentWithCaptionMessage) return "documento";
+  if (message.stickerMessage)  return "sticker";
+  return "texto";
+}
+
+async function baixarMidia(
+  instance: string,
+  msg: Record<string, unknown>,
+  globalKey: string
+): Promise<{ base64: string; mimetype: string } | null> {
+  try {
+    const res = await fetch(
+      `${EVOLUTION_URL}/chat/getBase64FromMediaMessage/${instance}`,
+      {
+        method: "POST",
+        headers: { apikey: globalKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, convertToMp4: false }),
+      }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json?.base64) return null;
+    return { base64: json.base64, mimetype: json.mimetype ?? "application/octet-stream" };
+  } catch {
+    return null;
+  }
+}
+
+function extFromMime(mime: string): string {
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "video/mp4": "mp4",
+    "video/3gpp": "3gp",
+    "application/pdf": "pdf",
+  };
+  return map[mime] ?? "bin";
+}
+
+function base64ToUint8Array(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+async function uploadMidia(
+  empresaId: string,
+  leadId: string,
+  tipo: TipoMensagem,
+  base64: string,
+  mimetype: string,
+  nomeArquivo?: string
+): Promise<string | null> {
+  try {
+    const ext = extFromMime(mimetype);
+    const nome = nomeArquivo ?? `${tipo}-${Date.now()}.${ext}`;
+    const path = `${empresaId}/${leadId}/${nome}`;
+    const bytes = base64ToUint8Array(base64);
+
+    const { error } = await supabase.storage
+      .from("midia_crm")
+      .upload(path, bytes, { contentType: mimetype, upsert: true });
+
+    if (error) {
+      console.error("[webhook] upload mídia erro:", error.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("midia_crm").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (e) {
+    console.error("[webhook] upload mídia exception:", e);
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -43,6 +132,7 @@ Deno.serve(async (req) => {
     }
 
     const empresaId = canal.empresa_id;
+    const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY") ?? "";
 
     for (const msg of mensagens) {
       const fromMe: boolean = msg.key?.fromMe === true;
@@ -51,35 +141,44 @@ Deno.serve(async (req) => {
 
       const telefone = remoteJid.replace("@s.whatsapp.net", "");
 
+      // --- Tipo e conteúdo ---
+      const message = (msg.message ?? {}) as Record<string, unknown>;
+      const tipo = detectarTipo(message);
+
+      const docMsg = (message.documentMessage ?? (message.documentWithCaptionMessage as any)?.message?.documentMessage) as Record<string, unknown> | undefined;
+      const nomeArquivo: string | undefined =
+        (docMsg?.fileName as string) ??
+        (message.imageMessage as any)?.fileName ??
+        undefined;
+
+      const texto: string =
+        (message.conversation as string) ||
+        ((message.extendedTextMessage as any)?.text as string) ||
+        ((message.listResponseMessage as any)?.singleSelectReply?.selectedRowId as string) ||
+        ((message.buttonsResponseMessage as any)?.selectedButtonId as string) ||
+        ((message.imageMessage as any)?.caption as string) ||
+        ((message.videoMessage as any)?.caption as string) ||
+        (docMsg?.caption as string) ||
+        (tipo !== "texto" ? `[${tipo.charAt(0).toUpperCase() + tipo.slice(1)}]` : "[Mídia]");
+
+      console.log("[webhook] msg de:", telefone, "fromMe:", fromMe, "tipo:", tipo, "texto:", texto.substring(0, 50));
+
       // Resolve nome do contato
       let nomeContato: string = fromMe ? telefone : (msg.pushName || telefone);
-      if (fromMe) {
+      if (fromMe && globalKey) {
         try {
-          const EVOLUTION_URL = "http://2.25.125.70:8080";
-          const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
-          if (globalKey) {
-            const contactRes = await fetch(
-              `${EVOLUTION_URL}/chat/findContacts/${instance}?where={"id":"${remoteJid}"}`,
-              { headers: { apikey: globalKey } }
-            );
-            if (contactRes.ok) {
-              const contacts = await contactRes.json();
-              const contact = Array.isArray(contacts) ? contacts[0] : contacts;
-              const nome = contact?.pushName || contact?.name || contact?.verifiedName;
-              if (nome) nomeContato = nome;
-            }
+          const contactRes = await fetch(
+            `${EVOLUTION_URL}/chat/findContacts/${instance}?where={"id":"${remoteJid}"}`,
+            { headers: { apikey: globalKey } }
+          );
+          if (contactRes.ok) {
+            const contacts = await contactRes.json();
+            const contact = Array.isArray(contacts) ? contacts[0] : contacts;
+            const nome = contact?.pushName || contact?.name || contact?.verifiedName;
+            if (nome) nomeContato = nome;
           }
-        } catch (_) { /* ignora — usa telefone como fallback */ }
+        } catch (_) { /* ignora */ }
       }
-      const texto: string =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
-        msg.message?.buttonsResponseMessage?.selectedButtonId ||
-        msg.message?.imageMessage?.caption ||
-        "[Mídia]";
-
-      console.log("[webhook] msg de:", telefone, "fromMe:", fromMe, "texto:", texto.substring(0, 50));
 
       // Busca ou cria lead
       let leadId: string | undefined;
@@ -120,9 +219,20 @@ Deno.serve(async (req) => {
         }
       }
 
+      // --- Download de mídia (best-effort) ---
+      let mediaUrl: string | null = null;
+      let mediaMime: string | null = null;
+
+      if (tipo !== "texto" && globalKey && leadId) {
+        const midia = await baixarMidia(instance, msg, globalKey);
+        if (midia) {
+          mediaMime = midia.mimetype;
+          mediaUrl = await uploadMidia(empresaId, leadId, tipo, midia.base64, midia.mimetype, nomeArquivo);
+        }
+      }
+
       // --- Mensagem de saída (fromMe) ---
       if (fromMe) {
-        // Busca protocolo ativo para linkar
         const { data: protocoloAtivo } = await supabase
           .from("protocolos_atendimento")
           .select("id")
@@ -134,6 +244,10 @@ Deno.serve(async (req) => {
           lead_id: leadId,
           empresa_id: empresaId,
           conteudo: texto,
+          tipo,
+          media_url: mediaUrl,
+          media_mime: mediaMime,
+          media_nome: nomeArquivo ?? null,
           direcao: "saida",
           canal: "whatsapp",
           protocolo_id: protocoloAtivo?.id ?? null,
@@ -158,8 +272,7 @@ Deno.serve(async (req) => {
           console.log("[webhook] lead", leadId, "voltou para fila (era finalizado)");
         }
 
-        // 2. Garante protocolo ativo ANTES de inserir a mensagem
-        //    (mensagem precisa ter protocolo_id correto para o bot filtrar o histórico)
+        // 2. Garante protocolo ativo
         let protocoloId: string | null = null;
         const { data: protocoloExistente } = await supabase
           .from("protocolos_atendimento")
@@ -171,7 +284,6 @@ Deno.serve(async (req) => {
         if (protocoloExistente) {
           protocoloId = protocoloExistente.id;
         } else {
-          // Usa a sequência do banco (atômica) para evitar duplicatas
           const { data: numeroProtocolo } = await supabase.rpc("gerar_numero_protocolo");
           const { data: novoProtocolo } = await supabase
             .from("protocolos_atendimento")
@@ -182,34 +294,36 @@ Deno.serve(async (req) => {
           console.log("[webhook] protocolo", numeroProtocolo, "criado para lead", leadId);
         }
 
-        // 3. Insere mensagem já com o protocolo_id correto
+        // 3. Insere mensagem
         await supabase.from("mensagens_crm").insert({
           lead_id: leadId,
           empresa_id: empresaId,
           conteudo: texto,
+          tipo,
+          media_url: mediaUrl,
+          media_mime: mediaMime,
+          media_nome: nomeArquivo ?? null,
           direcao: "entrada",
           canal: "whatsapp",
           protocolo_id: protocoloId,
         });
 
         // 4. Foto de perfil (best-effort)
-        try {
-          const EVOLUTION_URL = "http://2.25.125.70:8080";
-          const globalKey = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
-          if (globalKey) {
+        if (globalKey) {
+          try {
             const picRes = await fetch(
               `${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${instance}`,
-              { method: "POST", headers: { "apikey": globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: remoteJid }) }
+              { method: "POST", headers: { apikey: globalKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: remoteJid }) }
             );
             if (picRes.ok) {
               const picData = await picRes.json();
               const picUrl: string | undefined = picData?.profilePictureUrl ?? picData?.picture ?? picData?.imgUrl ?? picData?.url;
               if (picUrl) await supabase.from("leads").update({ foto_perfil: picUrl }).eq("id", leadId);
             }
-          }
-        } catch (_) { /* ignora */ }
+          } catch (_) { /* ignora */ }
+        }
 
-        // 5. Atualiza nome do lead com pushName real
+        // 5. Atualiza nome do lead
         if (msg.pushName && leadId) {
           await supabase.from("leads")
             .update({ nome: msg.pushName })
@@ -224,34 +338,40 @@ Deno.serve(async (req) => {
 
         await supabase.rpc("incrementar_mensagens_nao_lidas", { lead_id_param: leadId });
 
-        // 6. Notificação push para a equipe
+        // 6. Push notification
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const notifBody = tipo !== "texto"
+          ? `[${tipo.charAt(0).toUpperCase() + tipo.slice(1)}]${texto && texto !== `[${tipo.charAt(0).toUpperCase() + tipo.slice(1)}]` ? " " + texto : ""}`
+          : (texto.length > 100 ? texto.substring(0, 97) + "..." : texto);
+
         fetch(`${supabaseUrl}/functions/v1/enviar-push`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
           body: JSON.stringify({
             empresa_id: empresaId,
             title: `💬 ${nomeContato}`,
-            body: texto.length > 100 ? texto.substring(0, 97) + "..." : texto,
+            body: notifBody,
             lead_id: leadId,
             url: "/",
           }),
         }).catch(e => console.error("[webhook] erro enviar-push:", e));
 
-        // 7. Dispara fluxo e bot
-        fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
-          body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
-        }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
-
-        if (existingLead?.bot_ativo) {
-          fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
+        // 7. Fluxo e bot (somente texto)
+        if (tipo === "texto") {
+          fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
-            body: JSON.stringify({ forceLeadId: leadId, delayMs: 8000 }),
-          }).catch(e => console.error("[webhook] erro processar-bot:", e));
+            body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
+          }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
+
+          if (existingLead?.bot_ativo) {
+            fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+              body: JSON.stringify({ forceLeadId: leadId, delayMs: 8000 }),
+            }).catch(e => console.error("[webhook] erro processar-bot:", e));
+          }
         }
       }
     }

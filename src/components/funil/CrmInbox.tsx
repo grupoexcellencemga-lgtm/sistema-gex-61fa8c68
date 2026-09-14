@@ -27,6 +27,10 @@ import type { FunilEtapa } from "./funilUtils";
 type Mensagem = {
   id: string;
   conteudo: string;
+  tipo: "texto" | "imagem" | "audio" | "video" | "documento" | "sticker";
+  media_url: string | null;
+  media_mime: string | null;
+  media_nome: string | null;
   direcao: "entrada" | "saida";
   canal: string;
   lido: boolean | null;
@@ -1176,7 +1180,47 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       ? "bg-primary text-primary-foreground rounded-br-sm"
                       : "bg-card border rounded-bl-sm"
                   )}>
-                    <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                    {/* Mídia */}
+                    {msg.media_url && (msg.tipo === "imagem" || msg.tipo === "sticker") && (
+                      <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={msg.media_url}
+                          alt={msg.media_nome ?? "imagem"}
+                          className="rounded-lg max-w-full max-h-64 object-contain mb-1"
+                          loading="lazy"
+                        />
+                      </a>
+                    )}
+                    {msg.media_url && msg.tipo === "audio" && (
+                      <audio controls src={msg.media_url} className="w-full mb-1" />
+                    )}
+                    {msg.media_url && msg.tipo === "video" && (
+                      <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48 mb-1" />
+                    )}
+                    {msg.media_url && msg.tipo === "documento" && (
+                      <a
+                        href={msg.media_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-2 py-1.5 mb-1 text-xs font-medium underline underline-offset-2",
+                          msg.direcao === "saida" ? "text-primary-foreground/90" : "text-foreground"
+                        )}
+                      >
+                        📄 {msg.media_nome ?? "Documento"}
+                      </a>
+                    )}
+                    {/* Legenda ou texto */}
+                    {msg.conteudo && !["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
+                      <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                    )}
+                    {/* Fallback: sem mídia e sem texto útil */}
+                    {!msg.media_url && ["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
+                      <p className="whitespace-pre-wrap break-words italic opacity-70">{msg.conteudo}</p>
+                    )}
+                    {!msg.media_url && msg.tipo === "texto" && (
+                      <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                    )}
                     <p className={cn("text-[10px] mt-1", msg.direcao === "saida" ? "text-primary-foreground/70 text-right" : "text-muted-foreground")}>
                       {formatTime(msg.created_at)}
                     </p>
