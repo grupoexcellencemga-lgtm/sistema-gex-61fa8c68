@@ -361,6 +361,7 @@ export const MatriculaFormDialog = ({
   const turmaSel = turmasFiltradas.find((t: any) => t.id === matriculaForm.turma_id);
   const formaEntradaLabel = formasPagamento.find((f) => f.codigo === matriculaForm.entrada_forma_pagamento)?.nome || "";
   const formaRestanteLabel = formasPagamento.find((f) => f.codigo === matriculaForm.parcelas_forma_pagamento)?.nome || "";
+  const formaInteiroLabel = formasPagamento.find((f) => f.codigo === matriculaForm.forma_pagamento)?.nome || "";
 
   const handleAvancar = () => {
     if (currentStep === 1) {
@@ -901,29 +902,26 @@ export const MatriculaFormDialog = ({
                     </div>
                   </>
                 )}
-                {!modoEntrada && (() => {
-                  const formaInteiroLabel = formasPagamento.find((f) => f.codigo === matriculaForm.forma_pagamento)?.nome || "";
-                  return (
-                    <>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Pagamento</p>
-                        <p className="font-medium">
-                          {formaInteiroLabel || "—"}
-                          {numParcelasCalc > 1 ? ` · ${numParcelasCalc}x` : ""}
-                          {matriculaForm.data_vencimento ? ` — ${new Date(matriculaForm.data_vencimento + "T12:00").toLocaleDateString("pt-BR")}` : ""}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Total a receber</p>
-                        <p className="font-medium">
-                          {showTaxa && valorTaxa > 0
-                            ? formatCurrency(matriculaForm.repassar_taxa ? valorFinalCalc + valorTaxa : valorFinalCalc - valorTaxa)
-                            : formatCurrency(valorFinalCalc)}
-                        </p>
-                      </div>
-                    </>
-                  );
-                })()}
+                {!modoEntrada && (
+                  <>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pagamento</p>
+                      <p className="font-medium">
+                        {formaInteiroLabel || "—"}
+                        {numParcelasCalc > 1 ? ` · ${numParcelasCalc}x` : ""}
+                        {matriculaForm.data_vencimento ? ` — ${new Date(matriculaForm.data_vencimento + "T12:00").toLocaleDateString("pt-BR")}` : ""}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total a receber</p>
+                      <p className="font-medium">
+                        {showTaxa && valorTaxa > 0
+                          ? formatCurrency(matriculaForm.repassar_taxa ? valorFinalCalc + valorTaxa : valorFinalCalc - valorTaxa)
+                          : formatCurrency(valorFinalCalc)}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
