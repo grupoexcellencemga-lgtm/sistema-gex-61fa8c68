@@ -208,6 +208,16 @@ export const MatriculaFormDialog = ({
     }
   }, [entradaTaxaAutoCalc.percentual, matriculaForm.entrada_valor, showEntradaTaxa, modoEntrada]);
 
+  // Auto-set entrada_taxa_absorvida_por: sem taxa → "nenhuma"; com taxa e não definido → "empresa"
+  useEffect(() => {
+    if (!modoEntrada) return;
+    if (!showEntradaTaxa) {
+      setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: "nenhuma" }));
+    } else if (matriculaForm.entrada_taxa_absorvida_por === "" || matriculaForm.entrada_taxa_absorvida_por === "nenhuma") {
+      setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: "empresa" }));
+    }
+  }, [showEntradaTaxa, modoEntrada]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Taxa automática para o RESTANTE ──
   const isRestanteCredito = ["credito", "cartao", "cartao_credito"].includes(matriculaForm.parcelas_forma_pagamento || "");
   const isRestanteDebito = (matriculaForm.parcelas_forma_pagamento || "") === "debito";
@@ -720,8 +730,7 @@ export const MatriculaFormDialog = ({
                         <Input type="number" step="0.01"
                           value={matriculaForm.entrada_taxa_valor}
                           onChange={(e) => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_valor: e.target.value }))}
-                          placeholder="0,00 — opcional"
-                          disabled={matriculaForm.entrada_taxa_absorvida_por === "nenhuma"} />
+                          placeholder="0,00 — opcional" />
                         {entradaTaxaAutoCalc.percentual > 0 && (
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             {entradaTaxaAutoCalc.nome} · {entradaTaxaAutoCalc.percentual.toFixed(2).replace(".", ",")}%
@@ -729,43 +738,16 @@ export const MatriculaFormDialog = ({
                         )}
                       </div>
                       <div>
-                        <Label>Quem absorveu a taxa? <span className="text-destructive">*</span></Label>
-                        <div className={cn("grid grid-cols-3 gap-1 mt-1", matriculaForm.entrada_taxa_absorvida_por === "" && "ring-1 ring-destructive rounded-lg")}>
-                          {(["nenhuma", "empresa", "aluno"] as const).map((opt) => (
-                            <button key={opt} type="button"
-                              className={cn("h-9 rounded-lg border text-xs font-medium transition-colors",
-                                matriculaForm.entrada_taxa_absorvida_por === opt
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-background text-muted-foreground border-border")}
-                              onClick={() => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: opt }))}>
-                              {opt === "nenhuma" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
-                            </button>
-                          ))}
+                        <Label>Repassar taxa ao aluno?</Label>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Switch
+                            checked={matriculaForm.entrada_taxa_absorvida_por === "aluno"}
+                            onCheckedChange={(c) => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: c ? "aluno" : "empresa" }))} />
+                          <span className="text-sm">
+                            {matriculaForm.entrada_taxa_absorvida_por === "aluno" ? "Sim — aluno paga a taxa" : "Não — empresa absorve"}
+                          </span>
                         </div>
-                        {matriculaForm.entrada_taxa_absorvida_por === "" && (
-                          <p className="text-[11px] text-destructive mt-1">Selecione uma opção.</p>
-                        )}
                       </div>
-                    </div>
-                  )}
-                  {!showEntradaTaxa && (
-                    <div>
-                      <Label>Quem absorveu a taxa? <span className="text-destructive">*</span></Label>
-                      <div className={cn("grid grid-cols-3 gap-1 mt-1", matriculaForm.entrada_taxa_absorvida_por === "" && "ring-1 ring-destructive rounded-lg")}>
-                        {(["nenhuma", "empresa", "aluno"] as const).map((opt) => (
-                          <button key={opt} type="button"
-                            className={cn("h-9 rounded-lg border text-xs font-medium transition-colors",
-                              matriculaForm.entrada_taxa_absorvida_por === opt
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background text-muted-foreground border-border")}
-                            onClick={() => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: opt }))}>
-                            {opt === "nenhuma" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
-                          </button>
-                        ))}
-                      </div>
-                      {matriculaForm.entrada_taxa_absorvida_por === "" && (
-                        <p className="text-[11px] text-destructive mt-1">Selecione uma opção.</p>
-                      )}
                     </div>
                   )}
                 </div>
