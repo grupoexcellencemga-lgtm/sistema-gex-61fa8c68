@@ -77,7 +77,7 @@ const Alunos = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("alunos")
-        .select("*")
+        .select("id, nome, email, telefone, cpf, sexo, data_nascimento")
         .eq("empresa_id", empresaId!)
         .is("deleted_at", null)
         .order("nome");
@@ -86,6 +86,7 @@ const Alunos = () => {
       return data;
     },
     enabled: !!empresaId,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: produtos = [] } = useQuery({
@@ -102,6 +103,7 @@ const Alunos = () => {
       return data;
     },
     enabled: !!empresaId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: turmas = [] } = useQuery({
@@ -118,6 +120,7 @@ const Alunos = () => {
       return data;
     },
     enabled: !!empresaId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Deep-link vindo de "Matricular na turma" (participante de evento): abre a
@@ -217,7 +220,8 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && (matriculaDialogOpen || sheetOpen),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: comerciais = [] } = useQuery({
@@ -234,7 +238,8 @@ const Alunos = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && matriculaDialogOpen,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: matriculas = [] } = useQuery({
