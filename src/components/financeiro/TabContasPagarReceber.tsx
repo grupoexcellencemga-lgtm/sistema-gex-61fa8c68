@@ -57,7 +57,10 @@ import {
   Wallet,
   Eye,
   CalendarDays,
+  Paperclip,
+  X,
 } from "lucide-react";
+import { abrirComprovante } from "@/lib/comprovantes";
 import { toast } from "@/hooks/use-toast";
 import { PaginationControls, paginate } from "@/components/Pagination";
 import { MetricDetailDialog, MetricDetailItem } from "@/components/MetricDetailDialog";
@@ -1786,6 +1789,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     forma_pagamento: "",
     conta_bancaria_id: "",
     observacoes: "",
+    comprovante_url: "",
     recorrente: false,
     recorrencia_tipo: "mensal",
     recorrencia_quantidade: "1",
@@ -1793,6 +1797,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     original_id: "",
     tipo: "pagar",
   });
+  const [uploadingComprovante, setUploadingComprovante] = useState(false);
 
   const openNew = () => {
     setForm({
@@ -1805,6 +1810,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       forma_pagamento: "",
       conta_bancaria_id: "",
       observacoes: "",
+      comprovante_url: "",
       recorrente: false,
       recorrencia_tipo: "mensal",
       recorrencia_quantidade: "1",
@@ -1839,6 +1845,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       forma_pagamento: conta.forma_pagamento || "",
       conta_bancaria_id: conta.conta_bancaria_id || "",
       observacoes: conta.observacoes || "",
+      comprovante_url: conta.comprovante_url || "",
       recorrente: false,
       recorrencia_tipo: "mensal",
       recorrencia_quantidade: "1",
@@ -1882,6 +1889,30 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     if (tipo === "anual") return addMonths(data, index * 12).toISOString().split("T")[0];
 
     return dataBase;
+  };
+
+  const handleComprovanteUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingComprovante(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `financeiro/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("comprovantes_financeiro")
+        .upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage
+        .from("comprovantes_financeiro")
+        .getPublicUrl(path);
+      const publicUrl = urlData?.publicUrl || "";
+      const storagePath = `/storage/v1/object/public/comprovantes_financeiro/${path}`;
+      setForm((f) => ({ ...f, comprovante_url: storagePath || publicUrl }));
+      toast({ title: "Comprovante anexado com sucesso!" });
+    } catch (err: any) {
+      toast({ title: "Erro ao anexar comprovante", description: err?.message, variant: "destructive" });
+    } finally {
+      setUploadingComprovante(false);
+    }
   };
 
   const handleSave = () => {
@@ -2707,6 +2738,51 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                 value={form.observacoes}
                 onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
               />
+            </div>
+
+            <div>
+              <Label>Comprovante</Label>
+              {form.comprovante_url ? (
+                <div className="flex items-center gap-2 mt-1 p-2 rounded-md border bg-muted/40">
+                  <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <button
+                    type="button"
+                    className="text-sm text-blue-600 hover:underline truncate flex-1 text-left"
+                    onClick={() => abrirComprovante(form.comprovante_url)}
+                  >
+                    Ver comprovante
+                  </button>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setForm((f) => ({ ...f, comprovante_url: "" }))}
+                    title="Remover comprovante"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer w-fit">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-muted-foreground hover:bg-muted transition-colors">
+                      <Paperclip className="h-4 w-4" />
+                      {uploadingComprovante ? "Enviando..." : "Anexar comprovante"}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      disabled={uploadingComprovante}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleComprovanteUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">PDF ou imagem</p>
+                </div>
+              )}
             </div>
 
             <Button onClick={handleSave} disabled={saveMutation.isPending}>

@@ -5,6 +5,7 @@ const BUCKETS_PRIVADOS = [
   "comprovantes_matriculas",
   "comprovantes_eventos",
   "comprovantes_reembolsos",
+  "comprovantes_financeiro",
 ];
 
 // Extrai bucket e caminho de uma URL do Supabase Storage (pública ou assinada).
