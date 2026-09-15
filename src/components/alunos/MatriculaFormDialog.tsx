@@ -767,8 +767,13 @@ export const MatriculaFormDialog = ({
                         <span className="text-sm font-semibold text-amber-600">{formatCurrency(restanteCalc)}</span>
                         <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ficará pendente</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {showRestanteDetails ? "▲ ocultar detalhes" : "▼ configurar pagamento"}
+                      <span className={cn(
+                        "text-xs font-medium px-2.5 py-1 rounded-md border transition-colors",
+                        showRestanteDetails
+                          ? "bg-muted text-muted-foreground border-border"
+                          : "bg-primary text-primary-foreground border-primary"
+                      )}>
+                        {showRestanteDetails ? "▲ ocultar" : "▼ configurar pagamento"}
                       </span>
                     </button>
 
