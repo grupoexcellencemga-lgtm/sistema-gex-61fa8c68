@@ -34,7 +34,7 @@ export const emptyMatriculaForm = {
   parcelas_data_vencimento: "",
   parcelas_taxa_cartao: "",
   parcelas_repassar_taxa: false,
-  // Destino do restante: registrar internamente ou cobrar via ASAAS
+  modalidade_cobranca: "a_pagar" as "a_pagar" | "ja_pago",
 };
 
 // Re-export from centralized formatters

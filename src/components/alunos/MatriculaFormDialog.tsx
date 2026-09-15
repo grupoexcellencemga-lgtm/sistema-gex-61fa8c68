@@ -337,66 +337,78 @@ export const MatriculaFormDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+
+        {/* Step indicator */}
+        <div className="flex items-center border-b pb-4 -mx-6 px-6 pt-1 gap-1">
+          <div className="flex items-center gap-1.5 flex-1 justify-center">
+            <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[11px] flex items-center justify-center font-bold shrink-0">1</div>
+            <span className="text-xs font-semibold text-primary leading-tight">Nova Matrícula</span>
+          </div>
+          <div className="h-px flex-none w-4 bg-border" />
+          <div className="flex items-center gap-1.5 flex-1 justify-center">
+            <div className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[11px] flex items-center justify-center font-bold shrink-0">2</div>
+            <span className="text-xs text-muted-foreground leading-tight">Financeiro do Aluno</span>
+          </div>
+          <div className="h-px flex-none w-4 bg-border" />
+          <div className="flex items-center gap-1.5 flex-1 justify-center">
+            <div className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[11px] flex items-center justify-center font-bold shrink-0">3</div>
+            <span className="text-xs text-muted-foreground leading-tight">Registrar Pagamento</span>
+          </div>
+        </div>
+
+        <DialogHeader className="pt-2">
           <DialogTitle>
             {editingMatriculaId ? "Editar Matrícula" : "Nova Matrícula"}
           </DialogTitle>
-
           <DialogDescription>
             {editingMatriculaId
               ? `Editando matrícula de ${selectedAlunoNome}`
-              : `Matricular ${selectedAlunoNome} — matrícula + parcelas automáticas`}
+              : `Matricular ${selectedAlunoNome}`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 mt-2">
-          <div>
-            <Label>Produto</Label>
-            <Select
-              value={matriculaForm.produto_id}
-              onValueChange={handleProdutoChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o produto" />
-              </SelectTrigger>
+          {/* Produto + Turma */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Produto</Label>
+              <Select value={matriculaForm.produto_id} onValueChange={handleProdutoChange}>
+                <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                <SelectContent>
+                  {produtos.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nome} {p.valor ? `(${formatCurrency(Number(p.valor))})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <SelectContent>
-                {produtos.map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nome} {p.valor ? `(${formatCurrency(Number(p.valor))})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Turma</Label>
+              <Select
+                value={matriculaForm.turma_id}
+                onValueChange={(v) => {
+                  const turmaSelecionada = turmasFiltradas.find((t: any) => t.id === v);
 
-          <div>
-            <Label>Turma</Label>
-            <Select
-              value={matriculaForm.turma_id}
-              onValueChange={(v) => {
-                const turmaSelecionada = turmasFiltradas.find(
-                  (t: any) => t.id === v
-                );
+                  const produtoDaTurma = turmaSelecionada?.produto_id
+                    ? produtos.find((p: any) => p.id === turmaSelecionada.produto_id)
+                    : null;
 
-                const produtoDaTurma = turmaSelecionada?.produto_id
-                  ? produtos.find((p: any) => p.id === turmaSelecionada.produto_id)
-                  : null;
-
-                const novoProdutoVal = produtoDaTurma?.valor != null ? String(produtoDaTurma.valor) : null;
-                setMatriculaForm((p) => ({
-                  ...p,
-                  turma_id: v,
-                  produto_id: turmaSelecionada?.produto_id || p.produto_id,
-                  valor_total: novoProdutoVal ?? p.valor_total,
-                  valor_contratado: novoProdutoVal ?? p.valor_contratado,
-                  data_inicio:
-                    turmaSelecionada?.data_inicio ||
-                    turmaSelecionada?.dataInicio ||
-                    turmaSelecionada?.inicio ||
-                    turmaSelecionada?.start_date ||
-                    "",
-                  data_fim:
+                  const novoProdutoVal = produtoDaTurma?.valor != null ? String(produtoDaTurma.valor) : null;
+                  setMatriculaForm((p) => ({
+                    ...p,
+                    turma_id: v,
+                    produto_id: turmaSelecionada?.produto_id || p.produto_id,
+                    valor_total: novoProdutoVal ?? p.valor_total,
+                    valor_contratado: novoProdutoVal ?? p.valor_contratado,
+                    data_inicio:
+                      turmaSelecionada?.data_inicio ||
+                      turmaSelecionada?.dataInicio ||
+                      turmaSelecionada?.inicio ||
+                      turmaSelecionada?.start_date ||
+                      "",
+                    data_fim:
                     turmaSelecionada?.data_fim ||
                     turmaSelecionada?.dataFim ||
                     turmaSelecionada?.fim ||
@@ -405,166 +417,114 @@ export const MatriculaFormDialog = ({
                 }));
               }}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a turma" />
-              </SelectTrigger>
-
+              <SelectTrigger><SelectValue placeholder="Selecione a turma" /></SelectTrigger>
               <SelectContent>
                 {turmasFiltradas.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.nome}
-                  </SelectItem>
+                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
                 ))}
-
                 {turmasFiltradas.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    Nenhuma turma disponível
-                  </div>
+                  <div className="px-3 py-2 text-sm text-muted-foreground">Nenhuma turma disponível</div>
                 )}
               </SelectContent>
             </Select>
+            </div>
           </div>
 
+          {/* Valor produto + Valor contratado */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Data início</Label>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Valor do Produto</Label>
               <Input
-                type="date"
-                value={matriculaForm.data_inicio || ""}
-                readOnly
-                className="bg-muted"
+                type="number" step="0.01" min="0"
+                value={matriculaForm.valor_total}
+                onChange={(e) => setMatriculaForm((p: any) => ({
+                  ...p,
+                  valor_total: e.target.value,
+                  valor_contratado: p.valor_contratado === p.valor_total || !p.valor_contratado ? e.target.value : p.valor_contratado,
+                }))}
+                placeholder={matriculaForm.produto_id ? "Sem valor" : "Selecione o produto"}
               />
+              <p className="text-[11px] text-muted-foreground mt-0.5">Valor de referência</p>
             </div>
-
             <div>
-              <Label>Data fim</Label>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Valor Contratado</Label>
               <Input
-                type="date"
-                value={matriculaForm.data_fim || ""}
-                readOnly
-                className="bg-muted"
+                type="number" step="0.01"
+                value={matriculaForm.valor_contratado}
+                onChange={(e) => setMatriculaForm((p) => ({ ...p, valor_contratado: e.target.value }))}
+                placeholder="Igual ao produto ou negociado"
+              />
+              {parseFloat(matriculaForm.valor_total) > 0 && parseFloat(matriculaForm.valor_contratado) > 0 &&
+                parseFloat(matriculaForm.valor_contratado) < parseFloat(matriculaForm.valor_total) && (
+                <p className="text-[11px] text-primary mt-0.5">
+                  Desconto de {formatCurrency(parseFloat(matriculaForm.valor_total) - parseFloat(matriculaForm.valor_contratado))} aplicado
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Comercial + % Comissão */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Comercial</Label>
+              <Select
+                value={matriculaForm.comercial_id || "nenhum"}
+                onValueChange={(v) => setMatriculaForm((p) => ({ ...p, comercial_id: v === "nenhum" ? "" : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">Nenhum</SelectItem>
+                  {comerciais.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">% Comissão</Label>
+              <Input
+                type="number" min="0" max="100" step="0.5"
+                value={matriculaForm.percentual_comissao}
+                onChange={(e) => setMatriculaForm((p) => ({ ...p, percentual_comissao: e.target.value }))}
+                placeholder="5"
+                disabled={!matriculaForm.comercial_id}
               />
             </div>
           </div>
 
-          {/* Toggle: Já foi pago / A pagar */}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setMatriculaForm((p: any) => ({
-                ...p,
-                modalidade_cobranca: "ja_pago",
-                forma_pagamento: isAsaasFP ? "" : p.forma_pagamento,
-              }))}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
-                modalidade === "ja_pago"
-                  ? "bg-emerald-600 text-white border-emerald-600"
-                  : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-              )}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Já foi pago
-            </button>
-            <button
-              type="button"
-              onClick={() => setMatriculaForm((p: any) => ({
-                ...p,
-                modalidade_cobranca: "a_pagar",
-                conta_bancaria_id: "",
-              }))}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
-                modalidade === "a_pagar"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-              )}
-            >
-              <Clock className="h-4 w-4" />
-              A pagar
-            </button>
+          {/* Status */}
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Status</Label>
+            <div className="flex gap-2 mt-1">
+              {([["ativo", "Ativo"], ["trancado", "Trancado"], ["cancelado", "Cancelado"]] as const).map(([val, lbl]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setMatriculaForm((p: any) => ({ ...p, status: val }))}
+                  className={cn(
+                    "flex-1 h-9 rounded-lg border text-sm font-medium transition-colors",
+                    matriculaForm.status === val
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                  )}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
-            <p className="text-sm font-semibold">Valores do Contrato</p>
-
-            <div className="grid grid-cols-2 gap-3">
+          {/* Entrada agora? */}
+          <div className="rounded-lg border p-4 space-y-0">
+            <div className="flex items-center justify-between">
               <div>
-                <Label>Valor do produto (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={matriculaForm.valor_total}
-                  onChange={(e) =>
-                    setMatriculaForm((p: any) => ({
-                      ...p,
-                      valor_total: e.target.value,
-                      // Se valor_contratado estava igual ao valor_total (sem desconto manual), acompanha
-                      valor_contratado:
-                        p.valor_contratado === p.valor_total || !p.valor_contratado
-                          ? e.target.value
-                          : p.valor_contratado,
-                    }))
-                  }
-                  placeholder={matriculaForm.produto_id ? "Sem valor — digite aqui" : "Selecione o produto"}
-                />
-                <p className="text-[11px] text-muted-foreground mt-0.5">Referência do produto</p>
+                <p className="text-sm font-semibold">Entrada agora?</p>
+                <p className="text-xs text-muted-foreground">O aluno dará um valor inicial no ato da matrícula</p>
               </div>
-
-              <div>
-                <Label>Valor contratado (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={matriculaForm.valor_contratado}
-                  onChange={(e) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      valor_contratado: e.target.value,
-                    }))
-                  }
-                  placeholder="Igual ao produto ou valor negociado"
-                />
-                {parseFloat(matriculaForm.valor_total) > 0 &&
-                  parseFloat(matriculaForm.valor_contratado) > 0 &&
-                  parseFloat(matriculaForm.valor_contratado) < parseFloat(matriculaForm.valor_total) && (
-                  <p className="text-[11px] text-emerald-600 mt-0.5">
-                    Desconto de {formatCurrency(parseFloat(matriculaForm.valor_total) - parseFloat(matriculaForm.valor_contratado))}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Toggle: Pagamento único / Entrada + Parcelamento */}
-            <div>
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Forma de recebimento</Label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <button
-                  type="button"
-                  onClick={() => setMatriculaForm((p: any) => ({ ...p, modalidade_pagamento: "unico" }))}
-                  className={cn(
-                    "h-9 rounded-lg border text-sm font-medium transition-colors",
-                    !modoEntrada
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-                  )}
-                >
-                  Pagamento único
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMatriculaForm((p: any) => ({ ...p, modalidade_pagamento: "entrada_parcelas" }))}
-                  className={cn(
-                    "h-9 rounded-lg border text-sm font-medium transition-colors",
-                    modoEntrada
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-                  )}
-                >
-                  Entrada + Parcelamento
-                </button>
-              </div>
+              <Switch
+                checked={modoEntrada}
+                onCheckedChange={(c) => setMatriculaForm((p: any) => ({ ...p, modalidade_pagamento: c ? "entrada_parcelas" : "unico", modalidade_cobranca: "a_pagar" }))}
+              />
             </div>
 
             {/* ── MODO ENTRADA + PARCELAMENTO ── */}
@@ -822,235 +782,6 @@ export const MatriculaFormDialog = ({
               </div>
             )}
 
-            {!modoEntrada && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Parcelas</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={matriculaForm.parcelas}
-                  onChange={(e) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      parcelas: e.target.value,
-                    }))
-                  }
-                  disabled={!showParcelas}
-                />
-              </div>
-
-              <div>
-                <Label>
-                  {matriculaForm.forma_pagamento === "boleto" ||
-                  matriculaForm.forma_pagamento === "recorrencia_cartao" ||
-                  matriculaForm.forma_pagamento === "cheque"
-                    ? "1º Vencimento"
-                    : "Data do pagamento"}
-                </Label>
-                <Input
-                  type="date"
-                  value={matriculaForm.data_vencimento}
-                  onChange={(e) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      data_vencimento: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Forma de pagamento</Label>
-
-                <Select
-                  value={matriculaForm.forma_pagamento}
-                  onValueChange={handleFormaPagamentoChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        formasPagamentoLoading ? "Carregando..." : "Selecione"
-                      }
-                    />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {formasPagamento.map((forma) => (
-                      <SelectItem key={forma.id} value={forma.codigo}>
-                        {forma.nome}
-                      </SelectItem>
-                    ))}
-                    {formasPagamento.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        Nenhuma forma cadastrada
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Conta Bancária</Label>
-                <Select
-                  value={matriculaForm.conta_bancaria_id}
-                  onValueChange={(v) =>
-                    setMatriculaForm((p) => ({ ...p, conta_bancaria_id: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o banco" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contasBancarias.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nome} ({c.banco})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-
-            {showTaxa && taxaPercentual > 0 && (
-              <div className="rounded-md border p-3 bg-accent/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">
-                      Taxa: {taxaAutoCalc.nome} —{" "}
-                      {taxaPercentual.toFixed(2).replace(".", ",")}%
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Valor da taxa: {formatCurrency(valorTaxa)}
-                    </p>
-                  </div>
-                </div>
-
-                {(isCredito || isLink || isDebito) && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch
-                      checked={matriculaForm.repassar_taxa || false}
-                      onCheckedChange={(checked) =>
-                        setMatriculaForm((p) => ({
-                          ...p,
-                          repassar_taxa: checked,
-                        }))
-                      }
-                    />
-                    <Label className="text-sm cursor-pointer font-medium">
-                      Repassar taxa para o cliente
-                    </Label>
-                  </div>
-                )}
-
-                {matriculaForm.repassar_taxa &&
-                  (isCredito || isLink || isDebito) && (
-                    <p className="text-xs text-primary font-medium">
-                      O cliente pagará{" "}
-                      {formatCurrency(taxaCalc.valorCobrado)} (valor + taxa)
-                    </p>
-                  )}
-
-                {!matriculaForm.repassar_taxa &&
-                  (isCredito || isLink || isDebito) && (
-                    <p className="text-xs text-muted-foreground font-medium">
-                      Líquido lançado: {formatCurrency(taxaCalc.valorLiquido)}
-                    </p>
-                  )}
-              </div>
-            )}
-
-            {valorFinalCalc > 0 && numParcelasCalc > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {numParcelasCalc}x de{" "}
-                {formatCurrency(valorParcelaCalc)}
-                {matriculaForm.data_vencimento &&
-                  ` · 1ª parcela em ${formatDate(
-                    matriculaForm.data_vencimento
-                  )}`}
-                {showTaxa &&
-                  taxaPercentual > 0 &&
-                  ` · Taxa: ${taxaPercentual
-                    .toFixed(2)
-                    .replace(".", ",")}%`}
-              </p>
-            )}
-            </>)}
-          </div>
-
-          <div>
-            <Label>Status</Label>
-            <Select
-              value={matriculaForm.status}
-              onValueChange={(v) =>
-                setMatriculaForm((p) => ({
-                  ...p,
-                  status: v,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="ativo">Ativo</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-                <SelectItem value="finalizado">Finalizado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Comercial (Vendedor)</Label>
-              <Select
-                value={matriculaForm.comercial_id || "nenhum"}
-                onValueChange={(v) =>
-                  setMatriculaForm((p) => ({
-                    ...p,
-                    comercial_id: v === "nenhum" ? "" : v,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione (opcional)" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="nenhum">Nenhum</SelectItem>
-                  {comerciais.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {matriculaForm.comercial_id && (
-              <div>
-                <Label>% Comissão</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value={matriculaForm.percentual_comissao}
-                  onChange={(e) =>
-                    setMatriculaForm((p) => ({
-                      ...p,
-                      percentual_comissao: e.target.value,
-                    }))
-                  }
-                  placeholder="5"
-                />
-              </div>
-            )}
           </div>
 
           <div>
