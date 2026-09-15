@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPag
 
 export const LancamentosDialog = ({ processo, contas }: { processo: any; contas: any[] }) => {
   const queryClient = useQueryClient();
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [open, setOpen] = useState(false);
   const [novoValor, setNovoValor] = useState("");
   const [novoData, setNovoData] = useState(new Date().toISOString().split("T")[0]);
@@ -102,6 +105,7 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
         .from("pagamentos_processo")
         .insert({
           processo_id: processo.id,
+          empresa_id: empresaId,
           valor,
           data: novoData,
           tipo: novoTipo,
@@ -127,7 +131,7 @@ export const LancamentosDialog = ({ processo, contas }: { processo: any; contas:
       setNovoDataVencimento("");
       setNovoConta(processo.conta_bancaria_id || "");
     },
-    onError: () => toast({ title: "Erro ao registrar lançamento", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erro ao registrar lançamento", description: err?.message || String(err), variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({

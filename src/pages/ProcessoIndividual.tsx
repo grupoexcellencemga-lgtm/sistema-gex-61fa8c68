@@ -101,7 +101,7 @@ const ProcessoIndividual = () => {
     return getFormaPagamento(codigo)?.nome || codigo;
   };
 
-  const { data: todosPagamentos = [] } = useQuery({ queryKey: ["pagamentos_processo_all"], queryFn: async () => { const { data, error } = await supabase.from("pagamentos_processo").select("processo_id, valor, data, tipo, observacoes, taxa_cartao").is("deleted_at", null); if (error) throw error; return data || []; } });
+  const { data: todosPagamentos = [] } = useQuery({ queryKey: ["pagamentos_processo_all", empresaId], queryFn: async () => { const { data, error } = await supabase.from("pagamentos_processo").select("processo_id, valor, data, tipo, observacoes, taxa_cartao").eq("empresa_id", empresaId!).is("deleted_at", null); if (error) throw error; return data || []; }, enabled: !!empresaId });
 
   // ── Mutations ──
   const saveMutation = useMutation({
@@ -114,7 +114,7 @@ const ProcessoIndividual = () => {
       const { taxa_cartao, ...processoPayload } = payload;
       const taxaCartao = usaTaxa ? (Number(taxa_cartao) || 0) : 0;
       const observacaoEntrada = usaParcelas && parcelas > 1
-        ? `Entrada registrada no cadastro do processo — x em `
+        ? `Entrada registrada no cadastro do processo — ${parcelas}x em ${nomeFormaPagamento}`
         : "Entrada registrada no cadastro do processo";
       if (editing) {
         const { error } = await supabase.from("processos_individuais").update(processoPayload).eq("id", editing.id);
@@ -123,16 +123,16 @@ const ProcessoIndividual = () => {
         const entradaAutomatica = (lancamentosExistentes || []).find((l: any) => l.tipo === "entrada" && (l.observacoes || "").startsWith("Entrada registrada no cadastro do processo"));
         const temEntradaManual = (lancamentosExistentes || []).some((l: any) => l.tipo === "entrada" && !(l.observacoes || "").startsWith("Entrada registrada no cadastro do processo"));
         const payloadEntrada = { valor: valorEntrada, data: payload.data_inicio || new Date().toISOString().split("T")[0], forma_pagamento: payload.forma_pagamento || null, observacoes: observacaoEntrada, conta_bancaria_id: payload.conta_bancaria_id || null, taxa_cartao: taxaCartao > 0 ? taxaCartao : null };
-        if (valorEntrada > 0) { if (entradaAutomatica) { await supabase.from("pagamentos_processo").update(payloadEntrada).eq("id", entradaAutomatica.id); } else if (!temEntradaManual) { await supabase.from("pagamentos_processo").insert({ processo_id: editing.id, tipo: "entrada", ...payloadEntrada }); } }
+        if (valorEntrada > 0) { if (entradaAutomatica) { await supabase.from("pagamentos_processo").update(payloadEntrada).eq("id", entradaAutomatica.id); } else if (!temEntradaManual) { const ins = await supabase.from("pagamentos_processo").insert({ processo_id: editing.id, empresa_id: empresaId, tipo: "entrada", ...payloadEntrada } as any); if (ins.error) throw ins.error; } }
         else if (entradaAutomatica) { await supabase.from("pagamentos_processo").update({ deleted_at: new Date().toISOString() }).eq("id", entradaAutomatica.id); }
       } else {
         const { data, error } = await supabase.from("processos_individuais").insert({ ...processoPayload, empresa_id: empresaId }).select("id").single();
         if (error) throw error;
-        if (valorEntrada > 0) { await supabase.from("pagamentos_processo").insert({ processo_id: data.id, tipo: "entrada", valor: valorEntrada, data: payload.data_inicio || new Date().toISOString().split("T")[0], forma_pagamento: payload.forma_pagamento || null, observacoes: observacaoEntrada, conta_bancaria_id: payload.conta_bancaria_id || null, taxa_cartao: taxaCartao > 0 ? taxaCartao : null }); }
+        if (valorEntrada > 0) { const ins = await supabase.from("pagamentos_processo").insert({ processo_id: data.id, empresa_id: empresaId, tipo: "entrada", valor: valorEntrada, data: payload.data_inicio || new Date().toISOString().split("T")[0], forma_pagamento: payload.forma_pagamento || null, observacoes: observacaoEntrada, conta_bancaria_id: payload.conta_bancaria_id || null, taxa_cartao: taxaCartao > 0 ? taxaCartao : null } as any); if (ins.error) throw ins.error; }
       }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["processos_individuais"] }); queryClient.invalidateQueries({ queryKey: ["pagamentos_processo_all"] }); queryClient.invalidateQueries({ queryKey: ["pagamentos_processo_financeiro"] }); queryClient.invalidateQueries({ queryKey: ["processos_individuais_financeiro"] }); queryClient.invalidateQueries({ queryKey: ["contas_bancarias_all"] }); toast({ title: editing ? "Processo atualizado" : "Processo cadastrado" }); setDialogOpen(false); resetForm(); },
-    onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erro ao salvar", description: err?.message || String(err), variant: "destructive" }),
   });
 
   const sessaoMutation = useMutation({ mutationFn: async ({ id, sessoes_realizadas }: { id: string; sessoes_realizadas: number }) => { const { error } = await supabase.from("processos_individuais").update({ sessoes_realizadas }).eq("id", id); if (error) throw error; }, onSuccess: () => queryClient.invalidateQueries({ queryKey: ["processos_individuais"] }), onError: () => toast({ title: "Erro ao atualizar sessão", variant: "destructive" }) });
