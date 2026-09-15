@@ -34,6 +34,7 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   selectedAluno: any;
   initialTab?: string;
+  sheetTabKey?: number;
   matriculas: any[];
   pagamentos: any[];
   contasBancarias: any[];
@@ -109,6 +110,8 @@ export const AlunoDetailSheet = (props: Props) => {
   const hoje = new Date().toISOString().split("T")[0];
 
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [deleteMatriculaId, setDeleteMatriculaId] = useState<string | null>(null);
+  const [deletePagamentoId, setDeletePagamentoId] = useState<string | null>(null);
   const [confirmPagamentoDialog, setConfirmPagamentoDialog] = useState(false);
   const [confirmingPagamento, setConfirmingPagamento] = useState<any>(null);
   const [confirmingFees, setConfirmingFees] = useState<any>(null);
@@ -353,7 +356,7 @@ export const AlunoDetailSheet = (props: Props) => {
                 </SheetHeader>
               </div>
 
-              <Tabs key={`${selectedAluno?.id}|${props.initialTab || "dados"}`} defaultValue={props.initialTab || "dados"} className="flex flex-col min-h-0 flex-1">
+              <Tabs key={`${selectedAluno?.id}|${props.initialTab || "dados"}|${props.sheetTabKey ?? 0}`} defaultValue={props.initialTab || "dados"} className="flex flex-col min-h-0 flex-1">
                 <div className="overflow-x-auto no-scrollbar -mx-1 px-1 shrink-0 px-6">
                   <TabsList className="w-max min-w-full">
                     <TabsTrigger value="dados">Dados</TabsTrigger>
@@ -438,9 +441,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7"
-                                  onClick={() => {
-                                    if (confirm("Excluir matrícula e todos os pagamentos vinculados?")) onDeleteMatricula(m.id);
-                                  }}
+                                  onClick={() => setDeleteMatriculaId(m.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                 </Button>
@@ -718,9 +719,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                             variant="ghost"
                                             size="icon"
                                             className="h-7 w-7 text-destructive"
-                                            onClick={() => {
-                                              if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
-                                            }}
+                                            onClick={() => setDeletePagamentoId(p.id)}
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
                                           </Button>
@@ -978,6 +977,48 @@ export const AlunoDetailSheet = (props: Props) => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog - Confirmar exclusão de matrícula */}
+      <AlertDialog open={!!deleteMatriculaId} onOpenChange={(v) => { if (!v) setDeleteMatriculaId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir matrícula?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá excluir a matrícula e todos os pagamentos vinculados a ela. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (deleteMatriculaId) { onDeleteMatricula(deleteMatriculaId); setDeleteMatriculaId(null); } }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog - Confirmar exclusão de pagamento */}
+      <AlertDialog open={!!deletePagamentoId} onOpenChange={(v) => { if (!v) setDeletePagamentoId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pagamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este pagamento será removido permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (deletePagamentoId) { onDeletePagamento(deletePagamentoId); setDeletePagamentoId(null); } }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Dialog - Detalhes das Parcelas */}
       <Dialog open={parcelasDetailOpen} onOpenChange={setParcelasDetailOpen}>
         <DialogContent className="max-w-md">
@@ -1026,9 +1067,7 @@ export const AlunoDetailSheet = (props: Props) => {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive"
-                        onClick={() => {
-                          if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
-                        }}
+                        onClick={() => setDeletePagamentoId(p.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

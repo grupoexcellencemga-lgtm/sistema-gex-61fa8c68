@@ -37,6 +37,7 @@ const Alunos = () => {
   const [selectedAluno, setSelectedAluno] = useState<any>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<string>("dados");
+  const [sheetTabKey, setSheetTabKey] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AlunoForm>(emptyForm);
@@ -642,6 +643,7 @@ const Alunos = () => {
       // Avança para o passo 2: abre o Financeiro do aluno automaticamente
       if (selectedAluno) {
         setInitialTab("financeiro");
+        setSheetTabKey((k) => k + 1); // força remount dos tabs mesmo se o sheet já estiver aberto
         setSheetOpen(true);
       }
     },
@@ -1688,6 +1690,7 @@ const Alunos = () => {
         }}
         selectedAluno={selectedAluno}
         initialTab={initialTab}
+        sheetTabKey={sheetTabKey}
         matriculas={matriculas}
         pagamentos={pagamentos}
         contasBancarias={contasBancarias}
