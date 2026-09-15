@@ -550,7 +550,7 @@ const Alunos = () => {
           ? (matriculaForm.parcelas_data_vencimento || dataVencimentoResolvida)
           : dataVencimentoResolvida;
 
-        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada)) {
+        if (baseParcelasValor > 0) {
           const isCartao = ["credito", "cartao_credito", "cartao"].includes(fpParcelas || "");
           const isDebito = (fpParcelas || "") === "debito";
           const isLink = (fpParcelas || "") === "link";
