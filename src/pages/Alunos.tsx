@@ -636,9 +636,14 @@ const Alunos = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["atividades", selectedAluno?.id] });
       queryClient.invalidateQueries({ queryKey: ["comissoes"] });
-      toast.success("Matrícula criada com parcelas geradas automaticamente!");
+      toast.success("Matrícula criada! Veja os pagamentos na aba Financeiro.");
       setMatriculaDialogOpen(false);
       setMatriculaForm(emptyMatriculaForm);
+      // Avança para o passo 2: abre o Financeiro do aluno automaticamente
+      if (selectedAluno) {
+        setInitialTab("financeiro");
+        setSheetOpen(true);
+      }
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });

@@ -344,15 +344,15 @@ export const MatriculaFormDialog = ({
             <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[11px] flex items-center justify-center font-bold shrink-0">1</div>
             <span className="text-xs font-semibold text-primary leading-tight">Nova Matrícula</span>
           </div>
-          <div className="h-px flex-none w-4 bg-border" />
-          <div className="flex items-center gap-1.5 flex-1 justify-center">
+          <div className="h-px flex-none w-6 bg-border" />
+          <div className="flex items-center gap-1.5 flex-1 justify-center opacity-50">
             <div className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[11px] flex items-center justify-center font-bold shrink-0">2</div>
-            <span className="text-xs text-muted-foreground leading-tight">Financeiro do Aluno</span>
+            <span className="text-xs text-muted-foreground leading-tight">Financeiro</span>
           </div>
-          <div className="h-px flex-none w-4 bg-border" />
-          <div className="flex items-center gap-1.5 flex-1 justify-center">
+          <div className="h-px flex-none w-6 bg-border" />
+          <div className="flex items-center gap-1.5 flex-1 justify-center opacity-50">
             <div className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[11px] flex items-center justify-center font-bold shrink-0">3</div>
-            <span className="text-xs text-muted-foreground leading-tight">Registrar Pagamento</span>
+            <span className="text-xs text-muted-foreground leading-tight">Registrar</span>
           </div>
         </div>
 
