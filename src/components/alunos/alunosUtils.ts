@@ -36,6 +36,8 @@ export const emptyMatriculaForm = {
   parcelas_repassar_taxa: false,
   // Destino do restante: registrar internamente ou cobrar via ASAAS
   restante_destino: "sistema" as "sistema" | "asaas",
+  // Destino do "A pagar" principal: Sistema (pendente interno) ou ASAAS
+  modalidade_cobranca_destino: "asaas" as "asaas" | "sistema",
 };
 
 // Re-export from centralized formatters

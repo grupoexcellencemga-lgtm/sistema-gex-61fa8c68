@@ -10,7 +10,7 @@ import { gerarContratoMatricula } from "@/lib/pdfUtils";
 import { formatCurrency, formatDate } from "./alunosUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useMemo, useRef, type ChangeEvent } from "react";
+import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { abrirComprovante } from "@/lib/comprovantes";
@@ -102,7 +102,9 @@ export const MatriculaFormDialog = ({
   );
 
   const modalidade: "ja_pago" | "a_pagar" = matriculaForm.modalidade_cobranca || "ja_pago";
+  const destino: "asaas" | "sistema" = matriculaForm.modalidade_cobranca_destino || "asaas";
   const isAsaasFP = ASAAS_FORMAS.some(f => f.codigo === matriculaForm.forma_pagamento);
+  const [apagaModalOpen, setApagaModalOpen] = useState(false);
 
   const isCredito = ["credito", "cartao", "cartao_credito"].includes(
     matriculaForm.forma_pagamento
@@ -472,11 +474,7 @@ export const MatriculaFormDialog = ({
             </button>
             <button
               type="button"
-              onClick={() => setMatriculaForm((p: any) => ({
-                ...p,
-                modalidade_cobranca: "a_pagar",
-                conta_bancaria_id: "",
-              }))}
+              onClick={() => setApagaModalOpen(true)}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
                 modalidade === "a_pagar"
@@ -485,9 +483,57 @@ export const MatriculaFormDialog = ({
               )}
             >
               <Clock className="h-4 w-4" />
-              A pagar (cobrar via ASAAS)
+              A pagar
             </button>
           </div>
+
+          {/* Mini-modal: como cobrar? */}
+          <Dialog open={apagaModalOpen} onOpenChange={setApagaModalOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Como cobrar?</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3 mt-2">
+                <button
+                  type="button"
+                  className="flex flex-col items-start gap-1 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setMatriculaForm((p: any) => ({
+                      ...p,
+                      modalidade_cobranca: "a_pagar",
+                      modalidade_cobranca_destino: "sistema",
+                      forma_pagamento: isAsaasFP ? "" : p.forma_pagamento,
+                      conta_bancaria_id: "",
+                    }));
+                    setApagaModalOpen(false);
+                  }}
+                >
+                  <span className="font-semibold">Registrar no Sistema</span>
+                  <span className="text-xs text-muted-foreground">
+                    Cria uma cobrança pendente internamente. Aparece em Financeiro → Contas a Pagar e Receber.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="flex flex-col items-start gap-1 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    setMatriculaForm((p: any) => ({
+                      ...p,
+                      modalidade_cobranca: "a_pagar",
+                      modalidade_cobranca_destino: "asaas",
+                      conta_bancaria_id: "",
+                    }));
+                    setApagaModalOpen(false);
+                  }}
+                >
+                  <span className="font-semibold flex items-center gap-1">Cobrar via ASAAS <span>⚡</span></span>
+                  <span className="text-xs text-muted-foreground">
+                    Envia a cobrança por e-mail automaticamente (PIX, Boleto ou Cartão de crédito).
+                  </span>
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
             <p className="text-sm font-semibold">Valores do Contrato</p>
@@ -894,7 +940,7 @@ export const MatriculaFormDialog = ({
                   </SelectTrigger>
 
                   <SelectContent>
-                    {modalidade === "a_pagar" ? (
+                    {modalidade === "a_pagar" && destino === "asaas" ? (
                       <>
                         {ASAAS_FORMAS.map((f) => (
                           <SelectItem key={f.codigo} value={f.codigo}>
@@ -920,7 +966,7 @@ export const MatriculaFormDialog = ({
                 </Select>
               </div>
 
-              {modalidade === "ja_pago" ? (
+              {modalidade === "ja_pago" || (modalidade === "a_pagar" && destino === "sistema") ? (
                 <div>
                   <Label>Conta Bancária</Label>
                   <Select
@@ -951,7 +997,7 @@ export const MatriculaFormDialog = ({
             </div>
 
             {/* Banner ASAAS */}
-            {modalidade === "a_pagar" && isAsaasFP && (
+            {modalidade === "a_pagar" && destino === "asaas" && isAsaasFP && (
               <div className="flex gap-2.5 items-start rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-3">
                 <span className="text-base mt-px">⚡</span>
                 <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
