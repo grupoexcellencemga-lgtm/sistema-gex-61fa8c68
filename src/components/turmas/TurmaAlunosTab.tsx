@@ -125,7 +125,8 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
       if (error) throw error;
       return data;
     },
-    enabled: buscaDialogOpen && !!empresaId,
+    enabled: !!empresaId,
+    staleTime: 60_000,
   });
 
   // ── Dados para o MatriculaFormDialog (só carrega ao abrir step 2) ──
