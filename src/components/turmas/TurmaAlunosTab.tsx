@@ -332,7 +332,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
             parcelas: 1,
             parcela_atual: 1,
             taxa_valor: entradaTaxa > 0 ? entradaTaxa : null,
-            taxa_absorvida_por: entradaTaxa > 0 ? (matriculaForm.entrada_taxa_absorvida_por || null) : null,
+            taxa_absorvida_por: entradaTaxa > 0 ? (matriculaForm.entrada_taxa_absorvida_por === "nenhuma" || !matriculaForm.entrada_taxa_absorvida_por ? null : matriculaForm.entrada_taxa_absorvida_por) : null,
           } as any);
           if (entErr) throw entErr;
         }

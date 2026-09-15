@@ -321,6 +321,10 @@ export const AlunoDetailSheet = (props: Props) => {
     return acc + semNoise(Math.max(0, Number(m.valor_final || 0) - pagoEfetivo));
   }, 0);
 
+  const totalVencido = pagamentos
+    .filter((p: any) => p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje))
+    .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+
   // Soma real de todos os pagamentos vinculados a cada matrícula
   const totalPorMatricula = (matriculaId: string) =>
     pagamentos
@@ -513,26 +517,47 @@ export const AlunoDetailSheet = (props: Props) => {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Total pago</p>
-                        <p className="text-lg font-semibold text-primary">{formatCurrency(totalPago)}</p>
+                        <p className="text-xs text-muted-foreground">Recebido</p>
+                        <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPago)}</p>
                       </div>
                       <div className="rounded-lg border p-3">
                         <p className="text-xs text-muted-foreground">Pendente</p>
-                        <p className="text-lg font-semibold text-warning">{formatCurrency(totalPendente)}</p>
+                        <p className="text-base font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(totalPendente)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Vencido</p>
+                        <p className="text-base font-semibold text-red-600 dark:text-red-400">{formatCurrency(totalVencido)}</p>
                       </div>
                     </div>
 
                     {pagamentos.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-6">Nenhum pagamento registrado</p>
                     ) : (
-                      <div className="space-y-2">
-                        {(() => {
-                          const grouped: any[] = [];
+                      <div className="space-y-5">
+                        {[
+                          ...matriculas
+                            .filter((m: any) => pagamentos.some((p: any) => p.matricula_id === m.id))
+                            .map((m: any) => ({
+                              id: m.id,
+                              label: m.produtos?.nome || "—",
+                              sub: m.turmas?.nome || null,
+                              status: m.status as string | null,
+                              pgs: pagamentos.filter((p: any) => p.matricula_id === m.id),
+                            })),
+                          ...(pagamentos.some((p: any) => !p.matricula_id) ? [{
+                            id: "__orphan__",
+                            label: "Sem vínculo",
+                            sub: null,
+                            status: null,
+                            pgs: pagamentos.filter((p: any) => !p.matricula_id),
+                          }] : []),
+                        ].map((group) => {
                           const cartaoGroups: Record<string, any[]> = {};
+                          const rowItems: { type: string; data: any }[] = [];
 
-                          pagamentos.forEach((p: any) => {
+                          group.pgs.forEach((p: any) => {
                             if (["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas > 1) {
                               const key = `${p.produto_id || "none"}-${p.parcelas}-${p.matricula_id || "none"}`;
                               if (!cartaoGroups[key]) cartaoGroups[key] = [];
@@ -542,131 +567,185 @@ export const AlunoDetailSheet = (props: Props) => {
                               if (!cartaoGroups[key]) cartaoGroups[key] = [];
                               cartaoGroups[key].push(p);
                             } else {
-                              grouped.push({ type: "single", data: p });
+                              rowItems.push({ type: "single", data: p });
                             }
                           });
+                          Object.values(cartaoGroups).forEach((pgList) => rowItems.push({ type: "group", data: pgList }));
 
-                          Object.values(cartaoGroups).forEach((items) => {
-                            grouped.push({ type: "group", data: items });
-                          });
-
-                          return grouped.map((item, idx) => {
-                            if (item.type === "group") {
-                              const items = item.data as any[];
-                              const totalGrupo = items.reduce((s: number, p: any) => s + Number(p.valor), 0);
-                              const pagas = items.filter((p: any) => p.status === "pago").length;
-                              return (
-                                <div
-                                  key={`group-${idx}`}
-                                  className="rounded-lg border p-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors"
-                                  onClick={() => {
-                                    setSelectedParcelas(items.sort((a: any, b: any) => a.parcela_atual - b.parcela_atual));
-                                    setParcelasDetailOpen(true);
-                                  }}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="font-medium">
-                                        {formatCurrency(totalGrupo)} · {items.length}x de {formatCurrency(Number(items[0].valor))}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {items[0]?.produtos?.nome || "—"} · {getFormaLabel(items[0]?.forma_pagamento)} · {pagas}/{items.length} pagas
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline" className={
-                                      pagas === items.length
-                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
-                                        : pagas > 0
-                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
-                                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
-                                    }>
-                                      {pagas === items.length ? "Quitado" : `${pagas}/${items.length}`}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            const p = item.data;
-                            const valorTaxaMaquina = getValorTaxaMaquina(p);
-
-                            return (
-                              <div key={p.id} className="rounded-lg border p-3 text-sm flex items-center justify-between">
+                          return (
+                            <div key={group.id} className="space-y-1.5">
+                              <div className="flex items-center justify-between pb-1.5 border-b">
                                 <div>
-                                  <p className="font-medium">
-                                    {formatCurrency(Number(p.valor))}
-                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no cartão`}
-                                    {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && !p.parcelas_cartao && " · 1x no cartão"}
-                                    {p.forma_pagamento === "link" && p.parcelas_cartao && ` · ${p.parcelas_cartao}x no link`}
-                                    {formasComTaxa.includes(p.forma_pagamento) && (p as any).taxa_cartao > 0 && ` · Taxa: ${(p as any).taxa_cartao}%`}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">{p.produtos?.nome || "—"} · {getFormaLabel(p.forma_pagamento)}</p>
-                                  <p className="text-xs text-muted-foreground">Venc: {formatDate(p.data_vencimento)}</p>
-                                  {valorTaxaMaquina > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Taxa da máquina: {formatCurrency(valorTaxaMaquina)}
-                                    </p>
-                                  )}
+                                  <p className="text-sm font-semibold">{group.label}</p>
+                                  {group.sub && <p className="text-xs text-muted-foreground">{group.sub}</p>}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  {p.status === "pendente" && (
-                                    <Button variant="outline" size="sm" onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}>
-                                      Confirmar
-                                    </Button>
-                                  )}
-                                  {p.status === "pago" && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        title="Gerar Recibo"
-                                        onClick={() =>
-                                          gerarReciboPagamento({
-                                            alunoNome: selectedAluno?.nome || "—",
-                                            alunoCpf: selectedAluno?.cpf || undefined,
-                                            produtoNome: p.produtos?.nome || "—",
-                                            valor: Number(p.valor),
-                                            dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
-                                            formaPagamento: getFormaLabel(p.forma_pagamento),
-                                            reciboId: p.id,
-                                          })
-                                        }
-                                      >
-                                        <Receipt className="h-3.5 w-3.5 text-primary" />
-                                      </Button>
-                                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDesfazerPagamento(p)}>
-                                        Desfazer
-                                      </Button>
-                                    </>
-                                  )}
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}>
-                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-destructive"
-                                    onClick={() => {
-                                      if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
-                                    }}
+                                {group.status && (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-xs border-0",
+                                      group.status === "ativo"
+                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                        : group.status === "concluido"
+                                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                    )}
                                   >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Badge variant="outline" className={
-                                    p.status === "pago"
-                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
-                                      : p.status === "vencido"
-                                        ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0"
-                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
-                                  }>
-                                    {p.status}
+                                    {group.status}
                                   </Badge>
-                                </div>
+                                )}
                               </div>
-                            );
-                          });
-                        })()}
+
+                              <div className="space-y-1.5">
+                                {rowItems.map((item, idx) => {
+                                  if (item.type === "group") {
+                                    const its = item.data as any[];
+                                    const totalGrupo = its.reduce((s: number, p: any) => s + Number(p.valor), 0);
+                                    const pagas = its.filter((p: any) => p.status === "pago").length;
+                                    return (
+                                      <div
+                                        key={`grp-${group.id}-${idx}`}
+                                        className="rounded-lg border p-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors"
+                                        onClick={() => {
+                                          setSelectedParcelas(its.sort((a: any, b: any) => a.parcela_atual - b.parcela_atual));
+                                          setParcelasDetailOpen(true);
+                                        }}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div>
+                                            <p className="font-medium">
+                                              {formatCurrency(totalGrupo)} · {its.length}x de {formatCurrency(Number(its[0].valor))}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {getFormaLabel(its[0]?.forma_pagamento)} · {pagas}/{its.length} pagas
+                                            </p>
+                                          </div>
+                                          <Badge variant="outline" className={
+                                            pagas === its.length
+                                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
+                                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
+                                          }>
+                                            {pagas === its.length ? "Quitado" : `${pagas}/${its.length}`}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  const p = item.data;
+                                  const valorTaxaMaquina = getValorTaxaMaquina(p);
+                                  const isVencido = p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje);
+
+                                  return (
+                                    <div key={p.id} className="rounded-lg border p-3 text-sm">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="font-medium">
+                                              {formatCurrency(Number(p.valor))}
+                                              {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x`}
+                                            </p>
+                                            {p.tipo === "entrada" && (
+                                              <Badge variant="outline" className="text-xs border-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Entrada</Badge>
+                                            )}
+                                            {valorTaxaMaquina > 0 && (
+                                              <Badge variant="outline" className="text-xs border-0 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                                taxa {formatCurrency(valorTaxaMaquina)}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                            {getFormaLabel(p.forma_pagamento)}
+                                            {p.status === "pago" && p.data_pagamento
+                                              ? ` · Pago em ${formatDate(p.data_pagamento)}`
+                                              : p.data_vencimento
+                                                ? ` · Venc. ${formatDate(p.data_vencimento)}`
+                                                : ""}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                          {(p.status === "pendente" || p.status === "vencido") && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 text-xs"
+                                              onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}
+                                            >
+                                              Registrar
+                                            </Button>
+                                          )}
+                                          {p.comprovante_url && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7"
+                                              title="Ver comprovante"
+                                              onClick={() => abrirComprovante(p.comprovante_url)}
+                                            >
+                                              <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </Button>
+                                          )}
+                                          {p.status === "pago" && (
+                                            <>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                title="Gerar Recibo"
+                                                onClick={() =>
+                                                  gerarReciboPagamento({
+                                                    alunoNome: selectedAluno?.nome || "—",
+                                                    alunoCpf: selectedAluno?.cpf || undefined,
+                                                    produtoNome: p.produtos?.nome || group.label || "—",
+                                                    valor: Number(p.valor),
+                                                    dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
+                                                    formaPagamento: getFormaLabel(p.forma_pagamento),
+                                                    reciboId: p.id,
+                                                  })
+                                                }
+                                              >
+                                                <Receipt className="h-3.5 w-3.5 text-primary" />
+                                              </Button>
+                                              <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => onDesfazerPagamento(p)}>
+                                                Desfazer
+                                              </Button>
+                                            </>
+                                          )}
+                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPagamento(p)}>
+                                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-destructive"
+                                            onClick={() => {
+                                              if (confirm("Excluir este pagamento?")) onDeletePagamento(p.id);
+                                            }}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                          <Badge
+                                            variant="outline"
+                                            className={cn(
+                                              "text-xs border-0",
+                                              p.status === "pago"
+                                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                                : isVencido
+                                                  ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                            )}
+                                          >
+                                            {p.status === "pago" ? "Pago" : isVencido ? "Vencido" : "Pendente"}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </TabsContent>

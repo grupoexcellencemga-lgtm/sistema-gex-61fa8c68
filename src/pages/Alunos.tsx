@@ -536,7 +536,7 @@ const Alunos = () => {
             parcelas: 1,
             parcela_atual: 1,
             taxa_valor: entradaTaxa > 0 ? entradaTaxa : null,
-            taxa_absorvida_por: entradaTaxa > 0 ? (matriculaForm.entrada_taxa_absorvida_por || null) : null,
+            taxa_absorvida_por: entradaTaxa > 0 ? (matriculaForm.entrada_taxa_absorvida_por === "nenhuma" || !matriculaForm.entrada_taxa_absorvida_por ? null : matriculaForm.entrada_taxa_absorvida_por) : null,
           } as any);
           if (entErr) throw entErr;
         }
@@ -545,13 +545,11 @@ const Alunos = () => {
         const baseParcelasValor = modoEntrada ? valorRestante : valorFinal;
         const fpParcelas = modoEntrada ? matriculaForm.parcelas_forma_pagamento : matriculaForm.forma_pagamento;
         const contaParcelas = modoEntrada ? matriculaForm.parcelas_conta_bancaria_id : matriculaForm.conta_bancaria_id;
-        const restanteDestino = modoEntrada ? (matriculaForm.restante_destino || "sistema") : "sistema";
         const dateBaseRestante = modoEntrada
           ? (matriculaForm.parcelas_data_vencimento || dataVencimentoResolvida)
           : dataVencimentoResolvida;
 
-        // ASAAS: por enquanto a integração ainda não está pronta — registra internamente
-        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada) && restanteDestino !== "asaas") {
+        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada)) {
           const isCartao = ["credito", "cartao_credito", "cartao"].includes(fpParcelas || "");
           const isDebito = (fpParcelas || "") === "debito";
           const isLink = (fpParcelas || "") === "link";
@@ -596,26 +594,6 @@ const Alunos = () => {
           if (pagErr) throw pagErr;
         }
 
-        // ASAAS: criação de cobrança via ASAAS (integração pendente)
-        if (baseParcelasValor > 0 && modoEntrada && restanteDestino === "asaas") {
-          // TODO: chamar Edge Function de criação de cobrança ASAAS
-          // Por enquanto apenas registra o pagamento como pendente internamente
-          const dateBase = matriculaForm.parcelas_data_vencimento || dataVencimentoResolvida;
-          const { error: asaasErr } = await supabase.from("pagamentos").insert({
-            empresa_id: empresaId,
-            aluno_id: selectedAluno.id,
-            produto_id: produtoIdResolvido,
-            matricula_id: mat.id,
-            valor: Math.round(baseParcelasValor * 100) / 100,
-            forma_pagamento: fpParcelas || null,
-            parcelas: 1,
-            parcela_atual: 1,
-            data_vencimento: dateBase,
-            status: "pendente",
-            conta_bancaria_id: null,
-          } as any);
-          if (asaasErr) throw asaasErr;
-        }
       }
 
       if (matriculaForm.comercial_id && valorFinal > 0) {

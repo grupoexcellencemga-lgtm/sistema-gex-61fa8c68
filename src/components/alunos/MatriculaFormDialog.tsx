@@ -15,12 +15,8 @@ import { useFormasPagamento } from "@/hooks/useFormasPagamento";
 import { calcTaxaMaquina } from "@/lib/taxaMaquina";
 import { abrirComprovante } from "@/lib/comprovantes";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
-const ASAAS_FORMAS = [
-  { codigo: "asaas_pix", nome: "PIX (ASAAS)" },
-  { codigo: "asaas_boleto", nome: "Boleto bancário (ASAAS)" },
-  { codigo: "asaas_cartao", nome: "Cartão de crédito (ASAAS)" },
-];
 
 interface Props {
   open: boolean;
@@ -77,6 +73,7 @@ export const MatriculaFormDialog = ({
 
   const entradaValorCalc = parseFloat(matriculaForm.entrada_valor) || 0;
   const restanteCalc = Math.max(valorFinalCalc - entradaValorCalc, 0);
+  const { toast } = useToast();
   const modoEntrada = matriculaForm.modalidade_pagamento === "entrada_parcelas";
 
   const numParcelasCalc = parseInt(matriculaForm.parcelas) || 1;
@@ -102,9 +99,6 @@ export const MatriculaFormDialog = ({
   );
 
   const modalidade: "ja_pago" | "a_pagar" = matriculaForm.modalidade_cobranca || "ja_pago";
-  const destino: "asaas" | "sistema" = matriculaForm.modalidade_cobranca_destino || "asaas";
-  const isAsaasFP = ASAAS_FORMAS.some(f => f.codigo === matriculaForm.forma_pagamento);
-  const [apagaModalOpen, setApagaModalOpen] = useState(false);
 
   const isCredito = ["credito", "cartao", "cartao_credito"].includes(
     matriculaForm.forma_pagamento
@@ -474,7 +468,11 @@ export const MatriculaFormDialog = ({
             </button>
             <button
               type="button"
-              onClick={() => setApagaModalOpen(true)}
+              onClick={() => setMatriculaForm((p: any) => ({
+                ...p,
+                modalidade_cobranca: "a_pagar",
+                conta_bancaria_id: "",
+              }))}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border text-sm font-medium transition-colors",
                 modalidade === "a_pagar"
@@ -486,54 +484,6 @@ export const MatriculaFormDialog = ({
               A pagar
             </button>
           </div>
-
-          {/* Mini-modal: como cobrar? */}
-          <Dialog open={apagaModalOpen} onOpenChange={setApagaModalOpen}>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Como cobrar?</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3 mt-2">
-                <button
-                  type="button"
-                  className="flex flex-col items-start gap-1 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    setMatriculaForm((p: any) => ({
-                      ...p,
-                      modalidade_cobranca: "a_pagar",
-                      modalidade_cobranca_destino: "sistema",
-                      forma_pagamento: isAsaasFP ? "" : p.forma_pagamento,
-                      conta_bancaria_id: "",
-                    }));
-                    setApagaModalOpen(false);
-                  }}
-                >
-                  <span className="font-semibold">Registrar no Sistema</span>
-                  <span className="text-xs text-muted-foreground">
-                    Cria uma cobrança pendente internamente. Aparece em Financeiro → Contas a Pagar e Receber.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="flex flex-col items-start gap-1 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    setMatriculaForm((p: any) => ({
-                      ...p,
-                      modalidade_cobranca: "a_pagar",
-                      modalidade_cobranca_destino: "asaas",
-                      conta_bancaria_id: "",
-                    }));
-                    setApagaModalOpen(false);
-                  }}
-                >
-                  <span className="font-semibold flex items-center gap-1">Cobrar via ASAAS <span>⚡</span></span>
-                  <span className="text-xs text-muted-foreground">
-                    Envia a cobrança por e-mail automaticamente (PIX, Boleto ou Cartão de crédito).
-                  </span>
-                </button>
-              </div>
-            </DialogContent>
-          </Dialog>
 
           <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
             <p className="text-sm font-semibold">Valores do Contrato</p>
@@ -697,9 +647,10 @@ export const MatriculaFormDialog = ({
                       <Input
                         type="number"
                         step="0.01"
-                        value={matriculaForm.entrada_taxa_valor}
+                        value={matriculaForm.entrada_taxa_absorvida_por === "" || matriculaForm.entrada_taxa_absorvida_por === "nenhuma" ? (matriculaForm.entrada_taxa_absorvida_por === "nenhuma" ? "" : matriculaForm.entrada_taxa_valor) : matriculaForm.entrada_taxa_valor}
                         onChange={(e) => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_valor: e.target.value }))}
-                        placeholder="0,00 — opcional"
+                        placeholder={matriculaForm.entrada_taxa_absorvida_por === "nenhuma" ? "Sem taxa" : "0,00 — opcional"}
+                        disabled={matriculaForm.entrada_taxa_absorvida_por === "" || matriculaForm.entrada_taxa_absorvida_por === "nenhuma"}
                       />
                       {showEntradaTaxa && entradaTaxaAutoCalc.percentual > 0 && (
                         <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -708,11 +659,13 @@ export const MatriculaFormDialog = ({
                       )}
                     </div>
                     <div>
-                      <Label>Quem absorveu a taxa?</Label>
-                      <div className="grid grid-cols-3 gap-1 mt-1">
-                        {(["", "empresa", "aluno"] as const).map((opt) => (
+                      <Label>
+                        Quem absorveu a taxa? <span className="text-destructive">*</span>
+                      </Label>
+                      <div className={cn("grid grid-cols-3 gap-1 mt-1 rounded-lg", matriculaForm.entrada_taxa_absorvida_por === "" && "ring-1 ring-destructive")}>
+                        {(["nenhuma", "empresa", "aluno"] as const).map((opt) => (
                           <button
-                            key={opt || "nenhum"}
+                            key={opt}
                             type="button"
                             className={cn(
                               "h-9 rounded-lg border text-xs font-medium transition-colors",
@@ -720,12 +673,53 @@ export const MatriculaFormDialog = ({
                                 ? "bg-primary text-primary-foreground border-primary"
                                 : "bg-background text-muted-foreground border-border"
                             )}
-                            onClick={() => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_absorvida_por: opt }))}
+                            onClick={() => setMatriculaForm((p: any) => ({
+                              ...p,
+                              entrada_taxa_absorvida_por: opt,
+                            }))}
                           >
-                            {opt === "" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
+                            {opt === "nenhuma" ? "Sem taxa" : opt === "empresa" ? "Empresa" : "Aluno"}
                           </button>
                         ))}
                       </div>
+                      {matriculaForm.entrada_taxa_absorvida_por === "" && (
+                        <p className="text-[11px] text-destructive mt-1">Selecione uma opção antes de salvar.</p>
+                      )}
+                      {/* Resumo do impacto da taxa */}
+                      {(() => {
+                        const taxaVal = parseFloat(matriculaForm.entrada_taxa_valor) || 0;
+                        const entVal = parseFloat(matriculaForm.entrada_valor) || 0;
+                        const absorvida = matriculaForm.entrada_taxa_absorvida_por;
+                        if (absorvida === "nenhuma") {
+                          return (
+                            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                              Nenhuma taxa aplicada — valor líquido igual ao cobrado.
+                            </p>
+                          );
+                        }
+                        if (absorvida === "empresa" && taxaVal > 0 && entVal > 0) {
+                          return (
+                            <p className="text-[11px] text-amber-600 mt-1 leading-snug">
+                              Empresa absorve {formatCurrency(taxaVal)} de taxa — líquido recebido: <strong>{formatCurrency(entVal - taxaVal)}</strong>
+                            </p>
+                          );
+                        }
+                        if (absorvida === "aluno" && taxaVal > 0 && entVal > 0) {
+                          return (
+                            <p className="text-[11px] text-blue-600 mt-1 leading-snug">
+                              Aluno pagou {formatCurrency(entVal + taxaVal)} no total ({formatCurrency(entVal)} + {formatCurrency(taxaVal)} de taxa)
+                            </p>
+                          );
+                        }
+                        if ((absorvida === "empresa" || absorvida === "aluno") && taxaVal <= 0) {
+                          return (
+                            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                              Informe o valor da taxa para ver o impacto.
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -737,32 +731,8 @@ export const MatriculaFormDialog = ({
                       <p className="text-sm font-semibold text-amber-600">{formatCurrency(restanteCalc)}</p>
                     </div>
 
-                    {/* Sistema | ASAAS */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button"
-                        onClick={() => setMatriculaForm((p: any) => ({ ...p, restante_destino: "sistema" }))}
-                        className={cn("h-9 rounded-lg border text-sm font-medium transition-colors",
-                          (matriculaForm.restante_destino || "sistema") === "sistema"
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-                        )}
-                      >
-                        Registrar no Sistema
-                      </button>
-                      <button type="button"
-                        onClick={() => setMatriculaForm((p: any) => ({ ...p, restante_destino: "asaas" }))}
-                        className={cn("h-9 rounded-lg border text-sm font-medium transition-colors",
-                          matriculaForm.restante_destino === "asaas"
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-                        )}
-                      >
-                        Cobrar via ASAAS
-                      </button>
-                    </div>
-
-                    {/* Campos: Sistema */}
-                    {(matriculaForm.restante_destino || "sistema") === "sistema" && (
+                    {/* Campos: Restante */}
+                    {(
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -847,38 +817,6 @@ export const MatriculaFormDialog = ({
                       </div>
                     )}
 
-                    {/* Campos: ASAAS */}
-                    {matriculaForm.restante_destino === "asaas" && (
-                      <div className="space-y-3">
-                        <div>
-                          <Label>Forma de cobrança (ASAAS)</Label>
-                          <Select value={matriculaForm.parcelas_forma_pagamento}
-                            onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_forma_pagamento: v }))}
-                          >
-                            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                            <SelectContent>
-                              {ASAAS_FORMAS.map((f) => (
-                                <SelectItem key={f.codigo} value={f.codigo}>{f.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Data de vencimento</Label>
-                          <Input type="date" value={matriculaForm.parcelas_data_vencimento}
-                            onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas_data_vencimento: e.target.value }))}
-                          />
-                        </div>
-                        <div className="flex gap-2.5 items-start rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-3">
-                          <span className="text-base mt-px">⚡</span>
-                          <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-                            <span className="font-semibold">Cobrança automática via ASAAS.</span>{" "}
-                            Ao salvar, o aluno receberá a cobrança por e-mail automaticamente.
-                            O status será atualizado no GEx assim que o pagamento for confirmado.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -940,75 +878,42 @@ export const MatriculaFormDialog = ({
                   </SelectTrigger>
 
                   <SelectContent>
-                    {modalidade === "a_pagar" && destino === "asaas" ? (
-                      <>
-                        {ASAAS_FORMAS.map((f) => (
-                          <SelectItem key={f.codigo} value={f.codigo}>
-                            {f.nome}
-                          </SelectItem>
-                        ))}
-                      </>
-                    ) : (
-                      <>
-                        {formasPagamento.map((forma) => (
-                          <SelectItem key={forma.id} value={forma.codigo}>
-                            {forma.nome}
-                          </SelectItem>
-                        ))}
-                        {formasPagamento.length === 0 && (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
-                            Nenhuma forma cadastrada
-                          </div>
-                        )}
-                      </>
+                    {formasPagamento.map((forma) => (
+                      <SelectItem key={forma.id} value={forma.codigo}>
+                        {forma.nome}
+                      </SelectItem>
+                    ))}
+                    {formasPagamento.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        Nenhuma forma cadastrada
+                      </div>
                     )}
                   </SelectContent>
                 </Select>
               </div>
 
-              {modalidade === "ja_pago" || (modalidade === "a_pagar" && destino === "sistema") ? (
-                <div>
-                  <Label>Conta Bancária</Label>
-                  <Select
-                    value={matriculaForm.conta_bancaria_id}
-                    onValueChange={(v) =>
-                      setMatriculaForm((p) => ({ ...p, conta_bancaria_id: v }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o banco" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {contasBancarias.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nome} ({c.banco})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="flex items-end">
-                  <p className="text-xs text-muted-foreground leading-tight pb-1">
-                    O pagamento será processado pelo ASAAS e o saldo ficará disponível na conta ASAAS.
-                  </p>
-                </div>
-              )}
+              <div>
+                <Label>Conta Bancária</Label>
+                <Select
+                  value={matriculaForm.conta_bancaria_id}
+                  onValueChange={(v) =>
+                    setMatriculaForm((p) => ({ ...p, conta_bancaria_id: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o banco" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contasBancarias.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.nome} ({c.banco})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Banner ASAAS */}
-            {modalidade === "a_pagar" && destino === "asaas" && isAsaasFP && (
-              <div className="flex gap-2.5 items-start rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-3">
-                <span className="text-base mt-px">⚡</span>
-                <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-                  <span className="font-semibold">Cobrança automática via ASAAS.</span> Ao salvar, o aluno receberá o{" "}
-                  {matriculaForm.forma_pagamento === "asaas_pix" ? "QR Code PIX" :
-                   matriculaForm.forma_pagamento === "asaas_boleto" ? "boleto bancário" :
-                   "link de pagamento por cartão"} por e-mail automaticamente.
-                  O status do pagamento no GEx será atualizado assim que for confirmado.
-                </p>
-              </div>
-            )}
 
             {showTaxa && taxaPercentual > 0 && (
               <div className="rounded-md border p-3 bg-accent/30 space-y-2">
@@ -1311,7 +1216,17 @@ export const MatriculaFormDialog = ({
               </Button>
             )}
 
-            <Button className="flex-1" onClick={onSave} disabled={isSaving}>
+            <Button
+              className="flex-1"
+              onClick={() => {
+                if (modoEntrada && matriculaForm.entrada_taxa_absorvida_por === "") {
+                  toast({ title: "Campo obrigatório", description: "Selecione quem absorveu a taxa da entrada antes de salvar.", variant: "destructive" });
+                  return;
+                }
+                onSave();
+              }}
+              disabled={isSaving}
+            >
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingMatriculaId
                 ? "Salvar Alterações"
