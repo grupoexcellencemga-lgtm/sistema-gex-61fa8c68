@@ -31,6 +31,11 @@ export const emptyMatriculaForm = {
   // Forma de pagamento das parcelas restantes
   parcelas_forma_pagamento: "",
   parcelas_conta_bancaria_id: "",
+  parcelas_data_vencimento: "",
+  parcelas_taxa_cartao: "",
+  parcelas_repassar_taxa: false,
+  // Destino do restante: registrar internamente ou cobrar via ASAAS
+  restante_destino: "sistema" as "sistema" | "asaas",
 };
 
 // Re-export from centralized formatters

@@ -212,6 +212,41 @@ export const MatriculaFormDialog = ({
     }
   }, [entradaTaxaAutoCalc.percentual, matriculaForm.entrada_valor, showEntradaTaxa, modoEntrada]);
 
+  // ── Taxa automática para o RESTANTE ──
+  const isRestanteCredito = ["credito", "cartao", "cartao_credito"].includes(matriculaForm.parcelas_forma_pagamento || "");
+  const isRestanteDebito = (matriculaForm.parcelas_forma_pagamento || "") === "debito";
+  const isRestanteLink = (matriculaForm.parcelas_forma_pagamento || "") === "link";
+  const isRestanteBoleto = (matriculaForm.parcelas_forma_pagamento || "") === "boleto";
+  const showRestanteTaxa = modoEntrada && !isRestanteBoleto && (isRestanteCredito || isRestanteDebito || isRestanteLink);
+
+  const restanteTaxaAutoCalc = useMemo(() => {
+    if (!showRestanteTaxa || !taxas.length) return { percentual: 0, nome: "" };
+    const numP = parseInt(matriculaForm.parcelas) || 1;
+    if (isRestanteDebito) {
+      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === "Débito");
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome: "Débito" };
+    }
+    if (isRestanteCredito) {
+      const nome = numP === 1 ? "Crédito 1x" : `Crédito ${numP}x`;
+      const found = taxas.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: found.nome } : { percentual: 0, nome };
+    }
+    if (isRestanteLink) {
+      const nome = `${numP}x`;
+      const found = taxas.find((t: any) => t.tipo === "link" && t.nome === nome);
+      return found ? { percentual: Number(found.percentual), nome: `Link ${found.nome}` } : { percentual: 0, nome: `Link ${nome}` };
+    }
+    return { percentual: 0, nome: "" };
+  }, [showRestanteTaxa, isRestanteCredito, isRestanteDebito, isRestanteLink, matriculaForm.parcelas, taxas]);
+
+  useEffect(() => {
+    if (!modoEntrada || !showRestanteTaxa || restanteTaxaAutoCalc.percentual <= 0) return;
+    const current = parseFloat(matriculaForm.parcelas_taxa_cartao) || 0;
+    if (current !== restanteTaxaAutoCalc.percentual) {
+      setMatriculaForm((p: any) => ({ ...p, parcelas_taxa_cartao: String(restanteTaxaAutoCalc.percentual) }));
+    }
+  }, [restanteTaxaAutoCalc.percentual, showRestanteTaxa, modoEntrada]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const taxaCalc = calcTaxaMaquina(
     valorFinalCalc,
     showTaxa ? taxaPercentual : 0,
@@ -649,10 +684,156 @@ export const MatriculaFormDialog = ({
                   </div>
                 </div>
 
-                {entradaValorCalc > 0 && (
-                  <p className="text-xs text-amber-600 font-medium">
-                    Restante após entrada: {formatCurrency(restanteCalc)} — adicione as parcelas na aba Financeiro da matrícula.
-                  </p>
+                {entradaValorCalc > 0 && restanteCalc > 0 && (
+                  <div className="rounded-md border p-3 space-y-3 bg-background">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Restante a cobrar</p>
+                      <p className="text-sm font-semibold text-amber-600">{formatCurrency(restanteCalc)}</p>
+                    </div>
+
+                    {/* Sistema | ASAAS */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button"
+                        onClick={() => setMatriculaForm((p: any) => ({ ...p, restante_destino: "sistema" }))}
+                        className={cn("h-9 rounded-lg border text-sm font-medium transition-colors",
+                          (matriculaForm.restante_destino || "sistema") === "sistema"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                        )}
+                      >
+                        Registrar no Sistema
+                      </button>
+                      <button type="button"
+                        onClick={() => setMatriculaForm((p: any) => ({ ...p, restante_destino: "asaas" }))}
+                        className={cn("h-9 rounded-lg border text-sm font-medium transition-colors",
+                          matriculaForm.restante_destino === "asaas"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                        )}
+                      >
+                        Cobrar via ASAAS
+                      </button>
+                    </div>
+
+                    {/* Campos: Sistema */}
+                    {(matriculaForm.restante_destino || "sistema") === "sistema" && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>Forma de pagamento</Label>
+                            <Select value={matriculaForm.parcelas_forma_pagamento}
+                              onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_forma_pagamento: v }))}
+                            >
+                              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                {formasPagamento.map((f) => (
+                                  <SelectItem key={f.id} value={f.codigo}>{f.nome}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>1º Vencimento</Label>
+                            <Input type="date" value={matriculaForm.parcelas_data_vencimento}
+                              onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas_data_vencimento: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>Conta bancária</Label>
+                            <Select value={matriculaForm.parcelas_conta_bancaria_id}
+                              onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_conta_bancaria_id: v }))}
+                            >
+                              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                {contasBancarias.map((c: any) => (
+                                  <SelectItem key={c.id} value={c.id}>{c.nome} ({c.banco})</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {(isRestanteCredito || isRestanteLink) && (
+                            <div>
+                              <Label>Parcelas do restante</Label>
+                              <Select value={matriculaForm.parcelas}
+                                onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas: v }))}
+                              >
+                                <SelectTrigger><SelectValue placeholder="1x" /></SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((n) => (
+                                    <SelectItem key={n} value={n}>{n}x</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+
+                        {showRestanteTaxa && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label>Taxa da operação (R$)</Label>
+                              <Input type="number" step="0.01"
+                                value={matriculaForm.parcelas_taxa_cartao}
+                                onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas_taxa_cartao: e.target.value }))}
+                                placeholder="0,00 — opcional"
+                              />
+                              {restanteTaxaAutoCalc.percentual > 0 && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {restanteTaxaAutoCalc.nome} · {restanteTaxaAutoCalc.percentual.toFixed(2).replace(".", ",")}%
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              <Label>Repassar taxa?</Label>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Switch
+                                  checked={matriculaForm.parcelas_repassar_taxa || false}
+                                  onCheckedChange={(c) => setMatriculaForm((p: any) => ({ ...p, parcelas_repassar_taxa: c }))}
+                                />
+                                <span className="text-sm">Repassar ao aluno</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Campos: ASAAS */}
+                    {matriculaForm.restante_destino === "asaas" && (
+                      <div className="space-y-3">
+                        <div>
+                          <Label>Forma de cobrança (ASAAS)</Label>
+                          <Select value={matriculaForm.parcelas_forma_pagamento}
+                            onValueChange={(v) => setMatriculaForm((p: any) => ({ ...p, parcelas_forma_pagamento: v }))}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                            <SelectContent>
+                              {ASAAS_FORMAS.map((f) => (
+                                <SelectItem key={f.codigo} value={f.codigo}>{f.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Data de vencimento</Label>
+                          <Input type="date" value={matriculaForm.parcelas_data_vencimento}
+                            onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas_data_vencimento: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex gap-2.5 items-start rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 p-3">
+                          <span className="text-base mt-px">⚡</span>
+                          <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                            <span className="font-semibold">Cobrança automática via ASAAS.</span>{" "}
+                            Ao salvar, o aluno receberá a cobrança por e-mail automaticamente.
+                            O status será atualizado no GEx assim que o pagamento for confirmado.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}

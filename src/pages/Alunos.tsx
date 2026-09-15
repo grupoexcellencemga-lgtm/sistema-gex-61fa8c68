@@ -545,8 +545,13 @@ const Alunos = () => {
         const baseParcelasValor = modoEntrada ? valorRestante : valorFinal;
         const fpParcelas = modoEntrada ? matriculaForm.parcelas_forma_pagamento : matriculaForm.forma_pagamento;
         const contaParcelas = modoEntrada ? matriculaForm.parcelas_conta_bancaria_id : matriculaForm.conta_bancaria_id;
+        const restanteDestino = modoEntrada ? (matriculaForm.restante_destino || "sistema") : "sistema";
+        const dateBaseRestante = modoEntrada
+          ? (matriculaForm.parcelas_data_vencimento || dataVencimentoResolvida)
+          : dataVencimentoResolvida;
 
-        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada)) {
+        // ASAAS: por enquanto a integração ainda não está pronta — registra internamente
+        if (baseParcelasValor > 0 && (fpParcelas || !modoEntrada) && restanteDestino !== "asaas") {
           const isCartao = ["credito", "cartao_credito", "cartao"].includes(fpParcelas || "");
           const isDebito = (fpParcelas || "") === "debito";
           const isLink = (fpParcelas || "") === "link";
@@ -554,18 +559,21 @@ const Alunos = () => {
           const recebeIntegral = isCartao || isDebito || isLink;
           const numParcelas = recebeIntegral ? 1 : parseInt(matriculaForm.parcelas) || 1;
           const parcelasCliente = parseInt(matriculaForm.parcelas) || 1;
-          const taxaCartao = temTaxaMaquina ? parseFloat(matriculaForm.taxa_cartao) || 0 : 0;
+          const taxaCartao = temTaxaMaquina
+            ? modoEntrada
+              ? parseFloat(matriculaForm.parcelas_taxa_cartao) || 0
+              : parseFloat(matriculaForm.taxa_cartao) || 0
+            : 0;
+          const repassarTaxa = modoEntrada
+            ? !!matriculaForm.parcelas_repassar_taxa
+            : !!matriculaForm.repassar_taxa;
 
-          const taxaCalc = calcTaxaMaquina(
-            baseParcelasValor,
-            temTaxaMaquina ? taxaCartao : 0,
-            !!matriculaForm.repassar_taxa
-          );
-          const valorBase = matriculaForm.repassar_taxa ? taxaCalc.valorCobrado : taxaCalc.valorLiquido;
+          const taxaCalc = calcTaxaMaquina(baseParcelasValor, temTaxaMaquina ? taxaCartao : 0, repassarTaxa);
+          const valorBase = repassarTaxa ? taxaCalc.valorCobrado : taxaCalc.valorLiquido;
           const valorParcela = valorBase / numParcelas;
 
           const rows = Array.from({ length: numParcelas }, (_, i) => {
-            const d = new Date(dataVencimentoResolvida + "T12:00:00");
+            const d = new Date(dateBaseRestante + "T12:00:00");
             if (!recebeIntegral) d.setMonth(d.getMonth() + i);
             return {
               empresa_id: empresaId,
@@ -586,6 +594,27 @@ const Alunos = () => {
 
           const { error: pagErr } = await supabase.from("pagamentos").insert(rows);
           if (pagErr) throw pagErr;
+        }
+
+        // ASAAS: criação de cobrança via ASAAS (integração pendente)
+        if (baseParcelasValor > 0 && modoEntrada && restanteDestino === "asaas") {
+          // TODO: chamar Edge Function de criação de cobrança ASAAS
+          // Por enquanto apenas registra o pagamento como pendente internamente
+          const dateBase = matriculaForm.parcelas_data_vencimento || dataVencimentoResolvida;
+          const { error: asaasErr } = await supabase.from("pagamentos").insert({
+            empresa_id: empresaId,
+            aluno_id: selectedAluno.id,
+            produto_id: produtoIdResolvido,
+            matricula_id: mat.id,
+            valor: Math.round(baseParcelasValor * 100) / 100,
+            forma_pagamento: fpParcelas || null,
+            parcelas: 1,
+            parcela_atual: 1,
+            data_vencimento: dateBase,
+            status: "pendente",
+            conta_bancaria_id: null,
+          } as any);
+          if (asaasErr) throw asaasErr;
         }
       }
 
