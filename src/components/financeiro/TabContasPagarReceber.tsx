@@ -1333,6 +1333,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
       const quitado = novoTotalMovimentado + 0.009 >= valorOriginal;
 
       const { error: movError } = await supabase.from("movimentacoes_contas" as any).insert({
+        empresa_id: empresaId,
         conta_origem_tipo: sourceType,
         conta_origem_id: originalId,
         tipo: conta.tipo,
