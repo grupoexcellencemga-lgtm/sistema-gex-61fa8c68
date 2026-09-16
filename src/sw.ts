@@ -11,6 +11,16 @@ declare const self: ServiceWorkerGlobalScope;
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+// Ativa o novo SW imediatamente (sem esperar fechar todas as abas).
+// Necessário com strategies: "injectManifest" — registerType: "autoUpdate" só
+// injeta isso automaticamente no modo generateSW.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Navegação SPA
 const allowlist = [/^\/(?!.*supabase)/];
 const denylist = [/^\/~oauth/, /^\/auth/, /^\/rest/, /^\/api/, /^\/inscricao/, /^\/inscricao-turma/, /^\/e\//];
