@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDataFilter } from "@/hooks/useDataFilter";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ function saudacao(): string {
 const Inicio = () => {
   const navigate = useNavigate();
   const { canAccess } = usePermissions();
+  const { isProfissional } = useDataFilter();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const { plural: alunoPlural } = useAlunoLabel();
@@ -78,7 +80,7 @@ const Inicio = () => {
   });
 
   const { data: agenda = [] } = useQuery({
-    queryKey: ["inicio-agenda", hoje, empresaId],
+    queryKey: ["inicio-agenda", hoje, empresaId, isProfissional],
     queryFn: async () => {
       const [{ data: eventos }, { data: encontros }, { data: googleEventos }] = await Promise.all([
         supabase.from("eventos").select("id, nome").eq("empresa_id", empresaId!).eq("data", hoje).is("deleted_at", null).neq("status", "cancelado"),
@@ -87,11 +89,14 @@ const Inicio = () => {
           .select("id, sessao_numero, turma_id, turmas(nome, produtos(nome))")
           .eq("empresa_id", empresaId!)
           .eq("data", hoje),
-        (supabase as any)
-          .from("google_agenda_eventos")
-          .select("id, titulo, hora")
-          .eq("empresa_id", empresaId!)
-          .eq("data", hoje),
+        // Profissionais não veem eventos do Google da empresa
+        isProfissional
+          ? Promise.resolve({ data: [] as any[] })
+          : (supabase as any)
+              .from("google_agenda_eventos")
+              .select("id, titulo, hora")
+              .eq("empresa_id", empresaId!)
+              .eq("data", hoje),
       ]);
       const itens = [
         ...(eventos || []).map((e: any) => ({
@@ -165,7 +170,7 @@ const Inicio = () => {
   const temAcessoFinanceiro = canAccess("financeiro");
 
   const { data: atencao } = useQuery({
-    queryKey: ["inicio-atencao", hoje, temAcessoFinanceiro, empresaId],
+    queryKey: ["inicio-atencao", hoje, temAcessoFinanceiro, empresaId, isProfissional],
     queryFn: async () => {
       const mmdd = hoje.slice(5); // "MM-DD"
       const [vencidosRes, { data: alunosNasc }] = await Promise.all([
@@ -178,12 +183,15 @@ const Inicio = () => {
               .lt("data_vencimento", hoje)
               .is("deleted_at", null)
           : Promise.resolve({ data: [] }),
-        supabase
-          .from("alunos")
-          .select("nome, data_nascimento")
-          .eq("empresa_id", empresaId!)
-          .is("deleted_at", null)
-          .not("data_nascimento", "is", null),
+        // Profissionais não veem aniversariantes de todos os alunos
+        isProfissional
+          ? Promise.resolve({ data: [] })
+          : supabase
+              .from("alunos")
+              .select("nome, data_nascimento")
+              .eq("empresa_id", empresaId!)
+              .is("deleted_at", null)
+              .not("data_nascimento", "is", null),
       ]);
       const vencidosArr = (vencidosRes.data || []) as any[];
       const aniversariantes = (alunosNasc || []).filter(

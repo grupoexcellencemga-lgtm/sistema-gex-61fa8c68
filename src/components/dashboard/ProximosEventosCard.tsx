@@ -47,10 +47,10 @@ export function ProximosEventosCard() {
         return new Date(Date.UTC(y, m - 1, d + HORIZONTE_DIAS)).toISOString().slice(0, 10);
       })();
 
-      const [{ data: eventos }, { data: turmas }] = await Promise.all([
-        supabase
+      const [{ data: eventosRaw }, { data: turmas }] = await Promise.all([
+        (supabase as any)
           .from("eventos")
-          .select("id, nome, tipo, data, responsavel")
+          .select("id, nome, tipo, data, responsavel, eventos_responsaveis(profissional_id, profissionais(nome))")
           .eq("empresa_id", empresaId!)
           .is("deleted_at", null)
           .neq("status", "cancelado")
@@ -63,7 +63,15 @@ export function ProximosEventosCard() {
           .is("deleted_at", null),
       ]);
 
-      return { eventos: eventos || [], turmas: turmas || [] };
+      // Constrói responsavel a partir da tabela de vínculo, igual ao Eventos.tsx
+      const eventos = (eventosRaw || []).map((e: any) => {
+        const nomes = (e.eventos_responsaveis || [])
+          .map((r: any) => r.profissionais?.nome)
+          .filter(Boolean);
+        return { ...e, responsavel: nomes.join(", ") || e.responsavel || null };
+      });
+
+      return { eventos, turmas: turmas || [] };
     },
     staleTime: 5 * 60_000,
     enabled: !!empresaId,
