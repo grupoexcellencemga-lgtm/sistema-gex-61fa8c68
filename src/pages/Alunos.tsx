@@ -655,6 +655,7 @@ const Alunos = () => {
       id,
       status,
       valorPago,
+      valorRecebido,
       valor,
       produtoNome,
       dataPagamento,
@@ -666,6 +667,7 @@ const Alunos = () => {
       id: string;
       status: string;
       valorPago?: number;
+      valorRecebido?: number;
       valor?: number;
       produtoNome?: string;
       dataPagamento?: string;
@@ -703,6 +705,25 @@ const Alunos = () => {
 
       const { error } = await supabase.from("pagamentos").update(update).eq("id", id);
       if (error) throw error;
+
+      if (status === "pago" && valorRecebido !== undefined && valor !== undefined && valorRecebido < valor) {
+        const diferenca = Math.round((valor - valorRecebido) * 100) / 100;
+        const { data: orig } = await supabase
+          .from("pagamentos")
+          .select("matricula_id, aluno_id, empresa_id, produto_id")
+          .eq("id", id)
+          .single();
+        if (orig) {
+          await supabase.from("pagamentos").insert({
+            matricula_id: orig.matricula_id,
+            aluno_id: orig.aluno_id,
+            empresa_id: orig.empresa_id,
+            produto_id: orig.produto_id,
+            valor: diferenca,
+            status: "pendente",
+          });
+        }
+      }
 
       if (status === "pago" && selectedAluno) {
         await logActivity({
@@ -1720,18 +1741,24 @@ const Alunos = () => {
           });
           setNovoPagamentoDialog(true);
         }}
-        onConfirmPagamento={(p, fees, extras) =>
+        onConfirmPagamento={(p, fees, extras) => {
+          const recebido = extras?.valor_recebido ? parseFloat(extras.valor_recebido) : undefined;
+          const valorPago = recebido !== undefined && !isNaN(recebido) && recebido > 0 ? recebido : fees.total;
+          const valorTotal = Number(p.valor);
           updatePagamentoStatus.mutate({
             id: p.id,
             status: "pago",
-            valorPago: fees.total,
-            valor: Number(p.valor),
+            valorPago,
+            valorRecebido: valorPago < valorTotal ? valorPago : undefined,
+            valor: valorTotal,
             produtoNome: p.produtos?.nome,
             dataPagamento: extras?.data_pagamento,
             formaPagamento: extras?.forma_pagamento,
             contaBancariaId: extras?.conta_bancaria_id,
-          })
-        }
+            taxaValor: extras?.taxa_valor,
+            taxaAbsorvidaPor: extras?.taxa_absorvida_por,
+          });
+        }}
         onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}
         onEditPagamento={openEditPagamento}
         onDeletePagamento={(id) => deletePagamento.mutate(id)}

@@ -121,6 +121,7 @@ export const AlunoDetailSheet = (props: Props) => {
     conta_bancaria_id: "",
     taxa_valor: "",
     taxa_absorvida_por: "" as "" | "empresa" | "aluno",
+    valor_recebido: "",
   });
 
   const { data: formasPagamento = [] } = useFormasPagamento();
@@ -149,6 +150,9 @@ export const AlunoDetailSheet = (props: Props) => {
       data_pagamento: p.data_pagamento || hoje,
       forma_pagamento: p.forma_pagamento || "",
       conta_bancaria_id: p.conta_bancaria_id || "",
+      taxa_valor: "",
+      taxa_absorvida_por: "" as "" | "empresa" | "aluno",
+      valor_recebido: String(Number(p.valor) || 0),
     });
 
     setConfirmPagamentoDialog(true);
@@ -830,6 +834,28 @@ export const AlunoDetailSheet = (props: Props) => {
               </div>
 
               <div>
+                <Label>Valor recebido (R$)</Label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={confirmPagamentoForm.valor_recebido}
+                  onChange={(e) => setConfirmPagamentoForm((prev) => ({ ...prev, valor_recebido: e.target.value }))}
+                />
+                {parseFloat(confirmPagamentoForm.valor_recebido) > 0 &&
+                  parseFloat(confirmPagamentoForm.valor_recebido) < Number(confirmingPagamento?.valor) && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      Pagamento parcial — restante{" "}
+                      {formatCurrency(
+                        Math.round((Number(confirmingPagamento?.valor) - parseFloat(confirmPagamentoForm.valor_recebido)) * 100) / 100
+                      )}{" "}
+                      ficará pendente
+                    </p>
+                  )}
+              </div>
+
+              <div>
                 <Label>Data real do pagamento *</Label>
                 <Input
                   type="date"
@@ -958,6 +984,7 @@ export const AlunoDetailSheet = (props: Props) => {
                     conta_bancaria_id: confirmPagamentoForm.conta_bancaria_id,
                     taxa_valor: confirmPagamentoForm.taxa_valor,
                     taxa_absorvida_por: confirmPagamentoForm.taxa_absorvida_por,
+                    valor_recebido: confirmPagamentoForm.valor_recebido,
                   });
 
                   setConfirmPagamentoDialog(false);
