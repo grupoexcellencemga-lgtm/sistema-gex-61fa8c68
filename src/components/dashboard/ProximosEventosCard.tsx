@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useDataFilter } from "@/hooks/useDataFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/formatters";
 import { CalendarClock, ChevronRight } from "lucide-react";
@@ -33,9 +34,10 @@ export function ProximosEventosCard() {
   const navigate = useNavigate();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
+  const { isProfissional, filterByResponsavel } = useDataFilter();
 
   const { data: itens = [] } = useQuery<ItemProximo[]>({
-    queryKey: ["proximos-eventos-card", empresaId],
+    queryKey: ["proximos-eventos-card", empresaId, isProfissional],
     queryFn: async () => {
       const hoje = hojeBrasilISO();
       const limite = (() => {
@@ -46,7 +48,7 @@ export function ProximosEventosCard() {
       const [{ data: eventos }, { data: turmas }] = await Promise.all([
         supabase
           .from("eventos")
-          .select("id, nome, tipo, data")
+          .select("id, nome, tipo, data, responsavel")
           .eq("empresa_id", empresaId!)
           .is("deleted_at", null)
           .neq("status", "cancelado")
@@ -54,12 +56,15 @@ export function ProximosEventosCard() {
           .lte("data", limite),
         (supabase as any)
           .from("turmas")
-          .select("id, nome, data_inicio, produtos(nome), encontros(data)")
+          .select("id, nome, data_inicio, responsavel, produtos(nome), encontros(data)")
           .eq("empresa_id", empresaId!)
           .is("deleted_at", null),
       ]);
 
-      const turmasProx = (turmas || [])
+      const eventosFiltrados = filterByResponsavel(eventos || []);
+      const turmasFiltradas = filterByResponsavel(turmas || []);
+
+      const turmasProx = turmasFiltradas
         .map((t: any) => {
           const futuras = (t.encontros || [])
             .map((e: any) => e.data as string | null)
@@ -70,7 +75,7 @@ export function ProximosEventosCard() {
         })
         .filter((t: any) => t.dataRef && diffDiasISO(hoje, t.dataRef) <= HORIZONTE_DIAS);
 
-      const eventoIds = (eventos || []).map((e: any) => e.id);
+      const eventoIds = eventosFiltrados.map((e: any) => e.id);
       const turmaIds = turmasProx.map((t: any) => t.id);
 
       const [{ data: tEvt }, { data: tTur }] = await Promise.all([
@@ -90,7 +95,7 @@ export function ProximosEventosCard() {
 
       const result: ItemProximo[] = [];
 
-      for (const e of eventos || []) {
+      for (const e of eventosFiltrados) {
         const tarefas = (tEvt || []).filter((t: any) => t.evento_id === e.id);
         const total = tarefas.length;
         const concluidas = tarefas.filter((t: any) => t.status === "concluida").length;
