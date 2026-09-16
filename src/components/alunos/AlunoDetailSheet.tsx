@@ -665,9 +665,14 @@ export const AlunoDetailSheet = (props: Props) => {
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <p className="font-medium">
-                                              {formatCurrency(Number(p.valor))}
+                                              {p.status === "pago" && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor)
+                                                ? formatCurrency(Number(p.valor_pago))
+                                                : formatCurrency(Number(p.valor))}
                                               {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x`}
                                             </p>
+                                            {p.status === "pago" && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor) && (
+                                              <span className="text-xs text-muted-foreground">parcial de {formatCurrency(Number(p.valor))}</span>
+                                            )}
                                             {p.tipo === "entrada" && (
                                               <Badge variant="outline" className="text-xs border-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Entrada</Badge>
                                             )}
