@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
-// import legacy from "@vitejs/plugin-legacy";
 import path from "path";
 const buildDate = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(2, 10).replace(/-/g, ".");
 
@@ -20,13 +19,6 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    
-    // legacy({
-    //   targets: ["Safari >= 12", "iOS >= 12"],
-    //   modernTargets: ["Safari >= 12", "iOS >= 12"],
-    //   modernPolyfills: true,
-    //   renderLegacyChunks: true,
-    // }),
     VitePWA({
       // "autoUpdate": o service worker novo ativa automaticamente assim que o
       // usuário fecha todas as abas do app. Evita ficar preso em versão antiga.
