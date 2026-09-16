@@ -113,7 +113,9 @@ const normalizeLinks = (links: Divulgacao["links"]): DivulgacaoLink[] => {
 
 const gerarCapaPdf = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  // enableScripting explicito: GHSA-hq66-cqwq-w95j permite execucao de JS
+  // arbitrario via PDF malicioso quando ligado, e so geramos uma imagem de capa.
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, enableScripting: false }).promise;
   const page = await pdf.getPage(1);
 
   const viewportOriginal = page.getViewport({ scale: 1 });
