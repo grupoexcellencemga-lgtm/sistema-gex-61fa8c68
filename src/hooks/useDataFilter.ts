@@ -69,6 +69,7 @@ export function useDataFilter() {
   const isProfissional = !isAdmin && !!profile?.profissional_id;
   const isComercial = !isAdmin && !!profile?.comercial_id;
   const isLimitado = isProfissional || isComercial;
+  const profissionalId = profissional?.id ?? null;
   const profissionalNome = profissional?.nome ?? null;
   const comercialId = comercial?.id ?? null;
   const comercialNome = comercial?.nome ?? null;
@@ -123,6 +124,7 @@ export function useDataFilter() {
     isLimitado,
     isProfissional,
     isComercial,
+    profissionalId,
     profissionalNome,
     comercialId,
     comercialNome,

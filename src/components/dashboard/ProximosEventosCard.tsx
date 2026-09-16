@@ -35,7 +35,7 @@ export function ProximosEventosCard() {
   const navigate = useNavigate();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
-  const { isProfissional, profissionalNome, filterByResponsavel } = useDataFilter();
+  const { isProfissional, profissionalId, profissionalNome, filterByResponsavel } = useDataFilter();
 
   // Busca os dados brutos sem filtro — o filtro é aplicado no useMemo abaixo
   const { data: rawData } = useQuery({
@@ -63,12 +63,19 @@ export function ProximosEventosCard() {
           .is("deleted_at", null),
       ]);
 
-      // Constrói responsavel a partir da tabela de vínculo, igual ao Eventos.tsx
+      // Constrói responsavel e responsavelIds a partir da tabela de vínculo
       const eventos = (eventosRaw || []).map((e: any) => {
         const nomes = (e.eventos_responsaveis || [])
           .map((r: any) => r.profissionais?.nome)
           .filter(Boolean);
-        return { ...e, responsavel: nomes.join(", ") || e.responsavel || null };
+        const ids = (e.eventos_responsaveis || [])
+          .map((r: any) => r.profissional_id)
+          .filter(Boolean);
+        return {
+          ...e,
+          responsavel: nomes.join(", ") || e.responsavel || null,
+          responsavelIds: ids,
+        };
       });
 
       return { eventos, turmas: turmas || [] };
@@ -105,7 +112,14 @@ export function ProximosEventosCard() {
     const tEvt = tarefasData?.tEvt ?? [];
     const tTur = tarefasData?.tTur ?? [];
 
-    const eventosFiltrados = filterByResponsavel(rawData.eventos);
+    // Eventos: filtra por profissional_id (UUID) no join — mais confiável que comparar string de nome
+    const eventosFiltrados = (isProfissional && profissionalId)
+      ? rawData.eventos.filter((e: any) =>
+          (e.responsavelIds as string[] | undefined)?.includes(profissionalId)
+        )
+      : rawData.eventos;
+
+    // Turmas: usa campo responsavel (texto) via filterByResponsavel
     const turmasFiltradas = filterByResponsavel(rawData.turmas);
 
     const turmasProx = turmasFiltradas
@@ -152,7 +166,7 @@ export function ProximosEventosCard() {
     }
 
     return result.sort((a, b) => a.dias - b.dias).slice(0, 6);
-  }, [rawData, tarefasData, isProfissional, profissionalNome, filterByResponsavel]);
+  }, [rawData, tarefasData, isProfissional, profissionalId, profissionalNome, filterByResponsavel]);
 
   if (itens.length === 0) return null;
 
