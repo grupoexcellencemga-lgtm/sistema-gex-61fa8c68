@@ -77,16 +77,17 @@ const AppRoutes = () => {
   const { user, isReady } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const prevUserId = useRef<string | null | undefined>(undefined);
+  const prevUserId = useRef<string | null>(null);
 
-  // Sem isso os dados da conta anterior ficam no cache e aparecem para quem
-  // logar em seguida.
+  // Limpa o cache ao sair ou trocar de conta, senao os dados do usuario
+  // anterior sobrevivem ao logout. So dispara quando ja havia alguem logado:
+  // no primeiro login a transicao e null -> id, e limpar ali mataria as
+  // consultas de permissao que ainda estao em voo, travando a tela.
   useEffect(() => {
     const id = user?.id ?? null;
-    if (prevUserId.current !== undefined && prevUserId.current !== id) {
-      queryClient.clear();
-    }
+    const anterior = prevUserId.current;
     prevUserId.current = id;
+    if (anterior && anterior !== id) queryClient.clear();
   }, [user?.id, queryClient]);
 
   if (!isReady) {
