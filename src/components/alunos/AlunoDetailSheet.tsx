@@ -545,6 +545,7 @@ export const AlunoDetailSheet = (props: Props) => {
                               label: m.produtos?.nome || "—",
                               sub: m.turmas?.nome || null,
                               status: m.status as string | null,
+                              valorFinal: Number(m.valor_final || 0),
                               pgs: pagamentos.filter((p: any) => p.matricula_id === m.id),
                             })),
                           ...(pagamentos.some((p: any) => !p.matricula_id) ? [{
@@ -573,8 +574,14 @@ export const AlunoDetailSheet = (props: Props) => {
                           });
                           Object.values(cartaoGroups).forEach((pgList) => rowItems.push({ type: "group", data: pgList }));
 
-                          const grpPago = group.pgs.reduce((s: number, p: any) => p.status === "pago" ? s + Number(p.valor) : s, 0);
-                          const grpPendente = group.pgs.reduce((s: number, p: any) => p.status !== "pago" ? s + Number(p.valor) : s, 0);
+                          const grpPago = group.pgs
+                            .filter((p: any) => p.status === "pago")
+                            .reduce((s: number, p: any) => {
+                              const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
+                              const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
+                              return s + base + taxaEmp;
+                            }, 0);
+                          const grpPendente = Math.max(0, Math.round((group.valorFinal - grpPago) * 100) / 100);
 
                           return (
                             <div key={group.id} className="space-y-1.5">
