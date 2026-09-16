@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,10 +35,11 @@ export function ProximosEventosCard() {
   const navigate = useNavigate();
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
-  const { isProfissional, filterByResponsavel } = useDataFilter();
+  const { isProfissional, profissionalNome, filterByResponsavel } = useDataFilter();
 
-  const { data: itens = [] } = useQuery<ItemProximo[]>({
-    queryKey: ["proximos-eventos-card", empresaId, isProfissional],
+  // Busca os dados brutos sem filtro — o filtro é aplicado no useMemo abaixo
+  const { data: rawData } = useQuery({
+    queryKey: ["proximos-eventos-card-raw", empresaId],
     queryFn: async () => {
       const hoje = hojeBrasilISO();
       const limite = (() => {
@@ -61,79 +63,88 @@ export function ProximosEventosCard() {
           .is("deleted_at", null),
       ]);
 
-      const eventosFiltrados = filterByResponsavel(eventos || []);
-      const turmasFiltradas = filterByResponsavel(turmas || []);
-
-      const turmasProx = turmasFiltradas
-        .map((t: any) => {
-          const futuras = (t.encontros || [])
-            .map((e: any) => e.data as string | null)
-            .filter((d: string | null): d is string => !!d && d >= hoje)
-            .sort();
-          const dataRef = futuras[0] || (t.data_inicio && t.data_inicio >= hoje ? t.data_inicio : null);
-          return { ...t, dataRef };
-        })
-        .filter((t: any) => t.dataRef && diffDiasISO(hoje, t.dataRef) <= HORIZONTE_DIAS);
-
-      const eventoIds = eventosFiltrados.map((e: any) => e.id);
-      const turmaIds = turmasProx.map((t: any) => t.id);
-
-      const [{ data: tEvt }, { data: tTur }] = await Promise.all([
-        eventoIds.length
-          ? supabase
-              .from("tarefas")
-              .select("status, evento_id")
-              .in("evento_id", eventoIds)
-          : Promise.resolve({ data: [] as any[] }),
-        turmaIds.length
-          ? (supabase as any)
-              .from("tarefas")
-              .select("status, turma_id")
-              .in("turma_id", turmaIds)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-
-      const result: ItemProximo[] = [];
-
-      for (const e of eventosFiltrados) {
-        const tarefas = (tEvt || []).filter((t: any) => t.evento_id === e.id);
-        const total = tarefas.length;
-        const concluidas = tarefas.filter((t: any) => t.status === "concluida").length;
-        result.push({
-          key: `evt-${e.id}`,
-          nome: e.nome,
-          subtitulo: `${e.tipo || "evento"} · ${formatDate(e.data)}`,
-          dataRef: e.data,
-          dias: diffDiasISO(hoje, e.data),
-          total,
-          concluidas,
-          href: `/eventos?evento=${e.id}`,
-        });
-      }
-
-      for (const t of turmasProx) {
-        const tarefas = (tTur || []).filter((x: any) => x.turma_id === t.id);
-        const total = tarefas.length;
-        const concluidas = tarefas.filter((x: any) => x.status === "concluida").length;
-        const totalSessoes = (t.encontros || []).filter((e: any) => e.data).length;
-        const cursoNome = t.produtos?.nome as string | undefined;
-        result.push({
-          key: `tur-${t.id}`,
-          nome: cursoNome || t.nome,
-          subtitulo: `${cursoNome ? `${t.nome} · ` : ""}${totalSessoes ? `${totalSessoes} sessões · ` : ""}próxima ${formatDate(t.dataRef)}`,
-          dataRef: t.dataRef,
-          dias: diffDiasISO(hoje, t.dataRef),
-          total,
-          concluidas,
-          href: `/turmas?turma=${t.id}&tab=operacao`,
-        });
-      }
-
-      return result.sort((a, b) => a.dias - b.dias).slice(0, 6);
+      return { eventos: eventos || [], turmas: turmas || [] };
     },
     staleTime: 5 * 60_000,
     enabled: !!empresaId,
   });
+
+  const allEventoIds = rawData?.eventos.map((e: any) => e.id) ?? [];
+  const allTurmaIds = rawData?.turmas.map((t: any) => t.id) ?? [];
+
+  const { data: tarefasData } = useQuery({
+    queryKey: ["proximos-eventos-tarefas", allEventoIds, allTurmaIds],
+    queryFn: async () => {
+      const [{ data: tEvt }, { data: tTur }] = await Promise.all([
+        allEventoIds.length
+          ? supabase.from("tarefas").select("status, evento_id").in("evento_id", allEventoIds)
+          : Promise.resolve({ data: [] as any[] }),
+        allTurmaIds.length
+          ? (supabase as any).from("tarefas").select("status, turma_id").in("turma_id", allTurmaIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      return { tEvt: tEvt || [], tTur: tTur || [] };
+    },
+    staleTime: 5 * 60_000,
+    enabled: !!rawData,
+  });
+
+  // Filtro e processamento fora da query — re-executa quando profissionalNome carrega
+  const itens = useMemo<ItemProximo[]>(() => {
+    if (!rawData) return [];
+
+    const hoje = hojeBrasilISO();
+    const tEvt = tarefasData?.tEvt ?? [];
+    const tTur = tarefasData?.tTur ?? [];
+
+    const eventosFiltrados = filterByResponsavel(rawData.eventos);
+    const turmasFiltradas = filterByResponsavel(rawData.turmas);
+
+    const turmasProx = turmasFiltradas
+      .map((t: any) => {
+        const futuras = (t.encontros || [])
+          .map((e: any) => e.data as string | null)
+          .filter((d: string | null): d is string => !!d && d >= hoje)
+          .sort();
+        const dataRef = futuras[0] || (t.data_inicio && t.data_inicio >= hoje ? t.data_inicio : null);
+        return { ...t, dataRef };
+      })
+      .filter((t: any) => t.dataRef && diffDiasISO(hoje, t.dataRef) <= HORIZONTE_DIAS);
+
+    const result: ItemProximo[] = [];
+
+    for (const e of eventosFiltrados) {
+      const tarefas = tEvt.filter((t: any) => t.evento_id === e.id);
+      result.push({
+        key: `evt-${e.id}`,
+        nome: e.nome,
+        subtitulo: `${e.tipo || "evento"} · ${formatDate(e.data)}`,
+        dataRef: e.data,
+        dias: diffDiasISO(hoje, e.data),
+        total: tarefas.length,
+        concluidas: tarefas.filter((t: any) => t.status === "concluida").length,
+        href: `/eventos?evento=${e.id}`,
+      });
+    }
+
+    for (const t of turmasProx) {
+      const tarefas = tTur.filter((x: any) => x.turma_id === t.id);
+      const totalSessoes = (t.encontros || []).filter((e: any) => e.data).length;
+      const cursoNome = t.produtos?.nome as string | undefined;
+      result.push({
+        key: `tur-${t.id}`,
+        nome: cursoNome || t.nome,
+        subtitulo: `${cursoNome ? `${t.nome} · ` : ""}${totalSessoes ? `${totalSessoes} sessões · ` : ""}próxima ${formatDate(t.dataRef)}`,
+        dataRef: t.dataRef,
+        dias: diffDiasISO(hoje, t.dataRef),
+        total: tarefas.length,
+        concluidas: tarefas.filter((x: any) => x.status === "concluida").length,
+        href: `/turmas?turma=${t.id}&tab=operacao`,
+      });
+    }
+
+    return result.sort((a, b) => a.dias - b.dias).slice(0, 6);
+  }, [rawData, tarefasData, isProfissional, profissionalNome, filterByResponsavel]);
 
   if (itens.length === 0) return null;
 
