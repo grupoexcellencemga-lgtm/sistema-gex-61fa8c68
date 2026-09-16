@@ -573,12 +573,23 @@ export const AlunoDetailSheet = (props: Props) => {
                           });
                           Object.values(cartaoGroups).forEach((pgList) => rowItems.push({ type: "group", data: pgList }));
 
+                          const grpPago = group.pgs.reduce((s: number, p: any) => p.status === "pago" ? s + Number(p.valor) : s, 0);
+                          const grpPendente = group.pgs.reduce((s: number, p: any) => p.status !== "pago" ? s + Number(p.valor) : s, 0);
+
                           return (
                             <div key={group.id} className="space-y-1.5">
-                              <div className="flex items-center justify-between pb-1.5 border-b">
+                              <div className="flex items-start justify-between pb-1.5 border-b">
                                 <div>
                                   <p className="text-sm font-semibold">{group.label}</p>
                                   {group.sub && <p className="text-xs text-muted-foreground">{group.sub}</p>}
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {grpPago > 0 && (
+                                      <span className="text-xs text-emerald-600 font-medium">Pago {formatCurrency(grpPago)}</span>
+                                    )}
+                                    {grpPendente > 0 && (
+                                      <span className="text-xs text-amber-600 font-medium">Pendente {formatCurrency(grpPendente)}</span>
+                                    )}
+                                  </div>
                                 </div>
                                 {group.status && (
                                   <Badge
