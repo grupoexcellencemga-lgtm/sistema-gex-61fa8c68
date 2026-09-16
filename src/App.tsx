@@ -12,7 +12,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import { IOSInstallPrompt } from "@/components/IOSInstallPrompt";
-import { ChatBot } from "@/components/ChatBot";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // Eager-load Auth (first screen for unauthenticated users)
@@ -168,7 +167,6 @@ const AppRoutes = () => {
     </EmpresaProvider>
     <PWAUpdatePrompt />
     <IOSInstallPrompt />
-    <ChatBot />
     </>
   );
 };
