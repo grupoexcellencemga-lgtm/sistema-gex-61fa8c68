@@ -49,18 +49,24 @@ export const ROLE_DEFAULTS: Record<string, PageKey[]> = {
 export function usePermissions() {
   const { user } = useAuth();
 
-  // Check if user is admin
+  // Check if user is admin — com timeout de 8s para não travar a tela se o Supabase demorar
   const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: async () => {
       if (!user) return false;
-      const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
-      return !!data;
+      try {
+        const fallback = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8000));
+        const query = supabase
+          .rpc("has_role", { _user_id: user.id, _role: "admin" })
+          .then(({ data }) => !!data);
+        return await Promise.race([fallback, query]);
+      } catch {
+        return false;
+      }
     },
     enabled: !!user,
-    retry: 1,
+    retry: 0,
     staleTime: 5 * 60 * 1000,
-    // Fallback: se demorar mais de 8s, assume false e libera a tela
     gcTime: 10 * 60 * 1000,
   });
 
