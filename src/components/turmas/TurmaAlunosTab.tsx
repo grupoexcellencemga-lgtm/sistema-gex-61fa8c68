@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Search, X, MessageCircle, Users, UserPlus, Check, UserRoundPlus, Trash2, Globe, CalendarDays } from "lucide-react";
@@ -36,6 +37,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const [busca, setBusca] = useState("");
+  const [alunoParaRemover, setAlunoParaRemover] = useState<any>(null);
 
   // Step 1: busca aluno
   const [buscaDialogOpen, setBuscaDialogOpen] = useState(false);
@@ -793,10 +795,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
                           disabled={removerMutation.isPending}
-                          onClick={() => {
-                            if (confirm(`Remover ${a.nome} da turma? A matrícula e todos os pagamentos serão excluídos.`))
-                              removerMutation.mutate(a.id);
-                          }}
+                          onClick={() => setAlunoParaRemover(a)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -818,6 +817,30 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Confirmar remoção de aluno */}
+      <AlertDialog open={!!alunoParaRemover} onOpenChange={(open) => { if (!open) setAlunoParaRemover(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover aluno da turma?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{alunoParaRemover?.nome}</strong> será removido desta turma. A matrícula e todos os pagamentos vinculados serão excluídos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (alunoParaRemover) removerMutation.mutate(alunoParaRemover.id);
+                setAlunoParaRemover(null);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Inscrições pelo link público */}
       <div className="pt-2">
