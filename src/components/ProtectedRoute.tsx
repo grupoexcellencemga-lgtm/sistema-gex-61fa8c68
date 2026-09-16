@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, Home } from "lucide-react";
+import { ShieldAlert, Home, RefreshCw } from "lucide-react";
 import { usePermissions, ALL_PAGES } from "@/hooks/usePermissions";
 
 interface ProtectedRouteProps {
@@ -11,11 +12,40 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ path, children }: ProtectedRouteProps) {
   const { canAccessPath, isReady } = usePermissions();
   const navigate = useNavigate();
+  const [demorouDemais, setDemorouDemais] = useState(false);
+
+  // Sem isto, qualquer falha ao carregar permissoes prende o usuario numa tela
+  // sem botao e sem mensagem, sem forma de sair a nao ser fechar o app.
+  useEffect(() => {
+    if (isReady) return;
+    const t = setTimeout(() => setDemorouDemais(true), 10_000);
+    return () => clearTimeout(t);
+  }, [isReady]);
 
   if (!isReady) {
+    if (!demorouDemais) {
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="text-sm text-muted-foreground">Carregando permissões...</div>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-sm text-muted-foreground">Carregando permissões...</div>
+      <div className="flex min-h-[50vh] items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-semibold text-foreground">
+            Não foi possível carregar suas permissões
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A conexão com o servidor está demorando mais que o normal. Recarregue
+            a página; se continuar assim, avise o administrador.
+          </p>
+          <Button className="mt-5 gap-2" onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4" />
+            Recarregar
+          </Button>
+        </div>
       </div>
     );
   }
