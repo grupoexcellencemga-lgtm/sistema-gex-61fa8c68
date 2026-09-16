@@ -50,6 +50,28 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        // Separar as libs do codigo da aplicacao: elas quase nunca mudam, entao
+        // o navegador (e o precache do service worker) so rebaixa o que mudou a
+        // cada deploy, em vez de um unico chunk de ~900 kB inteiro.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          // react, react-dom e o router precisam ficar juntos: instancias
+          // separadas do React quebram os hooks.
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return "react-vendor";
+          }
+          if (id.includes("@supabase")) return "supabase";
+          if (id.includes("@tanstack")) return "react-query";
+          if (id.includes("@radix-ui")) return "radix-ui";
+          if (id.includes("lucide-react")) return "icons";
+          if (id.includes("date-fns")) return "date-fns";
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
