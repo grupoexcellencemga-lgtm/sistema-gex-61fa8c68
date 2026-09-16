@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -57,6 +57,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      // O padrão (3) faz um erro de RLS levar ~7s de backoff antes de aparecer.
+      retry: 1,
     },
   },
 });
@@ -74,6 +76,18 @@ const PR = ({ path, children }: { path: string; children: React.ReactNode }) => 
 const AppRoutes = () => {
   const { user, isReady } = useAuth();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const prevUserId = useRef<string | null | undefined>(undefined);
+
+  // Sem isso os dados da conta anterior ficam no cache e aparecem para quem
+  // logar em seguida.
+  useEffect(() => {
+    const id = user?.id ?? null;
+    if (prevUserId.current !== undefined && prevUserId.current !== id) {
+      queryClient.clear();
+    }
+    prevUserId.current = id;
+  }, [user?.id, queryClient]);
 
   if (!isReady) {
     return <LoadingScreen />;
