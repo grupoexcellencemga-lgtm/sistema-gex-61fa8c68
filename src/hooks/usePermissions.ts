@@ -59,6 +59,9 @@ export function usePermissions() {
     },
     enabled: !!user,
     retry: 1,
+    staleTime: 5 * 60 * 1000,
+    // Fallback: se demorar mais de 8s, assume false e libera a tela
+    gcTime: 10 * 60 * 1000,
   });
 
   // Get user role

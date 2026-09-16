@@ -28,9 +28,9 @@ export default defineConfig(({ mode }) => ({
     //   renderLegacyChunks: true,
     // }),
     VitePWA({
-      // "prompt": o service worker novo fica em espera e avisamos o usuário
-      // (banner "Nova versão disponível") em vez de trocar por baixo dos panos.
-      registerType: "prompt",
+      // "autoUpdate": o service worker novo ativa automaticamente assim que o
+      // usuário fecha todas as abas do app. Evita ficar preso em versão antiga.
+      registerType: "autoUpdate",
       // injectManifest: usa SW customizado (src/sw.ts) com suporte a push notifications
       strategies: "injectManifest",
       srcDir: "src",
