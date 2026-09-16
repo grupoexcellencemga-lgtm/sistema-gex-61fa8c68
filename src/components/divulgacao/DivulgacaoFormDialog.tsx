@@ -133,7 +133,9 @@ const gerarCapaPdf = async (file: File): Promise<Blob> => {
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
 
-  await page.render({ canvasContext: context, viewport }).promise;
+  // canvas e o parametro recomendado desde o pdf.js 6; canvasContext continua
+  // aceito so por compatibilidade.
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
 
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
