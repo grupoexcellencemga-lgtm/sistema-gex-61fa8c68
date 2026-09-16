@@ -706,25 +706,6 @@ const Alunos = () => {
       const { error } = await supabase.from("pagamentos").update(update).eq("id", id);
       if (error) throw error;
 
-      if (status === "pago" && valorRecebido !== undefined && valor !== undefined && valorRecebido < valor) {
-        const diferenca = Math.round((valor - valorRecebido) * 100) / 100;
-        const { data: orig } = await supabase
-          .from("pagamentos")
-          .select("matricula_id, aluno_id, empresa_id, produto_id")
-          .eq("id", id)
-          .single();
-        if (orig) {
-          await supabase.from("pagamentos").insert({
-            matricula_id: orig.matricula_id,
-            aluno_id: orig.aluno_id,
-            empresa_id: orig.empresa_id,
-            produto_id: orig.produto_id,
-            valor: diferenca,
-            status: "pendente",
-          });
-        }
-      }
-
       if (status === "pago" && selectedAluno) {
         await logActivity({
           tipo: "pagamento",
