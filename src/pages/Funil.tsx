@@ -680,97 +680,6 @@ const Funil = () => {
               </div>
             </div>
 
-            <div className="p-3 border-b space-y-2">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newQuadroName.trim()) return;
-                  createQuadroMutation.mutate(newQuadroName);
-                }}
-                className="flex gap-2"
-              >
-                <Input
-                  value={newQuadroName}
-                  onChange={(e) => setNewQuadroName(e.target.value)}
-                  placeholder="Nome do quadro..."
-                  className="h-9 text-sm"
-                />
-                <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
-                  {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </Button>
-              </form>
-
-              {/* Import contacts toggle */}
-              <button
-                type="button"
-                onClick={() => setImportOpen((v) => !v)}
-                className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-0.5"
-              >
-                {importOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                <Users className="h-3.5 w-3.5" />
-                Importar contatos do evento/turma
-              </button>
-
-              {importOpen && (
-                <div className="space-y-2 pt-1">
-                  {/* Tipo toggle */}
-                  <div className="flex gap-1">
-                    {(["evento", "turma"] as const).map((tipo) => (
-                      <button
-                        key={tipo}
-                        type="button"
-                        onClick={() => { setImportTipo(tipo); setImportEventoId(""); setImportTurmaId(""); }}
-                        className={cn(
-                          "flex-1 py-1 text-xs rounded border transition-colors",
-                          importTipo === tipo ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"
-                        )}
-                      >
-                        {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Source select */}
-                  {importTipo === "evento" ? (
-                    <select
-                      value={importEventoId}
-                      onChange={(e) => setImportEventoId(e.target.value)}
-                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione o evento...</option>
-                      {(eventosImport as { id: string; nome: string }[]).map((ev) => (
-                        <option key={ev.id} value={ev.id}>{ev.nome}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      value={importTurmaId}
-                      onChange={(e) => setImportTurmaId(e.target.value)}
-                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione a turma...</option>
-                      {turmas.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.produtos?.nome ? `${t.produtos.nome} · ${t.nome}` : t.nome}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {/* Preview count */}
-                  {((importTipo === "evento" && importEventoId) || (importTipo === "turma" && importTurmaId)) && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {previewFetching
-                        ? "Contando..."
-                        : previewCount != null
-                          ? `${previewCount} contato${previewCount !== 1 ? "s" : ""} encontrado${previewCount !== 1 ? "s" : ""}`
-                          : ""}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
             <div className="flex-1 overflow-auto p-2 space-y-1">
               {quadrosLoading ? (
                 <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
@@ -864,6 +773,95 @@ const Funil = () => {
                     </div>
                   ))}
                 </>
+              )}
+            </div>
+
+            {/* Criar quadro + Importar contatos */}
+            <div className="p-3 border-t space-y-2 shrink-0">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newQuadroName.trim()) return;
+                  createQuadroMutation.mutate(newQuadroName);
+                }}
+                className="flex gap-2"
+              >
+                <Input
+                  value={newQuadroName}
+                  onChange={(e) => setNewQuadroName(e.target.value)}
+                  placeholder="Nome do quadro..."
+                  className="h-9 text-sm"
+                />
+                <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
+                  {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </form>
+
+              {/* Import contacts toggle */}
+              <button
+                type="button"
+                onClick={() => setImportOpen((v) => !v)}
+                className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-0.5"
+              >
+                {importOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                <Users className="h-3.5 w-3.5" />
+                Importar contatos do evento/turma
+              </button>
+
+              {importOpen && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex gap-1">
+                    {(["evento", "turma"] as const).map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => { setImportTipo(tipo); setImportEventoId(""); setImportTurmaId(""); }}
+                        className={cn(
+                          "flex-1 py-1 text-xs rounded border transition-colors",
+                          importTipo === tipo ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"
+                        )}
+                      >
+                        {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {importTipo === "evento" ? (
+                    <select
+                      value={importEventoId}
+                      onChange={(e) => setImportEventoId(e.target.value)}
+                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione o evento...</option>
+                      {(eventosImport as { id: string; nome: string }[]).map((ev) => (
+                        <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={importTurmaId}
+                      onChange={(e) => setImportTurmaId(e.target.value)}
+                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione a turma...</option>
+                      {turmas.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.produtos?.nome ? `${t.produtos.nome} · ${t.nome}` : t.nome}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {((importTipo === "evento" && importEventoId) || (importTipo === "turma" && importTurmaId)) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {previewFetching
+                        ? "Contando..."
+                        : previewCount != null
+                          ? `${previewCount} contato${previewCount !== 1 ? "s" : ""} encontrado${previewCount !== 1 ? "s" : ""}`
+                          : ""}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </aside>
