@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { temTaxaAlunoSeparada } from "@/lib/alunoFinanceiro";
+import { temTaxaSeparada } from "@/lib/alunoFinanceiro";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isInMonth } from "@/components/MonthFilter";
@@ -545,7 +545,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
     const items: ContaItem[] = [];
 
     pagamentos.forEach((p: any) => {
-      const valorOriginal = temTaxaAlunoSeparada(p) ? Number(p.valor_pago) : Number(p.valor || 0);
+      const valorOriginal = temTaxaSeparada(p) ? Number(p.valor_pago) : Number(p.valor || 0);
       const valorMovimentado = getTotalMovimentado("aluno", p.id);
       const valorPago = Math.min(valorOriginal, valorMovimentado > 0 ? valorMovimentado : Number(p.valor_pago || 0));
       const saldoRestante = Math.max(roundMoney(valorOriginal - valorPago), 0);

@@ -28,7 +28,7 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
-import { ordenarPagamentos, resumirMatricula, valorPagoAluno, calcularPagamentoComTaxa } from "@/lib/alunoFinanceiro";
+import { ordenarPagamentos, resumirMatricula, valorPagoAluno, calcularPagamentoComTaxa, temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 interface Props {
   open: boolean;
@@ -325,7 +325,7 @@ export const AlunoDetailSheet = (props: Props) => {
     }
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
-  const totalPago = pagamentos.reduce((s: number, p: any) => s + (p.status === "pago" && p.taxa_absorvida_por === "aluno" && p.valor_pago != null && Number(p.valor) > Number(p.valor_pago) ? Number(p.valor) : valorPagoAluno(p)), 0);
+  const totalPago = pagamentos.reduce((s: number, p: any) => s + (temTaxaSeparada(p) ? Number(p.valor) : valorPagoAluno(p)), 0);
   const totalPendente = matriculas.reduce((acc: number, m: any) =>
     acc + resumirMatricula(Number(m.valor_final || 0), pagamentos.filter((p: any) => p.matricula_id === m.id)).pendente, 0)
     + pagamentos.filter((p: any) => !p.matricula_id && (p.status === "pendente" || p.status === "vencido"))
@@ -640,7 +640,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                                 : formatCurrency(Number(p.valor))}
                                               {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x`}
                                             </p>
-                                            {p.status === "pago" && p.taxa_absorvida_por !== "aluno" && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor) && (
+                                            {p.status === "pago" && !temTaxaSeparada(p) && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor) && (
                                               <span className="text-xs text-muted-foreground">parcial de {formatCurrency(Number(p.valor))}</span>
                                             )}
                                             {p.tipo === "entrada" && (
@@ -652,7 +652,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                               </Badge>
                                             )}
                                           </div>
-                                          {p.status === "pago" && p.taxa_absorvida_por === "aluno" && p.valor_pago != null && Number(p.valor) > Number(p.valor_pago) && (
+                                          {temTaxaSeparada(p) && (
                                             <p className="text-xs text-muted-foreground">Total cobrado: {formatCurrency(Number(p.valor))} · Abatido da matrícula: {formatCurrency(valorPagoAluno(p))}</p>
                                           )}
                                           <p className="text-xs text-muted-foreground mt-0.5">
@@ -698,7 +698,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                                     alunoNome: selectedAluno?.nome || "—",
                                                     alunoCpf: selectedAluno?.cpf || undefined,
                                                     produtoNome: p.produtos?.nome || group.label || "—",
-                                                    valor: p.taxa_absorvida_por === "aluno" ? Number(p.valor) : valorPagoAluno(p),
+                                                    valor: temTaxaSeparada(p) ? Number(p.valor) : valorPagoAluno(p),
                                                     dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
                                                     formaPagamento: getFormaLabel(p.forma_pagamento),
                                                     reciboId: p.id,
@@ -845,8 +845,8 @@ export const AlunoDetailSheet = (props: Props) => {
                   value={confirmPagamentoForm.valor_recebido}
                   onChange={(e) => setConfirmPagamentoForm((prev) => ({ ...prev, valor_recebido: e.target.value }))}
                 />
-                <p className="text-xs text-muted-foreground mt-1">Informe o total cobrado. Se a taxa foi repassada ao aluno, selecione “Aluno” e informe a taxa abaixo; ela não abate o saldo do curso.</p>
-                {!confirmValorValido && <p role="alert" className="text-xs text-destructive mt-1">O valor que abate a matrícula deve ser maior que zero e até {formatCurrency(Number(confirmingPagamento.valor))}. Para cobrar mais por taxas, informe a taxa e selecione “Aluno”.</p>}
+                <p className="text-xs text-muted-foreground mt-1">Informe o total passado na maquininha e a taxa descontada. Ao selecionar Empresa ou Aluno, o valor líquido (total menos taxa) abate a matrícula.</p>
+                {!confirmValorValido && <p role="alert" className="text-xs text-destructive mt-1">O valor que abate a matrícula deve ser maior que zero e até {formatCurrency(Number(confirmingPagamento.valor))}. Para cobrar mais por taxas, informe a taxa e selecione “Empresa” ou “Aluno”.</p>}
                 {confirmResultado && confirmResultado.restante > 0 && (
                     <p className="text-xs text-amber-600 mt-0.5">
                       Pagamento parcial — restante{" "}
@@ -997,7 +997,7 @@ export const AlunoDetailSheet = (props: Props) => {
               {confirmResultado && <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
                 <p>Total cobrado: <strong>{formatCurrency(confirmResultado.recebido)}</strong></p>
                 <p>Abatido da matrícula: <strong>{formatCurrency(confirmResultado.pago)}</strong></p>
-                {confirmPagamentoForm.taxa_absorvida_por === "aluno" && <p>Taxa cobrada do aluno: {formatCurrency(confirmResultado.taxa)}</p>}
+                {confirmPagamentoForm.taxa_absorvida_por && <p>{confirmPagamentoForm.taxa_absorvida_por === "empresa" ? "Taxa descontada pela maquininha" : "Taxa cobrada do aluno"}: {formatCurrency(confirmResultado.taxa)}</p>}
               </div>}
 
               <Button

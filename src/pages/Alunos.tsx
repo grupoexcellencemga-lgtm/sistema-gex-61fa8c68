@@ -22,7 +22,7 @@ import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
-import { calcularPagamentoParcial, calcularPagamentoComTaxa } from "@/lib/alunoFinanceiro";
+import { calcularPagamentoParcial, calcularPagamentoComTaxa, temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 const Alunos = () => {
   const { empresa } = useEmpresa();
@@ -720,7 +720,7 @@ const Alunos = () => {
         }
         // Guardar principal e total cobrado separadamente: a taxa repassada
         // aparece no recebimento sem quitar outras dívidas do aluno.
-        if (valorRecebido !== undefined && taxaAbsorvidaPor === "aluno") {
+        if (valorRecebido !== undefined && ["aluno", "empresa"].includes(taxaAbsorvidaPor || "")) {
           update.valor = valorRecebido;
           update.valor_pago = valorPago;
         }
@@ -838,8 +838,7 @@ const Alunos = () => {
 
       const taxaValorEdit = parseFloat(editPagForm.taxa_valor) || 0;
       const isPago = editPagForm.status === "pago";
-      const temPrincipalSeparado = editingPagamento.taxa_absorvida_por === "aluno" && editingPagamento.valor_pago != null &&
-        Number(editingPagamento.valor) > Number(editingPagamento.valor_pago);
+      const temPrincipalSeparado = temTaxaSeparada(editingPagamento);
       const updatePayload: any = {
         valor,
         forma_pagamento: editPagForm.forma_pagamento || null,
@@ -852,7 +851,7 @@ const Alunos = () => {
       if (isPago) {
         updatePayload.data_vencimento = editPagForm.data_vencimento;
         updatePayload.data_pagamento = editPagForm.data_vencimento;
-        updatePayload.valor_pago = temPrincipalSeparado && editPagForm.taxa_absorvida_por === "aluno"
+        updatePayload.valor_pago = temPrincipalSeparado && ["aluno", "empresa"].includes(editPagForm.taxa_absorvida_por || "")
           ? Math.round((valor - taxaValorEdit) * 100) / 100 : valor;
         if (updatePayload.valor_pago <= 0) throw new Error("O total cobrado precisa ser maior que a taxa.");
       } else {
@@ -1822,7 +1821,7 @@ const Alunos = () => {
           });
         }}
         confirmPagamentoIsPending={updatePagamentoStatus.isPending}
-        onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente", valor: p.taxa_absorvida_por === "aluno" && p.valor_pago != null ? Number(p.valor_pago) : undefined })}
+        onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente", valor: temTaxaSeparada(p) ? Number(p.valor_pago) : undefined })}
         onEditPagamento={openEditPagamento}
         onDeletePagamento={(id) => deletePagamento.mutate(id)}
         parcelasDetailOpen={parcelasDetailOpen}

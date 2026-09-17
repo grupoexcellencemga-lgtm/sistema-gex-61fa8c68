@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { calcularPagamentoParcial, calcularPagamentoComTaxa, resumirMatricula, ordenarPagamentos, valorPagoAluno, temTaxaAlunoSeparada } from "@/lib/alunoFinanceiro";
+import { calcularPagamentoParcial, calcularPagamentoComTaxa, resumirMatricula, ordenarPagamentos, valorPagoAluno, temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 describe("financeiro da matrícula", () => {
   it("distingue taxa repassada de dívidas parciais antigas", () => {
-    expect(temTaxaAlunoSeparada({ status: "pago", valor: 1407.60, valor_pago: 1173, taxa_valor: 234.60, taxa_absorvida_por: "aluno" })).toBe(true);
-    expect(temTaxaAlunoSeparada({ status: "pago", valor: 1173, valor_pago: 600, taxa_valor: 20, taxa_absorvida_por: "aluno" })).toBe(false);
+    expect(temTaxaSeparada({ status: "pago", valor: 1407.60, valor_pago: 1173, taxa_valor: 234.60, taxa_absorvida_por: "aluno" })).toBe(true);
+    expect(temTaxaSeparada({ status: "pago", valor: 1173, valor_pago: 600, taxa_valor: 20, taxa_absorvida_por: "aluno" })).toBe(false);
   });
   it("permite cobrar 1407,60 para quitar 1173 com 234,60 de taxa do aluno", () => {
     expect(calcularPagamentoComTaxa(1173, 1407.60, 234.60, "aluno")).toEqual({ pago: 1173, restante: 0, recebido: 1407.60, taxa: 234.60 });
@@ -13,9 +13,10 @@ describe("financeiro da matrícula", () => {
     expect(calcularPagamentoComTaxa(1173, 620, 20, "aluno").restante).toBe(573);
     expect(resumirMatricula(1970, [{ status: "pago", valor: 197 }, { status: "pago", valor: 620, valor_pago: 600, taxa_valor: 20, taxa_absorvida_por: "aluno" }]).pendente).toBe(1173);
   });
-  it("a taxa da empresa não reduz a quitação nem autoriza pagar acima do saldo", () => {
-    expect(calcularPagamentoComTaxa(1173, 600, 20, "empresa").pago).toBe(600);
-    expect(() => calcularPagamentoComTaxa(1173, 1407.60, 234.60, "empresa")).toThrow();
+  it("desconta a taxa retida pela maquininha e permite o total acima do saldo", () => {
+    expect(calcularPagamentoComTaxa(1173, 600, 20, "empresa")).toEqual({ pago: 580, restante: 593, recebido: 600, taxa: 20 });
+    expect(calcularPagamentoComTaxa(1173, 1407.60, 234.60, "empresa").restante).toBe(0);
+    expect(temTaxaSeparada({ status: "pago", valor: 1407.60, valor_pago: 1173, taxa_valor: 234.60, taxa_absorvida_por: "empresa" })).toBe(true);
     expect(() => calcularPagamentoComTaxa(1173, 600, 601, "aluno")).toThrow();
   });
   it("abate entrada e pagamentos sucessivos até quitar o curso", () => {

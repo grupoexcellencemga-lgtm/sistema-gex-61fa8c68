@@ -16,8 +16,8 @@ export function valorPagoAluno(p: Pagamento): number {
   return p.status === "pago" ? Number(p.valor_pago ?? p.valor) : 0;
 }
 
-export function temTaxaAlunoSeparada(p: Pagamento): boolean {
-  return p.status === "pago" && p.taxa_absorvida_por === "aluno" && p.valor_pago != null &&
+export function temTaxaSeparada(p: Pagamento): boolean {
+  return p.status === "pago" && ["aluno", "empresa"].includes(p.taxa_absorvida_por || "") && p.valor_pago != null &&
     centavos(Number(p.valor)) > centavos(Number(p.valor_pago)) &&
     centavos(Number(p.valor)) - centavos(Number(p.valor_pago)) === centavos(Number(p.taxa_valor || 0));
 }
@@ -37,7 +37,7 @@ export function calcularPagamentoParcial(saldo: number, recebido: number) {
 /** Recebido inclui a taxa repassada; somente o principal quita a matrícula. */
 export function calcularPagamentoComTaxa(saldo: number, recebido: number, taxa: number, absorvidaPor: string) {
   if (!Number.isFinite(taxa) || taxa < 0) throw new Error("A taxa deve ser um valor válido maior ou igual a zero.");
-  const principal = absorvidaPor === "aluno" ? (centavos(recebido) - centavos(taxa)) / 100 : recebido;
+  const principal = ["aluno", "empresa"].includes(absorvidaPor) ? (centavos(recebido) - centavos(taxa)) / 100 : recebido;
   const resultado = calcularPagamentoParcial(saldo, principal);
   return { ...resultado, recebido: centavos(recebido) / 100, taxa: centavos(taxa) / 100 };
 }

@@ -22,7 +22,7 @@ import { PaginationControls, paginate } from "@/components/Pagination";
 import { statusVariant, formatDate, formatCurrency } from "./financeiroUtils";
 import { useFormasPagamento, getFormaPagamentoLabel, isFormaCredito } from "@/hooks/useFormasPagamento";
 import { useEmpresa } from "@/contexts/EmpresaContext";
-import { temTaxaAlunoSeparada } from "@/lib/alunoFinanceiro";
+import { temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const queryClient = useQueryClient();
@@ -40,12 +40,12 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   };
 
   const getSaldoEntrada = (pagamento: any) => {
-    if (temTaxaAlunoSeparada(pagamento)) return 0;
+    if (temTaxaSeparada(pagamento)) return 0;
     return Math.max(getValorOriginalEntrada(pagamento) - Number(pagamento?.valor_pago || 0), 0);
   };
 
   const getStatusEntrada = (pagamento: any) => {
-    if (temTaxaAlunoSeparada(pagamento)) return "pago";
+    if (temTaxaSeparada(pagamento)) return "pago";
     const valorPago = Number(pagamento?.valor_pago || 0);
     const valorOriginal = getValorOriginalEntrada(pagamento);
 
@@ -1151,7 +1151,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
                     </TableCell>
                     <TableCell className="text-sm">
                       <div>{formatCurrency(getValorPagoEntrada(p))}</div>
-                      {!temTaxaAlunoSeparada(p) && Number(p.valor_pago || 0) > 0 && Number(p.valor_pago || 0) < Number(p.valor || 0) && (
+                      {!temTaxaSeparada(p) && Number(p.valor_pago || 0) > 0 && Number(p.valor_pago || 0) < Number(p.valor || 0) && (
                         <div className="text-xs text-muted-foreground">
                           Total: {formatCurrency(Number(p.valor))} • Saldo: {formatCurrency(getSaldoEntrada(p))}
                         </div>
