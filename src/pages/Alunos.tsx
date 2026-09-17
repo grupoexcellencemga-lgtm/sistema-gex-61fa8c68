@@ -663,6 +663,13 @@ const Alunos = () => {
       contaBancariaId,
       taxaValor,
       taxaAbsorvidaPor,
+      alunoId,
+      empresaId: empresaIdParcela,
+      matriculaId,
+      produtoId,
+      dataVencimento,
+      parcelaAtual,
+      parcelas,
     }: {
       id: string;
       status: string;
@@ -675,13 +682,34 @@ const Alunos = () => {
       contaBancariaId?: string;
       taxaValor?: string;
       taxaAbsorvidaPor?: string;
+      alunoId?: string;
+      empresaId?: string;
+      matriculaId?: string | null;
+      produtoId?: string | null;
+      dataVencimento?: string | null;
+      parcelaAtual?: number | null;
+      parcelas?: number | null;
     }) => {
       const update: any = { status };
+      // Pagamento parcial: se recebeu menos que o valor da parcela, o restante
+      // precisa virar uma NOVA parcela pendente, senão ele desaparece do
+      // sistema (o total "Pendente" da tela é calculado por fora, então até
+      // aqui parecia certo, mas não sobrava linha nenhuma para lançar o
+      // próximo pagamento).
+      const restante =
+        status === "pago" && valor !== undefined && valorPago !== undefined
+          ? Math.round((valor - valorPago) * 100) / 100
+          : 0;
 
       if (status === "pago") {
         update.data_pagamento = dataPagamento || new Date().toISOString().split("T")[0];
 
-        if (valorPago !== undefined) {
+        if (restante > 0) {
+          // Reduz esta parcela ao que foi de fato recebido — ela fica
+          // integralmente paga, sem "parcial de".
+          update.valor = valorPago;
+          update.valor_pago = null;
+        } else if (valorPago !== undefined) {
           update.valor_pago = valorPago;
         }
 
@@ -706,10 +734,25 @@ const Alunos = () => {
       const { error } = await supabase.from("pagamentos").update(update).eq("id", id);
       if (error) throw error;
 
+      if (restante > 0 && matriculaId && alunoId && empresaIdParcela) {
+        const { error: insertError } = await supabase.from("pagamentos").insert({
+          aluno_id: alunoId,
+          empresa_id: empresaIdParcela,
+          matricula_id: matriculaId,
+          produto_id: produtoId ?? null,
+          valor: restante,
+          status: "pendente",
+          data_vencimento: dataVencimento ?? null,
+          parcela_atual: parcelaAtual ?? null,
+          parcelas: parcelas ?? null,
+        });
+        if (insertError) throw insertError;
+      }
+
       if (status === "pago" && selectedAluno) {
         await logActivity({
           tipo: "pagamento",
-          descricao: `Pagamento de ${formatCurrency(valor || valorPago || 0)} confirmado${produtoNome ? ` (${produtoNome})` : ""}`,
+          descricao: `Pagamento de ${formatCurrency(valorPago ?? valor ?? 0)} confirmado${produtoNome ? ` (${produtoNome})` : ""}${restante > 0 ? ` — restante de ${formatCurrency(restante)} lançado como pendente` : ""}`,
           aluno_id: selectedAluno.id,
         });
       }
@@ -1738,6 +1781,15 @@ const Alunos = () => {
             contaBancariaId: extras?.conta_bancaria_id,
             taxaValor: extras?.taxa_valor,
             taxaAbsorvidaPor: extras?.taxa_absorvida_por,
+            // Necessários para criar a parcela do restante quando o pagamento
+            // é parcial — ver comentário na mutação.
+            alunoId: p.aluno_id,
+            empresaId: p.empresa_id,
+            matriculaId: p.matricula_id,
+            produtoId: p.produto_id,
+            dataVencimento: p.data_vencimento,
+            parcelaAtual: p.parcela_atual,
+            parcelas: p.parcelas,
           });
         }}
         onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}
