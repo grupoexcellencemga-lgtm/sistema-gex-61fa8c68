@@ -22,7 +22,7 @@ import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
-import { calcularPagamentoParcial } from "@/lib/alunoFinanceiro";
+import { calcularPagamentoParcial, calcularPagamentoComTaxa } from "@/lib/alunoFinanceiro";
 
 const Alunos = () => {
   const { empresa } = useEmpresa();
@@ -718,6 +718,12 @@ const Alunos = () => {
         } else if (valorPago !== undefined) {
           update.valor_pago = valorPago;
         }
+        // Guardar principal e total cobrado separadamente: a taxa repassada
+        // aparece no recebimento sem quitar outras dívidas do aluno.
+        if (valorRecebido !== undefined && taxaAbsorvidaPor === "aluno") {
+          update.valor = valorRecebido;
+          update.valor_pago = valorPago;
+        }
 
         if (formaPagamento) {
           update.forma_pagamento = formaPagamento;
@@ -738,6 +744,7 @@ const Alunos = () => {
       if (status === "pendente") {
         update.data_pagamento = null;
         update.valor_pago = 0;
+        if (valor !== undefined) update.valor = valor;
       }
 
       const { error } = await supabase.from("pagamentos").update(update).eq("id", id);
@@ -831,6 +838,8 @@ const Alunos = () => {
 
       const taxaValorEdit = parseFloat(editPagForm.taxa_valor) || 0;
       const isPago = editPagForm.status === "pago";
+      const temPrincipalSeparado = editingPagamento.taxa_absorvida_por === "aluno" && editingPagamento.valor_pago != null &&
+        Number(editingPagamento.valor) > Number(editingPagamento.valor_pago);
       const updatePayload: any = {
         valor,
         forma_pagamento: editPagForm.forma_pagamento || null,
@@ -843,8 +852,16 @@ const Alunos = () => {
       if (isPago) {
         updatePayload.data_vencimento = editPagForm.data_vencimento;
         updatePayload.data_pagamento = editPagForm.data_vencimento;
-        updatePayload.valor_pago = valor;
+        updatePayload.valor_pago = temPrincipalSeparado && editPagForm.taxa_absorvida_por === "aluno"
+          ? Math.round((valor - taxaValorEdit) * 100) / 100 : valor;
+        if (updatePayload.valor_pago <= 0) throw new Error("O total cobrado precisa ser maior que a taxa.");
       } else {
+        if (temPrincipalSeparado) {
+          updatePayload.valor = Math.round((valor - taxaValorEdit) * 100) / 100;
+          if (updatePayload.valor <= 0) throw new Error("O total cobrado precisa ser maior que a taxa.");
+          updatePayload.taxa_valor = null;
+          updatePayload.taxa_absorvida_por = null;
+        }
         updatePayload.data_vencimento = editPagForm.data_vencimento;
         updatePayload.data_pagamento = null;
         updatePayload.valor_pago = 0;
@@ -1776,13 +1793,15 @@ const Alunos = () => {
         }}
         onConfirmPagamento={(p, fees, extras) => {
           const recebido = extras?.valor_recebido !== undefined ? Number(extras.valor_recebido) : fees.total;
-          const valorPago = calcularPagamentoParcial(Number(p.valor), recebido).pago;
+          const resultado = calcularPagamentoComTaxa(Number(p.valor), recebido,
+            Number(extras?.taxa_valor || 0), extras?.taxa_absorvida_por || "");
+          const valorPago = resultado.pago;
           const valorTotal = Number(p.valor);
           return updatePagamentoStatus.mutateAsync({
             id: p.id,
             status: "pago",
             valorPago,
-            valorRecebido: valorPago < valorTotal ? valorPago : undefined,
+            valorRecebido: resultado.recebido,
             valor: valorTotal,
             produtoNome: p.produtos?.nome,
             dataPagamento: extras?.data_pagamento,
@@ -1803,7 +1822,7 @@ const Alunos = () => {
           });
         }}
         confirmPagamentoIsPending={updatePagamentoStatus.isPending}
-        onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}
+        onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente", valor: p.taxa_absorvida_por === "aluno" && p.valor_pago != null ? Number(p.valor_pago) : undefined })}
         onEditPagamento={openEditPagamento}
         onDeletePagamento={(id) => deletePagamento.mutate(id)}
         parcelasDetailOpen={parcelasDetailOpen}
