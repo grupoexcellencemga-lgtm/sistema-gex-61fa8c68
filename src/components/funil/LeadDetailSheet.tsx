@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import { ActivityTimeline, logActivity } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { BotSessoesLead } from "./BotSessoesLead";
+import { FichaLeadPanel } from "./FichaLeadPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LeadForm, emptyLeadForm, origens, cidades, ETAPA_CORES, type FunilEtapa } from "./funilUtils";
 import { maskPhone } from "@/lib/utils";
 
@@ -341,7 +343,34 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   {lead.cidade && <div className="flex items-center gap-2 text-sm"><MapPin className="h-4 w-4 text-muted-foreground" />{lead.cidade}</div>}
                 </div>
 
-                <div className="border-t pt-4">
+                {/* forceMount: sem isto o Radix desmonta a aba inativa, e o editor
+                    de observações perderia o que foi digitado e não salvo. */}
+                {/* key: o sheet continua montado entre um lead e outro, e sem isto a
+                    aba escolhida no anterior vazaria para o próximo. Quem nunca
+                    conversou (ex.: importado de evento) não tem ficha, então abre
+                    direto nos detalhes. */}
+                <Tabs
+                  key={lead.id}
+                  defaultValue={lead.ultima_mensagem_em ? "ficha" : "detalhes"}
+                  className="space-y-4"
+                >
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="ficha">Ficha da IA</TabsTrigger>
+                    <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
+                    <TabsTrigger value="historico">Histórico</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="ficha" forceMount className="mt-0 data-[state=inactive]:hidden">
+                    <FichaLeadPanel
+                      leadId={lead.id}
+                      tipoContato={lead.tipo_contato ?? null}
+                      onTipoAlterado={onLeadUpdated}
+                      temConversa={!!lead.ultima_mensagem_em}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="detalhes" forceMount className="mt-0 space-y-5 data-[state=inactive]:hidden">
+                <div>
                   <h3 className="text-sm font-semibold mb-2">Detalhes</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><span className="text-muted-foreground">Produto:</span><p>{lead.produto_interesse || "—"}</p></div>
@@ -429,8 +458,10 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   </Button>
                 </div>
 
-                {/* Timeline */}
-                <div className="border-t pt-4">
+                  </TabsContent>
+
+                  <TabsContent value="historico" forceMount className="mt-0 space-y-5 data-[state=inactive]:hidden">
+                <div>
                   <TarefasContextSection leadId={lead.id} />
                 </div>
 
@@ -470,6 +501,8 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                   />
                   <ActivityTimeline leadId={lead.id} />
                 </div>
+                  </TabsContent>
+                </Tabs>
               </>
             )}
           </div>

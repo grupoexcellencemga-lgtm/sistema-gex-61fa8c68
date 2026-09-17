@@ -68,6 +68,52 @@ export function calcularTaxaConversao(total: number, convertidos: number): strin
   return ((convertidos / total) * 100).toFixed(1);
 }
 
+// ── Tipo de contato e ficha da IA ────────────────────────────────────────────
+
+// O mesmo WhatsApp atende clientes, fornecedores e equipe. Só lead e aluno
+// entram no painel de pendências, no alerta de SLA e no agente de vendas.
+export const TIPOS_CONTATO = [
+  { value: "lead", label: "Lead" },
+  { value: "aluno", label: "Aluno / cliente" },
+  { value: "fornecedor", label: "Fornecedor" },
+  { value: "parceiro", label: "Parceiro" },
+  { value: "equipe", label: "Equipe" },
+  { value: "outro", label: "Outro" },
+] as const;
+
+export type TipoContato = (typeof TIPOS_CONTATO)[number]["value"];
+
+export const TIPOS_CLIENTE: TipoContato[] = ["lead", "aluno"];
+
+export function ehTipoCliente(tipo: string | null | undefined): boolean {
+  return (TIPOS_CLIENTE as readonly string[]).includes(tipo ?? "lead");
+}
+
+export function rotuloTipoContato(tipo: string | null | undefined): string {
+  return TIPOS_CONTATO.find((t) => t.value === tipo)?.label ?? "Lead";
+}
+
+export interface FichaLead {
+  tipo_contato: TipoContato;
+  resumo: string;
+  necessidade: string;
+  dores: string[];
+  momento: string;
+  perfil: string;
+  objecoes: string[];
+  interesses: string[];
+  temperatura: "quente" | "morno" | "frio" | "indefinido";
+  proximo_passo: string;
+  alertas: string[];
+}
+
+export const TEMPERATURA_LEAD: Record<FichaLead["temperatura"], { label: string; classe: string }> = {
+  quente: { label: "Quente", classe: "border-red-300 text-red-700 dark:border-red-800 dark:text-red-400" },
+  morno: { label: "Morno", classe: "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400" },
+  frio: { label: "Frio", classe: "border-sky-300 text-sky-700 dark:border-sky-800 dark:text-sky-400" },
+  indefinido: { label: "Indefinido", classe: "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-400" },
+};
+
 // ── SLA de atendimento ───────────────────────────────────────────────────────
 
 export interface LeadSla {

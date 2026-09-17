@@ -23,6 +23,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Marcador que o prompt manda o agente devolver quando não há o que responder.
+const SEM_RESPOSTA = "[SEM_RESPOSTA]";
+
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "atualizar_lead",
@@ -175,6 +178,7 @@ Deno.serve(async (req) => {
             .eq("empresa_id", agente.empresa_id)
             .eq("bot_ativo", true)
             .in("canal_id", agente.canais_ids)
+            .in("tipo_contato", ["lead", "aluno"])
             .is("deleted_at", null)
             .maybeSingle();
 
@@ -252,6 +256,7 @@ Deno.serve(async (req) => {
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .in("canal_id", agente.canais_ids)
+          .in("tipo_contato", ["lead", "aluno"])
           .is("deleted_at", null);
         if (exigeBotAtivo) q = q.eq("bot_ativo", true);
         const { data } = await q.maybeSingle();
@@ -265,6 +270,7 @@ Deno.serve(async (req) => {
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .in("canal_id", agente.canais_ids)
+          .in("tipo_contato", ["lead", "aluno"])
           .lt("ultima_mensagem_em", cutoff)
           .is("deleted_at", null)
           .not("ultima_mensagem_em", "is", null);
@@ -510,6 +516,23 @@ Deno.serve(async (req) => {
             ? `Use o nome da pessoa naturalmente na conversa quando fizer sentido.`
             : ``);
 
+        // Ficha que a IA mantém do contato: dores, momento, objeções e
+        // compromissos de conversas anteriores, que o histórico recente sozinho
+        // não mostra.
+        let fichaContato = "";
+        try {
+          const { data: fichaSalva } = await supabase
+            .from("leads_ficha_ia")
+            .select("ficha")
+            .eq("lead_id", lead.id)
+            .maybeSingle();
+          if (fichaSalva?.ficha) {
+            fichaContato =
+              `\n\n# FICHA DO CONTATO\nResumo interno das conversas anteriores. Use para entender a pessoa; não cite a ficha para ela.\n` +
+              JSON.stringify(fichaSalva.ficha, null, 2);
+          }
+        } catch (_) {}
+
         // Registra início da sessão na conversas_ia.
         // conversas_ia mede as conversas reais que o bot teve com clientes. Nos
         // modos de avaliação a sessão nunca é finalizada (o fluxo desvia antes),
@@ -564,7 +587,7 @@ Deno.serve(async (req) => {
 
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
-        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato;
+        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato + fichaContato;
         let loopMessages: Anthropic.MessageParam[] = [...messages];
         let resposta: string | null = null;
         let handoff = false;
@@ -795,6 +818,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // O agente pode decidir que não há o que responder: um "ok" ou
+        // "obrigado" que só encerra a conversa. Responder a isso soa robótico,
+        // e na revisão a decisão de ficar calado também precisa ser julgada.
+        const naoResponder = resposta.includes(SEM_RESPOSTA);
+        if (naoResponder) resposta = SEM_RESPOSTA;
+
         // ── Modos de avaliação ────────────────────────────────────────────
         // Guarda o que o agente responderia, sem falar com o cliente.
         if (modoAgente !== "ativo") {
@@ -844,7 +873,7 @@ Deno.serve(async (req) => {
                   headers: { apikey: apiKeyTeste ?? "", "Content-Type": "application/json" },
                   body: JSON.stringify({
                     number: destinoTeste,
-                    text: `[TESTE — lead ${lead.nome ?? lead.id}]\n\nCliente: ${ultimaMensagem.conteudo}\n\nIA responderia: ${resposta}`,
+                    text: `[TESTE — lead ${lead.nome ?? lead.id}]\n\nCliente: ${ultimaMensagem.conteudo}\n\nIA responderia: ${naoResponder ? "(nada — consideraria a conversa encerrada)" : resposta}`,
                   }),
                 }
               ).catch((e) => console.error("[processar-bot] falha no envio de teste:", e));
@@ -852,6 +881,14 @@ Deno.serve(async (req) => {
           }
 
           console.log(`[processar-bot] modo ${modoAgente}: resposta registrada, nada enviado ao lead ${lead.id}`);
+          processados++;
+          continue;
+        }
+
+        if (naoResponder) {
+          // Marca como tratada para o cron não reavaliar a mesma mensagem.
+          await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
+          console.log(`[processar-bot] lead ${lead.id}: conversa encerrada, nada a responder`);
           processados++;
           continue;
         }
@@ -938,6 +975,7 @@ Deno.serve(async (req) => {
           .eq("bot_ativo", true)
           .lt("followup_count", maxTentativas)
           .in("canal_id", agente.canais_ids)
+          .in("tipo_contato", ["lead", "aluno"])
           .is("deleted_at", null);
 
         for (const lead of candidatos ?? []) {

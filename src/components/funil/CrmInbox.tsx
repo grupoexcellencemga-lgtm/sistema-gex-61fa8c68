@@ -15,7 +15,7 @@ import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
   ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
   FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
-  Tag, Zap, Reply, X, ArrowRightLeft,
+  Tag, Zap, Reply, X, ArrowRightLeft, Sparkles,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -1304,6 +1304,24 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {/* A ficha da IA mora no detalhe do lead; sem este atalho ela só era
+                    alcançável pelo menu de engrenagem. */}
+                {onLeadClick && selectedLead && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={() => onLeadClick(selectedLead)}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ficha
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">Ficha do lead feita pela IA</TooltipContent>
+                  </Tooltip>
+                )}
                 {/* Busca na conversa */}
                 <Tooltip>
                   <TooltipTrigger asChild>

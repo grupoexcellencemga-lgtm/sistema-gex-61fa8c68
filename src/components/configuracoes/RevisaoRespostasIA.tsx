@@ -27,6 +27,8 @@ type Revisao = Database["public"]["Views"]["v_respostas_sombra_revisao"]["Row"];
 type Filtro = "pendentes" | "boa" | "ruim" | "todas";
 
 const TAMANHO_PAGINA = 20;
+// Marcador que o processar-bot grava quando o agente decide não responder.
+const SEM_RESPOSTA = "[SEM_RESPOSTA]";
 // Amostra a partir da qual a taxa de aprovação começa a dizer algo. Abaixo
 // disso, dois ou três casos mudam o percentual inteiro.
 const AMOSTRA_MINIMA = 30;
@@ -220,8 +222,17 @@ function CardRevisao({ item }: { item: Revisao }) {
         {item.mensagem_entrada || <span className="italic text-muted-foreground">[mídia]</span>}
       </Bolha>
 
-      <Bolha rotulo="A IA responderia" destaque>
-        {item.resposta_ia}
+      <Bolha
+        rotulo={item.resposta_ia === SEM_RESPOSTA ? "A IA ficaria em silêncio" : "A IA responderia"}
+        destaque
+      >
+        {item.resposta_ia === SEM_RESPOSTA ? (
+          <span className="italic text-muted-foreground">
+            Não enviaria nada: entendeu que a mensagem só encerra a conversa ou não é de venda.
+          </span>
+        ) : (
+          item.resposta_ia
+        )}
         {ferramentas.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {ferramentas.map((f, idx) => (

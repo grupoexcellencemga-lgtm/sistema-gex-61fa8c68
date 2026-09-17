@@ -68,6 +68,11 @@ Deno.serve(async (req) => {
       .is("deleted_at", null)
       .eq("ultima_mensagem_direcao", "entrada")
       .not("ultima_mensagem_em", "is", null)
+      // Fornecedor, parceiro e equipe não são cliente esperando atendimento; e
+      // conversa marcada como resolvida não pede resposta. O webhook tira do
+      // "finalizado" sozinho quando a pessoa volta a escrever.
+      .in("tipo_contato", ["lead", "aluno"])
+      .neq("status_atendimento", "finalizado")
       .or(`sla_alertado_em.is.null,sla_alertado_em.lt.${limiteRealerta}`)
       .order("ultima_mensagem_em", { ascending: true })
       .limit(200);

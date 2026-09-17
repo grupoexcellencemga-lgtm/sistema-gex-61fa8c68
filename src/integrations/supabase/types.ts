@@ -2577,6 +2577,7 @@ export type Database = {
           status_atendimento: string
           telefone: string | null
           tem_mensagem_nova: boolean | null
+          tipo_contato: string
           ultima_mensagem_direcao: string | null
           ultima_mensagem_em: string | null
           ultima_mensagem_texto: string | null
@@ -2614,6 +2615,7 @@ export type Database = {
           status_atendimento?: string
           telefone?: string | null
           tem_mensagem_nova?: boolean | null
+          tipo_contato?: string
           ultima_mensagem_direcao?: string | null
           ultima_mensagem_em?: string | null
           ultima_mensagem_texto?: string | null
@@ -2651,6 +2653,7 @@ export type Database = {
           status_atendimento?: string
           telefone?: string | null
           tem_mensagem_nova?: boolean | null
+          tipo_contato?: string
           ultima_mensagem_direcao?: string | null
           ultima_mensagem_em?: string | null
           ultima_mensagem_texto?: string | null
@@ -2684,6 +2687,47 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "comerciais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_ficha_ia: {
+        Row: {
+          ate_mensagem_em: string | null
+          atualizada_em: string
+          empresa_id: string
+          ficha: Json
+          lead_id: string
+          modelo: string | null
+          tokens_entrada: number | null
+          tokens_saida: number | null
+        }
+        Insert: {
+          ate_mensagem_em?: string | null
+          atualizada_em?: string
+          empresa_id: string
+          ficha: Json
+          lead_id: string
+          modelo?: string | null
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Update: {
+          ate_mensagem_em?: string | null
+          atualizada_em?: string
+          empresa_id?: string
+          ficha?: Json
+          lead_id?: string
+          modelo?: string | null
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_ficha_ia_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
@@ -5138,6 +5182,12 @@ export type Database = {
         Returns: undefined
       }
       is_gestor: { Args: { _user_id: string }; Returns: boolean }
+      leads_para_ficha: {
+        Args: { p_limite?: number }
+        Returns: {
+          lead_id: string
+        }[]
+      }
       marcar_bot_respondido: { Args: { p_lead_id: string }; Returns: undefined }
       relatorios_data: {
         Args: { _data_fim?: string; _data_inicio?: string }
