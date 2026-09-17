@@ -766,7 +766,7 @@ Deno.serve(async (req) => {
           // upsert e nao insert: duas rodadas podem se sobrepor (a execucao leva
           // ~70s, o cron dispara a cada 2 min) e ambas passam pela checagem de
           // duplicata antes de qualquer uma gravar. O indice unico decide.
-          await supabase.from("respostas_sombra").upsert(
+          const { error: erroSombra } = await supabase.from("respostas_sombra").upsert(
             {
               empresa_id: agente.empresa_id,
               lead_id: lead.id,
@@ -779,6 +779,12 @@ Deno.serve(async (req) => {
             },
             { onConflict: "mensagem_entrada_id", ignoreDuplicates: true }
           );
+          // Sem isto a gravação falha calada: o contador sobe, a chamada ao
+          // Claude é paga e a resposta some. Foi exatamente o que aconteceu
+          // quando o índice único era parcial e o ON CONFLICT não o aceitava.
+          if (erroSombra) {
+            console.error("[processar-bot] falha ao gravar resposta sombra:", erroSombra);
+          }
 
           // No modo teste a resposta sai de verdade, mas o destino vem da
           // variável de ambiente — nunca do lead. É impossível acertar um
