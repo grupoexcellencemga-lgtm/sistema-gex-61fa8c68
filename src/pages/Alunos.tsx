@@ -22,6 +22,7 @@ import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
+import { calcularPagamentoParcial } from "@/lib/alunoFinanceiro";
 
 const Alunos = () => {
   const { empresa } = useEmpresa();
@@ -700,8 +701,11 @@ const Alunos = () => {
       // próximo pagamento).
       const restante =
         status === "pago" && valor !== undefined && valorPago !== undefined
-          ? Math.round((valor - valorPago) * 100) / 100
+          ? calcularPagamentoParcial(valor, valorPago).restante
           : 0;
+      if (restante > 0 && (!alunoId || !empresaIdParcela)) {
+        throw new Error("Não foi possível identificar o aluno e a empresa para registrar o saldo restante.");
+      }
 
       if (status === "pago") {
         update.data_pagamento = dataPagamento || new Date().toISOString().split("T")[0];
@@ -724,8 +728,8 @@ const Alunos = () => {
         }
 
         const tv = parseFloat(taxaValor || "") || 0;
-        if (tv > 0) update.taxa_valor = tv;
-        if (taxaAbsorvidaPor) update.taxa_absorvida_por = taxaAbsorvidaPor;
+        if (taxaValor !== undefined) update.taxa_valor = tv > 0 ? tv : null;
+        if (taxaAbsorvidaPor !== undefined) update.taxa_absorvida_por = taxaAbsorvidaPor || null;
 
         const pc = parseInt(parcelasCartao || "") || 0;
         if (pc > 0) update.parcelas_cartao = pc;
@@ -739,11 +743,11 @@ const Alunos = () => {
       const { error } = await supabase.from("pagamentos").update(update).eq("id", id);
       if (error) throw error;
 
-      if (restante > 0 && matriculaId && alunoId && empresaIdParcela) {
+      if (restante > 0 && alunoId && empresaIdParcela) {
         const { error: insertError } = await supabase.from("pagamentos").insert({
           aluno_id: alunoId,
           empresa_id: empresaIdParcela,
-          matricula_id: matriculaId,
+          matricula_id: matriculaId ?? null,
           produto_id: produtoId ?? null,
           valor: restante,
           status: "pendente",
@@ -1771,10 +1775,10 @@ const Alunos = () => {
           setNovoPagamentoDialog(true);
         }}
         onConfirmPagamento={(p, fees, extras) => {
-          const recebido = extras?.valor_recebido ? parseFloat(extras.valor_recebido) : undefined;
-          const valorPago = recebido !== undefined && !isNaN(recebido) && recebido > 0 ? recebido : fees.total;
+          const recebido = extras?.valor_recebido !== undefined ? Number(extras.valor_recebido) : fees.total;
+          const valorPago = calcularPagamentoParcial(Number(p.valor), recebido).pago;
           const valorTotal = Number(p.valor);
-          updatePagamentoStatus.mutate({
+          return updatePagamentoStatus.mutateAsync({
             id: p.id,
             status: "pago",
             valorPago,
@@ -1798,6 +1802,7 @@ const Alunos = () => {
             parcelas: p.parcelas,
           });
         }}
+        confirmPagamentoIsPending={updatePagamentoStatus.isPending}
         onDesfazerPagamento={(p) => updatePagamentoStatus.mutate({ id: p.id, status: "pendente" })}
         onEditPagamento={openEditPagamento}
         onDeletePagamento={(id) => deletePagamento.mutate(id)}

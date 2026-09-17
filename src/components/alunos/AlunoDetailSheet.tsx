@@ -28,6 +28,7 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
+import { ordenarPagamentos, resumirMatricula, valorPagoAluno } from "@/lib/alunoFinanceiro";
 
 interface Props {
   open: boolean;
@@ -59,7 +60,8 @@ interface Props {
       valor_recebido?: string;
       parcelas_cartao?: string;
     }
-  ) => void;
+  ) => Promise<unknown>;
+  confirmPagamentoIsPending?: boolean;
   onDesfazerPagamento: (p: any) => void;
   onEditPagamento: (p: any) => void;
   onDeletePagamento: (id: string) => void;
@@ -117,6 +119,7 @@ export const AlunoDetailSheet = (props: Props) => {
   const [deleteMatriculaId, setDeleteMatriculaId] = useState<string | null>(null);
   const [deletePagamentoId, setDeletePagamentoId] = useState<string | null>(null);
   const [confirmPagamentoDialog, setConfirmPagamentoDialog] = useState(false);
+  const [escolherPendenciaOpen, setEscolherPendenciaOpen] = useState(false);
   const [confirmingPagamento, setConfirmingPagamento] = useState<any>(null);
   const [confirmingFees, setConfirmingFees] = useState<any>(null);
   const [confirmPagamentoForm, setConfirmPagamentoForm] = useState({
@@ -242,7 +245,9 @@ export const AlunoDetailSheet = (props: Props) => {
 
   // ── Taxa automática para "Confirmar pagamento" ──
   const confirmForma = confirmPagamentoForm.forma_pagamento || confirmingPagamento?.forma_pagamento || "";
-  const confirmValorBase = parseFloat(String(confirmingPagamento?.valor || 0)) || 0;
+  const confirmValorBase = parseFloat(confirmPagamentoForm.valor_recebido) || 0;
+  const confirmValorValido = Number.isFinite(confirmValorBase) && Math.round(confirmValorBase * 100) > 0 &&
+    Math.round(confirmValorBase * 100) <= Math.round(Number(confirmingPagamento?.valor || 0) * 100);
   const confirmParcelasCalc = parseInt(confirmPagamentoForm.parcelas_cartao) || 1;
   const confirmIsCartao = ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(confirmForma);
   const confirmIsDebito = confirmForma === "debito";
@@ -272,7 +277,7 @@ export const AlunoDetailSheet = (props: Props) => {
     ? Math.round(confirmValorBase * confirmTaxaAutoCalc.percentual / 100 * 100) / 100
     : 0;
   useEffect(() => {
-    if (!confirmShowTaxa || confirmTaxaVal <= 0) return;
+    if (!confirmShowTaxa) return;
     const current = parseFloat(confirmPagamentoForm.taxa_valor) || 0;
     if (current !== confirmTaxaVal) {
       setConfirmPagamentoForm((p) => ({ ...p, taxa_valor: String(confirmTaxaVal) }));
@@ -315,30 +320,17 @@ export const AlunoDetailSheet = (props: Props) => {
     }
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
-  const semNoise = (v: number) => Math.round(v * 100) / 100 < 0.10 ? 0 : Math.round(v * 100) / 100;
-  // "Recebido": dinheiro que de fato caiu na conta. Quando a empresa absorve a
-  // taxa da maquininha, a taxa é DESCONTADA — o aluno quitou o valor da
-  // parcela, mas a maquininha ficou com uma parte antes de cair no banco.
-  const totalPago = pagamentos
-    .filter((p: any) => p.status === "pago")
-    .reduce((s: number, p: any) => {
-      const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
-      const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
-      return s + base - taxaEmp;
-    }, 0);
-  const totalPendente = matriculas.reduce((acc: number, m: any) => {
-    const pgsMat = pagamentos.filter((pg: any) => pg.matricula_id === m.id);
-    // Quitação da dívida do aluno: usa o valor cheio da parcela, sem entrar em
-    // taxa de maquininha — quem absorve a taxa é custo da empresa, não muda
-    // quanto do valor contratado já foi pago.
-    const pagoEfetivo = pgsMat
-      .filter((pg: any) => pg.status === "pago")
-      .reduce((s: number, pg: any) => {
-        const base = pg.valor_pago != null ? Number(pg.valor_pago) : Number(pg.valor || 0);
-        return s + base;
-      }, 0);
-    return acc + semNoise(Math.max(0, Number(m.valor_final || 0) - pagoEfetivo));
-  }, 0);
+  const totalPago = pagamentos.reduce((s: number, p: any) => s + valorPagoAluno(p), 0);
+  const totalPendente = matriculas.reduce((acc: number, m: any) =>
+    acc + resumirMatricula(Number(m.valor_final || 0), pagamentos.filter((p: any) => p.matricula_id === m.id)).pendente, 0)
+    + pagamentos.filter((p: any) => !p.matricula_id && (p.status === "pendente" || p.status === "vencido"))
+      .reduce((s: number, p: any) => s + Number(p.valor), 0);
+  const pendencias = ordenarPagamentos(pagamentos.filter((p: any) => p.status === "pendente" || p.status === "vencido"));
+  const iniciarPagamento = () => {
+    if (pendencias.length === 1) openConfirmPagamentoDialog(pendencias[0], null);
+    else if (pendencias.length > 1) setEscolherPendenciaOpen(true);
+    else onNewPagamento();
+  };
 
   const totalVencido = pagamentos
     .filter((p: any) => p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje))
@@ -359,6 +351,7 @@ export const AlunoDetailSheet = (props: Props) => {
               <div className="px-6 pt-6 pb-3 pr-14 shrink-0">
                 <SheetHeader className="p-0">
                   <SheetTitle>{selectedAluno.nome}</SheetTitle>
+                  {totalPendente > 0 && <p role="status" className="text-sm font-medium text-amber-700 dark:text-amber-400">Pendência financeira: {formatCurrency(totalPendente)}</p>}
                   <div className="flex items-center gap-2 pt-1">
                     <Button variant="outline" size="sm" onClick={() => onEdit(selectedAluno)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" />
@@ -377,7 +370,7 @@ export const AlunoDetailSheet = (props: Props) => {
                   <TabsList className="w-max min-w-full">
                     <TabsTrigger value="dados">Dados</TabsTrigger>
                     <TabsTrigger value="matriculas">Matrículas</TabsTrigger>
-                    <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+                    <TabsTrigger value="financeiro">Financeiro{totalPendente > 0 && <span className="ml-1 text-amber-600" aria-label="Com pendência">●</span>}</TabsTrigger>
                     <TabsTrigger value="atividades">
                       <Clock className="h-3.5 w-3.5 mr-1" />
                       Histórico
@@ -527,8 +520,8 @@ export const AlunoDetailSheet = (props: Props) => {
 
                   <TabsContent value="financeiro" className="mt-4 space-y-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">Parcelas são geradas automaticamente ao criar uma matrícula.</p>
-                      <Button size="sm" onClick={onNewPagamento}>
+                      <p className="text-xs text-muted-foreground">Registre cada pagamento na pendência para abater o saldo da matrícula.</p>
+                      <Button size="sm" onClick={iniciarPagamento}>
                         <Plus className="h-4 w-4 mr-1.5" />
                         Novo Pagamento
                       </Button>
@@ -536,7 +529,7 @@ export const AlunoDetailSheet = (props: Props) => {
 
                     <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Recebido</p>
+                        <p className="text-xs text-muted-foreground">Pago pelo aluno</p>
                         <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPago)}</p>
                       </div>
                       <div className="rounded-lg border p-3">
@@ -566,39 +559,20 @@ export const AlunoDetailSheet = (props: Props) => {
                             })),
                           ...(pagamentos.some((p: any) => !p.matricula_id) ? [{
                             id: "__orphan__",
+                            valorFinal: undefined,
                             label: "Sem vínculo",
                             sub: null,
                             status: null,
                             pgs: pagamentos.filter((p: any) => !p.matricula_id),
                           }] : []),
                         ].map((group) => {
-                          const cartaoGroups: Record<string, any[]> = {};
-                          const rowItems: { type: string; data: any }[] = [];
-
-                          group.pgs.forEach((p: any) => {
-                            if (["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas > 1) {
-                              const key = `${p.produto_id || "none"}-${p.parcelas}-${p.matricula_id || "none"}`;
-                              if (!cartaoGroups[key]) cartaoGroups[key] = [];
-                              cartaoGroups[key].push(p);
-                            } else if (p.parcelas > 1) {
-                              const key = `${p.matricula_id || p.produto_id || "none"}-${p.parcelas}`;
-                              if (!cartaoGroups[key]) cartaoGroups[key] = [];
-                              cartaoGroups[key].push(p);
-                            } else {
-                              rowItems.push({ type: "single", data: p });
-                            }
-                          });
-                          Object.values(cartaoGroups).forEach((pgList) => rowItems.push({ type: "group", data: pgList }));
-
-                          // Mesma regra de totalPendente: quitação de dívida não
-                          // entra em taxa de maquininha.
-                          const grpPago = group.pgs
-                            .filter((p: any) => p.status === "pago")
-                            .reduce((s: number, p: any) => {
-                              const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
-                              return s + base;
-                            }, 0);
-                          const grpPendente = Math.max(0, Math.round((group.valorFinal - grpPago) * 100) / 100);
+                          // Cada recebimento fica separado para preservar forma e data do pagamento.
+                          const rowItems = ordenarPagamentos(group.pgs).map((p) => ({ type: "single", data: p }));
+                          const resumo = resumirMatricula(group.valorFinal ?? 0, group.pgs);
+                          const grpPago = resumo.pago;
+                          const grpPendente = group.id === "__orphan__"
+                            ? group.pgs.filter((p: any) => p.status !== "pago").reduce((s: number, p: any) => s + Number(p.valor), 0)
+                            : resumo.pendente;
 
                           return (
                             <div key={group.id} className="space-y-1.5">
@@ -606,6 +580,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                 <div>
                                   <p className="text-sm font-semibold">{group.label}</p>
                                   {group.sub && <p className="text-xs text-muted-foreground">{group.sub}</p>}
+                                  {group.valorFinal != null && <p className="text-xs text-muted-foreground mt-1">Total da matrícula: {formatCurrency(group.valorFinal)}</p>}
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {grpPago > 0 && (
                                       <span className="text-xs text-emerald-600 font-medium">Pago {formatCurrency(grpPago)}</span>
@@ -632,48 +607,25 @@ export const AlunoDetailSheet = (props: Props) => {
                                 )}
                               </div>
 
+                              {grpPendente > 0 && (
+                                <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                                  <p className="font-semibold">Saldo pendente: {formatCurrency(grpPendente)}</p>
+                                  <p className="text-xs mt-1">Registre o valor recebido abaixo. O restante continua pendente até a quitação.</p>
+                                </div>
+                              )}
                               <div className="space-y-1.5">
                                 {rowItems.map((item, idx) => {
-                                  if (item.type === "group") {
-                                    const its = item.data as any[];
-                                    const totalGrupo = its.reduce((s: number, p: any) => s + Number(p.valor), 0);
-                                    const pagas = its.filter((p: any) => p.status === "pago").length;
-                                    return (
-                                      <div
-                                        key={`grp-${group.id}-${idx}`}
-                                        className="rounded-lg border p-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors"
-                                        onClick={() => {
-                                          setSelectedParcelas(its.sort((a: any, b: any) => a.parcela_atual - b.parcela_atual));
-                                          setParcelasDetailOpen(true);
-                                        }}
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <div>
-                                            <p className="font-medium">
-                                              {formatCurrency(totalGrupo)} · {its.length}x de {formatCurrency(Number(its[0].valor))}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {getFormaLabel(its[0]?.forma_pagamento)} · {pagas}/{its.length} pagas
-                                            </p>
-                                          </div>
-                                          <Badge variant="outline" className={
-                                            pagas === its.length
-                                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"
-                                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0"
-                                          }>
-                                            {pagas === its.length ? "Quitado" : `${pagas}/${its.length}`}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-
                                   const p = item.data;
                                   const valorTaxaMaquina = getValorTaxaMaquina(p);
                                   const isVencido = p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje);
 
                                   return (
-                                    <div key={p.id} className="rounded-lg border p-3 text-sm">
+                                    <div key={p.id}>
+                                      {(idx === 0 || (p.status === "pago" && rowItems[idx - 1].data.status !== "pago")) && (
+                                        <p className="text-xs font-semibold text-muted-foreground pt-3 pb-1">{p.status === "pago" ? "Pagamentos realizados" : "Pendências — registrar pagamento"}</p>
+                                      )}
+                                    <div className={cn("rounded-lg border p-3 text-sm", p.status !== "pago" && "border-amber-300 dark:border-amber-800")}>
+                                      {p.parcelas > 1 && <p className="text-xs text-muted-foreground mb-1">Parcela {p.parcela_atual} de {p.parcelas}</p>}
                                       <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap">
@@ -712,7 +664,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                               className="h-7 text-xs"
                                               onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}
                                             >
-                                              Registrar
+                                              Registrar pagamento
                                             </Button>
                                           )}
                                           {p.comprovante_url && (
@@ -738,7 +690,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                                     alunoNome: selectedAluno?.nome || "—",
                                                     alunoCpf: selectedAluno?.cpf || undefined,
                                                     produtoNome: p.produtos?.nome || group.label || "—",
-                                                    valor: Number(p.valor),
+                                                    valor: valorPagoAluno(p),
                                                     dataPagamento: p.data_pagamento ? new Date(p.data_pagamento + "T12:00").toLocaleDateString("pt-BR") : undefined,
                                                     formaPagamento: getFormaLabel(p.forma_pagamento),
                                                     reciboId: p.id,
@@ -779,6 +731,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                         </div>
                                       </div>
                                     </div>
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -794,6 +747,28 @@ export const AlunoDetailSheet = (props: Props) => {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog open={escolherPendenciaOpen} onOpenChange={setEscolherPendenciaOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Em qual pendência deseja registrar o pagamento?</DialogTitle>
+            <DialogDescription>O valor recebido será abatido da pendência escolhida.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {pendencias.map((p: any) => {
+              const mat = matriculas.find((m: any) => m.id === p.matricula_id);
+              return <Button key={p.id} variant="outline" className="w-full h-auto py-3 justify-start text-left whitespace-normal" onClick={() => {
+                setEscolherPendenciaOpen(false);
+                openConfirmPagamentoDialog(p, null);
+              }}>
+                <span>{mat?.produtos?.nome || p.produtos?.nome || "Sem vínculo"}{mat?.turmas?.nome ? " · " + mat.turmas.nome : ""}<br />
+                  {formatCurrency(Number(p.valor))} · Vencimento: {formatDate(p.data_vencimento)}
+                </span>
+              </Button>;
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog - Confirmar pagamento */}
       <Dialog open={confirmPagamentoDialog} onOpenChange={setConfirmPagamentoDialog}>
@@ -820,14 +795,14 @@ export const AlunoDetailSheet = (props: Props) => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Valor da parcela</p>
+                    <p className="text-xs text-muted-foreground">Saldo desta pendência</p>
                     <p className="font-semibold">{formatCurrency(Number(confirmingPagamento.valor))}</p>
                   </div>
 
                   <div>
-                    <p className="text-xs text-muted-foreground">Valor a confirmar</p>
+                    <p className="text-xs text-muted-foreground">Saldo após este pagamento</p>
                     <p className="font-semibold">
-                      {formatCurrency(Number(confirmingFees?.total || confirmingPagamento.valor))}
+                      {confirmValorValido ? formatCurrency(Math.round((Number(confirmingPagamento.valor) - confirmValorBase) * 100) / 100) : "—"}
                     </p>
                   </div>
                 </div>
@@ -852,15 +827,18 @@ export const AlunoDetailSheet = (props: Props) => {
               </div>
 
               <div>
-                <Label>Valor recebido (R$)</Label>
+                <Label htmlFor="valor-recebido">Valor recebido agora (R$)</Label>
                 <input
+                  id="valor-recebido"
                   type="number"
                   step="0.01"
-                  min="0"
+                  min="0.01"
+                  max={Number(confirmingPagamento.valor)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={confirmPagamentoForm.valor_recebido}
                   onChange={(e) => setConfirmPagamentoForm((prev) => ({ ...prev, valor_recebido: e.target.value }))}
                 />
+                {!confirmValorValido && <p role="alert" className="text-xs text-destructive mt-1">Informe um valor maior que zero e até {formatCurrency(Number(confirmingPagamento.valor))}.</p>}
                 {parseFloat(confirmPagamentoForm.valor_recebido) > 0 &&
                   parseFloat(confirmPagamentoForm.valor_recebido) < Number(confirmingPagamento?.valor) && (
                     <p className="text-xs text-amber-600 mt-0.5">
@@ -1010,15 +988,17 @@ export const AlunoDetailSheet = (props: Props) => {
 
               <Button
                 className="w-full"
-                onClick={() => {
-                  if (!confirmingPagamento) return;
+                disabled={!confirmValorValido || !confirmPagamentoForm.data_pagamento || !confirmPagamentoForm.forma_pagamento || props.confirmPagamentoIsPending}
+                onClick={async () => {
+                  if (!confirmingPagamento || !confirmValorValido || props.confirmPagamentoIsPending) return;
 
-                  onConfirmPagamento(confirmingPagamento, confirmingFees, {
+                  try {
+                  await onConfirmPagamento(confirmingPagamento, confirmingFees, {
                     data_pagamento: confirmPagamentoForm.data_pagamento,
                     forma_pagamento: confirmPagamentoForm.forma_pagamento,
                     conta_bancaria_id: confirmPagamentoForm.conta_bancaria_id,
-                    taxa_valor: confirmPagamentoForm.taxa_valor,
-                    taxa_absorvida_por: confirmPagamentoForm.taxa_absorvida_por,
+                    taxa_valor: confirmShowTaxa ? confirmPagamentoForm.taxa_valor : "0",
+                    taxa_absorvida_por: confirmShowTaxa ? confirmPagamentoForm.taxa_absorvida_por : "",
                     valor_recebido: confirmPagamentoForm.valor_recebido,
                     parcelas_cartao: (confirmIsCartao || confirmIsLink) ? confirmPagamentoForm.parcelas_cartao : undefined,
                   });
@@ -1026,6 +1006,7 @@ export const AlunoDetailSheet = (props: Props) => {
                   setConfirmPagamentoDialog(false);
                   setConfirmingPagamento(null);
                   setConfirmingFees(null);
+                  } catch { /* A mutação exibe o erro; manter os dados para correção. */ }
                 }}
               >
                 Confirmar pagamento
