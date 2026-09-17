@@ -68,6 +68,41 @@ export function calcularTaxaConversao(total: number, convertidos: number): strin
   return ((convertidos / total) * 100).toFixed(1);
 }
 
+// ── SLA de atendimento ───────────────────────────────────────────────────────
+
+export interface LeadSla {
+  ultima_mensagem_direcao?: string | null;
+  ultima_mensagem_em?: string | null;
+  sla_minutos?: number | null;
+}
+
+export const SLA_MINUTOS_PADRAO = 60;
+
+/** Minutos desde a última mensagem do lead. null se a bola não está com a gente. */
+export function minutosAguardando(lead: LeadSla): number | null {
+  if (lead.ultima_mensagem_direcao !== "entrada" || !lead.ultima_mensagem_em) return null;
+  return Math.floor((Date.now() - new Date(lead.ultima_mensagem_em).getTime()) / 60000);
+}
+
+export function formatDuracao(min: number): string {
+  if (min < 60) return `${min}m`;
+  const dias = Math.floor(min / 1440);
+  const horas = Math.floor((min % 1440) / 60);
+  const mins = min % 60;
+  if (dias > 0) return horas > 0 ? `${dias}d ${horas}h` : `${dias}d`;
+  return mins > 0 ? `${horas}h ${mins}m` : `${horas}h`;
+}
+
+export function slaLabel(lead: LeadSla): { text: string; color: string } | null {
+  const minutos = minutosAguardando(lead);
+  if (minutos === null) return null;
+  const limite = lead.sla_minutos ?? SLA_MINUTOS_PADRAO;
+  const text = formatDuracao(minutos);
+  if (minutos < 30) return { text, color: "text-green-600 dark:text-green-400" };
+  if (minutos < limite) return { text, color: "text-amber-600 dark:text-amber-400" };
+  return { text, color: "text-red-600 dark:text-red-400 font-bold" };
+}
+
 export function calcularTempoMedioConversao(tempos: number[]): number {
   if (tempos.length === 0) return 0;
   return Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length);

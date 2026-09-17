@@ -8,6 +8,7 @@ import { useAlunoLabel } from "@/hooks/useAlunoLabel";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProximosEventosCard } from "@/components/dashboard/ProximosEventosCard";
+import { LeadsAguardandoCard } from "@/components/dashboard/LeadsAguardandoCard";
 import { formatCurrency } from "@/lib/formatters";
 import {
   Users, CalendarPlus, CalendarDays, CircleCheck, ListChecks, Calendar,
@@ -244,6 +245,10 @@ const Inicio = () => {
           </button>
         ))}
       </div>
+
+      {/* Leads sem resposta vêm antes de tudo: sem isto a informação só existe
+          dentro da caixa de entrada, e quem não abre o sistema não fica sabendo. */}
+      {!isProfissional && canAccess("funil") && <LeadsAguardandoCard />}
 
       {temEventos && <ProximosEventosCard />}
 

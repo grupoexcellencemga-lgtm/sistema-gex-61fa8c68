@@ -23,7 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
-import type { FunilEtapa } from "./funilUtils";
+import { slaLabel, type FunilEtapa } from "./funilUtils";
 
 type Mensagem = {
   id: string;
@@ -762,23 +762,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     }
   }
 
-  function slaLabel(lead: any): { text: string; color: string } | null {
-    if (lead.ultima_mensagem_direcao !== "entrada" || !lead.ultima_mensagem_em) return null;
-    const minutos = Math.floor((Date.now() - new Date(lead.ultima_mensagem_em).getTime()) / 60000);
-    const slaLimite = lead.sla_minutos ?? 60;
-    function formatDuracao(min: number): string {
-      if (min < 60) return `${min}m`;
-      const dias = Math.floor(min / 1440);
-      const horas = Math.floor((min % 1440) / 60);
-      const mins = min % 60;
-      if (dias > 0) return horas > 0 ? `${dias}d ${horas}h` : `${dias}d`;
-      return mins > 0 ? `${horas}h ${mins}m` : `${horas}h`;
-    }
-    if (minutos < 30) return { text: formatDuracao(minutos), color: "text-green-600 dark:text-green-400" };
-    if (minutos < slaLimite) return { text: formatDuracao(minutos), color: "text-amber-600 dark:text-amber-400" };
-    return { text: formatDuracao(minutos), color: "text-red-600 dark:text-red-400 font-bold" };
-  }
-
   function formatTime(iso: string) {
     const d = new Date(iso);
     const today = new Date();
@@ -1015,20 +998,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
-            )}
-            {isAdmin && aba === "fila" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleDistribuir}
-                    disabled={distributing}
-                    className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  >
-                    {distributing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">Distribuir para agentes</TooltipContent>
-              </Tooltip>
             )}
           </div>
         </div>
