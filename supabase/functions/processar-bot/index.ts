@@ -164,8 +164,10 @@ Deno.serve(async (req) => {
       if (!dentroDoHorario(agente)) {
         console.log(`[processar-bot] agente ${agente.nome} fora do horário`);
 
-        // Se for modo direto (forceLeadId), envia mensagem de fora de horário uma vez
-        if (forceLeadId && agente.canais_ids?.length) {
+        // Se for modo direto (forceLeadId), envia mensagem de fora de horário uma vez.
+        // Só no modo ativo: este ramo fala com o cliente de verdade, e nos modos
+        // de avaliação nada pode sair — nem o aviso de horário.
+        if (modoAgente === "ativo" && forceLeadId && agente.canais_ids?.length) {
           const { data: leadFora } = await supabase
             .from("leads")
             .select("id, nome, contato_id, canal_id, empresa_id")
@@ -508,10 +510,14 @@ Deno.serve(async (req) => {
             ? `Use o nome da pessoa naturalmente na conversa quando fizer sentido.`
             : ``);
 
-        // Registra início da sessão na conversas_ia
+        // Registra início da sessão na conversas_ia.
+        // conversas_ia mede as conversas reais que o bot teve com clientes. Nos
+        // modos de avaliação a sessão nunca é finalizada (o fluxo desvia antes),
+        // então registrar aqui criaria conversas "abandonadas" que distorcem o
+        // Analytics. A avaliação tem a própria tabela, respostas_sombra.
         let conversaId: string | null = null;
         const totalMsgsHistorico = messages.length;
-        try {
+        if (modoAgente === "ativo") try {
           const { data: novaConversa } = await supabase
             .from("conversas_ia")
             .insert({
@@ -567,6 +573,22 @@ Deno.serve(async (req) => {
         const MAX_ITER = 5;
         // O que o agente TERIA feito, quando ele não está em modo ativo.
         const ferramentasIntencionadas: { nome: string; input: unknown }[] = [];
+        // Soma de todas as voltas do laço de ferramentas, para medir o custo
+        // real de cada avaliação.
+        let tokensEntrada = 0;
+        let tokensSaida = 0;
+        // O Claude pode escrever a resposta ao cliente E chamar uma ferramenta
+        // na mesma volta. Antes esse texto era descartado: o laço executava a
+        // ferramenta, e na volta seguinte o modelo — que já tinha dito o que
+        // queria — encerrava sem texto novo. A resposta ficava nula e o cliente
+        // ficava sem retorno, em silêncio. Juntamos o texto de todas as voltas.
+        const partesResposta: string[] = [];
+        const extrairTexto = (content: Anthropic.ContentBlock[]) =>
+          content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map((b) => b.text)
+            .join("\n\n")
+            .trim();
 
         for (let iter = 0; iter < MAX_ITER; iter++) {
           const response = await anthropic.messages.create({
@@ -576,10 +598,13 @@ Deno.serve(async (req) => {
             tools: TOOLS,
             messages: loopMessages,
           });
+          tokensEntrada += response.usage?.input_tokens ?? 0;
+          tokensSaida += response.usage?.output_tokens ?? 0;
 
           if (response.stop_reason === "end_turn") {
-            const textBlock = response.content.find((b) => b.type === "text");
-            resposta = textBlock?.type === "text" ? textBlock.text : null;
+            const texto = extrairTexto(response.content);
+            if (texto) partesResposta.push(texto);
+            resposta = partesResposta.join("\n\n") || null;
             // Fallback legado: [HANDOFF] no texto
             if (resposta?.includes("[HANDOFF]")) {
               resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
@@ -594,6 +619,8 @@ Deno.serve(async (req) => {
 
           if (response.stop_reason === "tool_use") {
             totalIteracoes++;
+            const textoComFerramenta = extrairTexto(response.content);
+            if (textoComFerramenta) partesResposta.push(textoComFerramenta);
             const assistantMessage: Anthropic.MessageParam = { role: "assistant", content: response.content };
             loopMessages = [...loopMessages, assistantMessage];
             const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -752,13 +779,21 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Qualquer outro stop_reason — extrai o que houver
-          const fallback = response.content.find((b) => b.type === "text");
-          resposta = fallback?.type === "text" ? fallback.text : null;
+          // Qualquer outro stop_reason (ex.: max_tokens) — extrai o que houver
+          const textoFinal = extrairTexto(response.content);
+          if (textoFinal) partesResposta.push(textoFinal);
+          resposta = partesResposta.join("\n\n") || null;
           break;
         }
 
-        if (!resposta) continue;
+        // O laço pode esgotar MAX_ITER só em chamadas de ferramenta, sem
+        // end_turn — o texto que veio junto delas ainda é a resposta.
+        if (!resposta && partesResposta.length) resposta = partesResposta.join("\n\n");
+
+        if (!resposta) {
+          console.log(`[processar-bot] sem texto de resposta para lead ${lead.id} após ${totalIteracoes} volta(s) de ferramenta`);
+          continue;
+        }
 
         // ── Modos de avaliação ────────────────────────────────────────────
         // Guarda o que o agente responderia, sem falar com o cliente.
@@ -776,6 +811,8 @@ Deno.serve(async (req) => {
               resposta_ia: resposta,
               ferramentas: ferramentasIntencionadas,
               modelo: agente.modelo,
+              tokens_entrada: tokensEntrada,
+              tokens_saida: tokensSaida,
             },
             { onConflict: "mensagem_entrada_id", ignoreDuplicates: true }
           );

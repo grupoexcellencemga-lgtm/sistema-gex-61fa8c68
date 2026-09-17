@@ -81,6 +81,7 @@ export type Database = {
           instrucao: string
           max_mensagens_contexto: number
           modelo: string
+          modo: string
           nome: string
           tempo_espera_minutos: number
           updated_at: string
@@ -102,6 +103,7 @@ export type Database = {
           instrucao?: string
           max_mensagens_contexto?: number
           modelo?: string
+          modo?: string
           nome: string
           tempo_espera_minutos?: number
           updated_at?: string
@@ -123,6 +125,7 @@ export type Database = {
           instrucao?: string
           max_mensagens_contexto?: number
           modelo?: string
+          modo?: string
           nome?: string
           tempo_espera_minutos?: number
           updated_at?: string
@@ -2569,6 +2572,7 @@ export type Database = {
           perfil_lead: string | null
           produto_interesse: string | null
           responsavel_id: string | null
+          sla_alertado_em: string | null
           sla_minutos: number | null
           status_atendimento: string
           telefone: string | null
@@ -2605,6 +2609,7 @@ export type Database = {
           perfil_lead?: string | null
           produto_interesse?: string | null
           responsavel_id?: string | null
+          sla_alertado_em?: string | null
           sla_minutos?: number | null
           status_atendimento?: string
           telefone?: string | null
@@ -2641,6 +2646,7 @@ export type Database = {
           perfil_lead?: string | null
           produto_interesse?: string | null
           responsavel_id?: string | null
+          sla_alertado_em?: string | null
           sla_minutos?: number | null
           status_atendimento?: string
           telefone?: string | null
@@ -4314,6 +4320,63 @@ export type Database = {
           },
         ]
       }
+      respostas_sombra: {
+        Row: {
+          agente_id: string | null
+          avaliacao: string | null
+          avaliacao_nota: string | null
+          avaliado_em: string | null
+          avaliado_por: string | null
+          created_at: string
+          empresa_id: string
+          ferramentas: Json
+          id: string
+          lead_id: string
+          mensagem_entrada: string | null
+          mensagem_entrada_id: string | null
+          modelo: string | null
+          resposta_ia: string
+          tokens_entrada: number | null
+          tokens_saida: number | null
+        }
+        Insert: {
+          agente_id?: string | null
+          avaliacao?: string | null
+          avaliacao_nota?: string | null
+          avaliado_em?: string | null
+          avaliado_por?: string | null
+          created_at?: string
+          empresa_id: string
+          ferramentas?: Json
+          id?: string
+          lead_id: string
+          mensagem_entrada?: string | null
+          mensagem_entrada_id?: string | null
+          modelo?: string | null
+          resposta_ia: string
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Update: {
+          agente_id?: string | null
+          avaliacao?: string | null
+          avaliacao_nota?: string | null
+          avaliado_em?: string | null
+          avaliado_por?: string | null
+          created_at?: string
+          empresa_id?: string
+          ferramentas?: Json
+          id?: string
+          lead_id?: string
+          mensagem_entrada?: string | null
+          mensagem_entrada_id?: string | null
+          modelo?: string | null
+          resposta_ia?: string
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+        }
+        Relationships: []
+      }
       sessoes_processo: {
         Row: {
           created_at: string | null
@@ -4968,7 +5031,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_respostas_sombra_revisao: {
+        Row: {
+          agente_id: string | null
+          agente_nome: string | null
+          avaliacao: string | null
+          avaliacao_nota: string | null
+          avaliado_em: string | null
+          avaliado_por: string | null
+          created_at: string | null
+          empresa_id: string | null
+          entrada_em: string | null
+          ferramentas: Json | null
+          id: string | null
+          lead_id: string | null
+          lead_nome: string | null
+          mensagem_entrada: string | null
+          modelo: string | null
+          resposta_humana: string | null
+          resposta_humana_em: string | null
+          resposta_ia: string | null
+          tokens_entrada: number | null
+          tokens_saida: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       atualizar_metas_ativas: { Args: never; Returns: Json }

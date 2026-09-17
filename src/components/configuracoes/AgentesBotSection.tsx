@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, Workflow, BookOpen, BarChart2, Users, Link2, Copy, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Bot, Clock, Loader2, Zap, Workflow, BookOpen, BarChart2, Users, Link2, Copy, Check, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FluxoEditor } from "./FluxoEditor";
@@ -35,6 +35,7 @@ import { FluxoRelatorioCard } from "./FluxoRelatorioCard";
 import { BaseConhecimentoDialog } from "./BaseConhecimentoDialog";
 import { BotIARelatorioCard } from "./BotIARelatorioCard";
 import { BotLeadsRelatorioCard } from "./BotLeadsRelatorioCard";
+import { RevisaoRespostasIA } from "./RevisaoRespostasIA";
 
 type Canal = {
   id: string;
@@ -50,6 +51,7 @@ type AgenteBot = {
   instrucao: string;
   modelo: string;
   ativo: boolean;
+  modo: string;
   ativo_24h: boolean;
   horario_inicio: string;
   horario_fim: string;
@@ -76,7 +78,45 @@ type FluxoBot = {
 const MODELOS = [
   { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (rápido e econômico)" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (balanceado)" },
+  { value: "claude-sonnet-5", label: "Claude Sonnet 5 (mais capaz, custo maior)" },
+  { value: "claude-opus-5", label: "Claude Opus 5 (máxima qualidade, custo alto)" },
 ];
+
+// "Ligado" (a coluna ativo) diz se o agente roda. O modo diz o que ele faz com
+// a resposta. Sem essa separação, "Ativo" significava as duas coisas.
+const MODOS: { value: string; label: string; descricao: string; disponivel: boolean }[] = [
+  {
+    value: "sombra",
+    label: "Sombra",
+    descricao: "Escreve a resposta e não envia. Nada chega ao cliente.",
+    disponivel: true,
+  },
+  {
+    value: "teste",
+    label: "Teste",
+    descricao: "Envia de verdade, mas só para o seu número de teste.",
+    disponivel: true,
+  },
+  {
+    value: "copiloto",
+    label: "Copiloto (em breve)",
+    descricao: "Deixa a resposta pronta para vocês enviarem.",
+    disponivel: false,
+  },
+  {
+    value: "ativo",
+    label: "Atendendo clientes",
+    descricao: "Responde os clientes no WhatsApp.",
+    disponivel: true,
+  },
+];
+
+const COR_MODO: Record<string, string> = {
+  sombra: "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-400",
+  teste: "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400",
+  copiloto: "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400",
+  ativo: "border-green-400 text-green-700 dark:border-green-700 dark:text-green-400",
+};
 
 const DIAS = [
   { value: 1, label: "Seg" },
@@ -88,7 +128,11 @@ const DIAS = [
   { value: 0, label: "Dom" },
 ];
 
-const emptyAgente: Omit<AgenteBot, "id"> = {
+// modo fica fora do formulário: só muda pelo seletor dedicado, que pede
+// confirmação antes de pôr o agente para falar com cliente.
+type AgenteForm = Omit<AgenteBot, "id" | "modo">;
+
+const emptyAgente: AgenteForm = {
   nome: "",
   instrucao: "",
   modelo: "claude-haiku-4-5-20251001",
@@ -118,7 +162,7 @@ export function AgentesBotSection() {
   // Agente IA dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgenteBot | null>(null);
-  const [form, setForm] = useState<Omit<AgenteBot, "id">>(emptyAgente);
+  const [form, setForm] = useState<AgenteForm>(emptyAgente);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -208,6 +252,35 @@ export function AgentesBotSection() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agentes-bot", empresaId] }),
     onError: () => toast.error("Erro ao atualizar agente"),
   });
+
+  // Troca para "ativo" pede confirmação: é o único modo em que o agente fala
+  // com cliente real.
+  const [confirmarAtivo, setConfirmarAtivo] = useState<AgenteBot | null>(null);
+
+  const alterarModo = useMutation({
+    mutationFn: async ({ id, modo }: { id: string; modo: string }) => {
+      const { error } = await supabase
+        .from("agentes_bot")
+        .update({ modo, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { modo }) => {
+      queryClient.invalidateQueries({ queryKey: ["agentes-bot", empresaId] });
+      setConfirmarAtivo(null);
+      toast.success(`Modo alterado para: ${MODOS.find((m) => m.value === modo)?.label ?? modo}`);
+    },
+    onError: () => toast.error("Erro ao alterar o modo"),
+  });
+
+  function pedirTrocaDeModo(agente: AgenteBot, modo: string) {
+    if (modo === agente.modo) return;
+    if (modo === "ativo") {
+      setConfirmarAtivo(agente);
+      return;
+    }
+    alterarModo.mutate({ id: agente.id, modo });
+  }
 
   const toggleFluxoAtivo = useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
@@ -353,6 +426,10 @@ export function AgentesBotSection() {
             <Users className="h-4 w-4" />
             Leads atendidos
           </TabsTrigger>
+          <TabsTrigger value="revisao" className="gap-1.5">
+            <Eye className="h-4 w-4" />
+            Revisão
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Aba: Agentes IA ── */}
@@ -404,16 +481,45 @@ export function AgentesBotSection() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm">{a.nome}</p>
                           <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
-                            {a.ativo ? "Ativo" : "Inativo"}
+                            {a.ativo ? "Ligado" : "Desligado"}
                           </Badge>
-                          <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
-                            Agente IA
+                          <Badge variant="outline" className={cn("text-[10px]", COR_MODO[a.modo])}>
+                            {MODOS.find((m) => m.value === a.modo)?.label ?? a.modo}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">
-                            {MODELOS.find(m => m.value === a.modelo)?.label.split(" ")[1] ?? a.modelo}
+                            {MODELOS.find((m) => m.value === a.modelo)?.label.split(" ").slice(1, 3).join(" ") ?? a.modelo}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.instrucao}</p>
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <Label htmlFor={`modo-${a.id}`} className="text-xs text-muted-foreground">
+                            Modo
+                          </Label>
+                          <Select
+                            value={a.modo}
+                            onValueChange={(v) => pedirTrocaDeModo(a, v)}
+                            disabled={alterarModo.isPending}
+                          >
+                            <SelectTrigger id={`modo-${a.id}`} className="h-7 w-44 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MODOS.map((m) => (
+                                <SelectItem
+                                  key={m.value}
+                                  value={m.value}
+                                  disabled={!m.disponivel}
+                                  className="text-xs"
+                                >
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-xs text-muted-foreground">
+                            {MODOS.find((m) => m.value === a.modo)?.descricao}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -579,7 +685,43 @@ export function AgentesBotSection() {
         <TabsContent value="leads">
           <BotLeadsRelatorioCard />
         </TabsContent>
+
+        {/* ── Aba: Revisão do modo sombra ── */}
+        <TabsContent value="revisao">
+          <RevisaoRespostasIA />
+        </TabsContent>
       </Tabs>
+
+      {/* Confirmação para pôr o agente atendendo clientes */}
+      <Dialog open={!!confirmarAtivo} onOpenChange={(o) => { if (!o) setConfirmarAtivo(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Colocar "{confirmarAtivo?.nome}" para atender clientes?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              A partir de agora o agente responde de verdade, no WhatsApp, os leads com o bot
+              ligado nos canais dele.
+            </p>
+            <p>
+              Antes de confirmar, vale conferir a aba <span className="font-medium text-foreground">Revisão</span>:
+              é lá que dá para ver se as respostas dele estão no nível que vocês querem.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmarAtivo(null)}>
+              Continuar avaliando
+            </Button>
+            <Button
+              onClick={() => confirmarAtivo && alterarModo.mutate({ id: confirmarAtivo.id, modo: "ativo" })}
+              disabled={alterarModo.isPending}
+            >
+              {alterarModo.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Sim, atender clientes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog criar/editar Agente IA */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
