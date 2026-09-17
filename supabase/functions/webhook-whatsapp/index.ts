@@ -163,9 +163,18 @@ Deno.serve(async (req) => {
 
       console.log("[webhook] msg de:", telefone, "fromMe:", fromMe, "tipo:", tipo, "texto:", texto.substring(0, 50));
 
-      // Resolve nome do contato
-      let nomeContato: string = fromMe ? telefone : (msg.pushName || telefone);
-      if (fromMe && globalKey) {
+      // Resolve nome do contato.
+      // Prioridade: o nome salvo na agenda do aparelho (contact.name) vence o
+      // que a pessoa pos no perfil dela (pushName) -- se alguem salvou o
+      // contato como "Jaqueline", e assim que ela deve ser chamada, mesmo que
+      // o WhatsApp dela diga "Jaq".
+      // verifiedName fica FORA de proposito: e o nome comercial da conta, e o
+      // bot acabaria chamando a pessoa pelo nome da empresa.
+      // Antes esta busca so rodava em mensagem de saida, entao o nome da
+      // agenda nunca chegava para quem escrevia pra gente.
+      let nomeContato: string = msg.pushName || telefone;
+      let nomeVeioDaAgenda = false;
+      if (globalKey) {
         try {
           const contactRes = await fetch(
             `${EVOLUTION_URL}/chat/findContacts/${instance}?where={"id":"${remoteJid}"}`,
@@ -174,10 +183,18 @@ Deno.serve(async (req) => {
           if (contactRes.ok) {
             const contacts = await contactRes.json();
             const contact = Array.isArray(contacts) ? contacts[0] : contacts;
-            const nome = contact?.pushName || contact?.name || contact?.verifiedName;
-            if (nome) nomeContato = nome;
+            if (contact?.name) {
+              nomeContato = contact.name;
+              nomeVeioDaAgenda = true;
+            } else if (contact?.pushName) {
+              nomeContato = contact.pushName;
+            }
           }
         } catch (_) { /* ignora */ }
+      }
+      if (fromMe && nomeContato === (msg.pushName || telefone)) {
+        // Em mensagem nossa o pushName e o NOSSO perfil, nao o do cliente.
+        nomeContato = telefone;
       }
 
       // Busca ou cria lead
@@ -252,10 +269,16 @@ Deno.serve(async (req) => {
           canal: "whatsapp",
           protocolo_id: protocoloAtivo?.id ?? null,
         });
+        // Responder pelo WhatsApp do notebook conta como ter lido a conversa.
+        // Sem zerar aqui, o contador so cresce: o atendimento acontece fora do
+        // sistema e o sistema nunca fica sabendo. Eram 153 nao lidas fantasma
+        // em 29 leads ja respondidos.
         await supabase.from("leads").update({
           ultima_mensagem_em: new Date().toISOString(),
           ultima_mensagem_texto: texto.substring(0, 200),
           ultima_mensagem_direcao: "saida",
+          mensagens_nao_lidas: 0,
+          tem_mensagem_nova: false,
         }).eq("id", leadId);
 
       } else {
@@ -323,8 +346,14 @@ Deno.serve(async (req) => {
           } catch (_) { /* ignora */ }
         }
 
-        // 5. Atualiza nome do lead
-        if (msg.pushName && leadId) {
+        // 5. Atualiza nome do lead.
+        // Nome vindo da agenda sobrepoe o que estiver la: se alguem salvou o
+        // contato como "Jaqueline", e porque quer que ela seja chamada assim.
+        // pushName so preenche quando o lead ainda esta com o telefone no
+        // lugar do nome -- senao toda mensagem desfaria a correcao manual.
+        if (leadId && nomeVeioDaAgenda) {
+          await supabase.from("leads").update({ nome: nomeContato }).eq("id", leadId);
+        } else if (leadId && msg.pushName) {
           await supabase.from("leads")
             .update({ nome: msg.pushName })
             .eq("id", leadId)
