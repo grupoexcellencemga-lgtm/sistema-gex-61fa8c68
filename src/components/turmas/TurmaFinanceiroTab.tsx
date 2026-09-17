@@ -123,20 +123,22 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       const pgtos = pagamentos.filter((p: any) => p.matricula_id === m.id);
       const contratado = Number(m.valor_final || 0);
 
-      // Caixa: líquido que entrou no banco
+      // Caixa: líquido que entrou no banco. Quando a empresa absorve a taxa da
+      // maquininha, ela é descontada — o aluno quitou o valor cheio, mas a
+      // maquininha ficou com uma parte antes de cair na conta.
       const pago = pgtos
         .filter((p: any) => p.status === "pago")
-        .reduce((s: number, p: any) => s + getValorPago(p), 0);
+        .reduce((s: number, p: any) => {
+          const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
+          return s + getValorPago(p) - taxaEmp;
+        }, 0);
 
-      // Obrigação do aluno: líquido + taxa que a empresa absorveu
-      // (empresa absorveu a taxa → aluno cumpriu sua parte pelo valor integral)
+      // Obrigação do aluno: valor cheio da parcela, sem taxa de maquininha —
+      // quem absorve o custo da maquininha não muda quanto do contratado já
+      // foi quitado.
       const pagoEfetivo = pgtos
         .filter((p: any) => p.status === "pago")
-        .reduce((s: number, p: any) => {
-          const base = getValorPago(p);
-          const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
-          return s + base + taxaEmp;
-        }, 0);
+        .reduce((s: number, p: any) => s + getValorPago(p), 0);
 
       const pendente = pgtos
         .filter((p: any) => p.status === "pendente")

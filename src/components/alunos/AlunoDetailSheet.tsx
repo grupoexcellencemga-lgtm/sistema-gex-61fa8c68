@@ -129,17 +129,13 @@ export const AlunoDetailSheet = (props: Props) => {
   const getFormaLabel = (codigo: string | null | undefined) => getFormaPagamentoLabel(codigo, formasPagamento);
   const getFormaConfig = (codigo: string | null | undefined) => formasPagamento.find((f) => f.codigo === codigo);
 
-  const formasComTaxa = ["credito", "cartao", "cartao_credito", "recorrencia_cartao", "debito", "link"];
-
+  // taxa_valor (R$) é quem os fluxos de Confirmar e Editar pagamento
+  // preenchem de verdade; taxa_cartao (%) só é gravado pelo Pagamento Avulso.
+  // Ler taxa_cartao aqui fazia o selo "taxa R$X" nunca aparecer para
+  // pagamentos confirmados a partir de parcela existente — a grande maioria.
   const getValorTaxaMaquina = (p: any) => {
-    const taxa = Number(p?.taxa_cartao) || 0;
-    const valor = Number(p?.valor) || 0;
-
-    if (!formasComTaxa.includes(p?.forma_pagamento) || taxa <= 0 || valor <= 0) {
-      return 0;
-    }
-
-    return Math.round(valor * (taxa / 100) * 100) / 100;
+    const tv = Number(p?.taxa_valor) || 0;
+    return tv > 0 ? tv : 0;
   };
 
   const openConfirmPagamentoDialog = (p: any, _fees: any) => {
@@ -309,21 +305,26 @@ export const AlunoDetailSheet = (props: Props) => {
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
   const semNoise = (v: number) => Math.round(v * 100) / 100 < 0.10 ? 0 : Math.round(v * 100) / 100;
+  // "Recebido": dinheiro que de fato caiu na conta. Quando a empresa absorve a
+  // taxa da maquininha, a taxa é DESCONTADA — o aluno quitou o valor da
+  // parcela, mas a maquininha ficou com uma parte antes de cair no banco.
   const totalPago = pagamentos
     .filter((p: any) => p.status === "pago")
     .reduce((s: number, p: any) => {
       const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
       const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
-      return s + base + taxaEmp;
+      return s + base - taxaEmp;
     }, 0);
   const totalPendente = matriculas.reduce((acc: number, m: any) => {
     const pgsMat = pagamentos.filter((pg: any) => pg.matricula_id === m.id);
+    // Quitação da dívida do aluno: usa o valor cheio da parcela, sem entrar em
+    // taxa de maquininha — quem absorve a taxa é custo da empresa, não muda
+    // quanto do valor contratado já foi pago.
     const pagoEfetivo = pgsMat
       .filter((pg: any) => pg.status === "pago")
       .reduce((s: number, pg: any) => {
         const base = pg.valor_pago != null ? Number(pg.valor_pago) : Number(pg.valor || 0);
-        const taxaEmp = pg.taxa_absorvida_por === "empresa" ? Number(pg.taxa_valor || 0) : 0;
-        return s + base + taxaEmp;
+        return s + base;
       }, 0);
     return acc + semNoise(Math.max(0, Number(m.valor_final || 0) - pagoEfetivo));
   }, 0);
@@ -578,12 +579,13 @@ export const AlunoDetailSheet = (props: Props) => {
                           });
                           Object.values(cartaoGroups).forEach((pgList) => rowItems.push({ type: "group", data: pgList }));
 
+                          // Mesma regra de totalPendente: quitação de dívida não
+                          // entra em taxa de maquininha.
                           const grpPago = group.pgs
                             .filter((p: any) => p.status === "pago")
                             .reduce((s: number, p: any) => {
                               const base = p.valor_pago != null ? Number(p.valor_pago) : Number(p.valor || 0);
-                              const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
-                              return s + base + taxaEmp;
+                              return s + base;
                             }, 0);
                           const grpPendente = Math.max(0, Math.round((group.valorFinal - grpPago) * 100) / 100);
 
