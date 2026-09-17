@@ -663,6 +663,7 @@ const Alunos = () => {
       contaBancariaId,
       taxaValor,
       taxaAbsorvidaPor,
+      parcelasCartao,
       alunoId,
       empresaId: empresaIdParcela,
       matriculaId,
@@ -682,6 +683,7 @@ const Alunos = () => {
       contaBancariaId?: string;
       taxaValor?: string;
       taxaAbsorvidaPor?: string;
+      parcelasCartao?: string;
       alunoId?: string;
       empresaId?: string;
       matriculaId?: string | null;
@@ -724,6 +726,9 @@ const Alunos = () => {
         const tv = parseFloat(taxaValor || "") || 0;
         if (tv > 0) update.taxa_valor = tv;
         if (taxaAbsorvidaPor) update.taxa_absorvida_por = taxaAbsorvidaPor;
+
+        const pc = parseInt(parcelasCartao || "") || 0;
+        if (pc > 0) update.parcelas_cartao = pc;
       }
 
       if (status === "pendente") {
@@ -1781,6 +1786,7 @@ const Alunos = () => {
             contaBancariaId: extras?.conta_bancaria_id,
             taxaValor: extras?.taxa_valor,
             taxaAbsorvidaPor: extras?.taxa_absorvida_por,
+            parcelasCartao: extras?.parcelas_cartao,
             // Necessários para criar a parcela do restante quando o pagamento
             // é parcial — ver comentário na mutação.
             alunoId: p.aluno_id,

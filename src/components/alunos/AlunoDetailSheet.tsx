@@ -54,6 +54,10 @@ interface Props {
       data_pagamento?: string;
       forma_pagamento?: string;
       conta_bancaria_id?: string;
+      taxa_valor?: string;
+      taxa_absorvida_por?: string;
+      valor_recebido?: string;
+      parcelas_cartao?: string;
     }
   ) => void;
   onDesfazerPagamento: (p: any) => void;
@@ -122,6 +126,7 @@ export const AlunoDetailSheet = (props: Props) => {
     taxa_valor: "",
     taxa_absorvida_por: "" as "" | "empresa" | "aluno",
     valor_recebido: "",
+    parcelas_cartao: "1",
   });
 
   const { data: formasPagamento = [] } = useFormasPagamento();
@@ -149,6 +154,7 @@ export const AlunoDetailSheet = (props: Props) => {
       taxa_valor: "",
       taxa_absorvida_por: "" as "" | "empresa" | "aluno",
       valor_recebido: String(Number(p.valor) || 0),
+      parcelas_cartao: p.parcelas_cartao ? String(p.parcelas_cartao) : "1",
     });
 
     setConfirmPagamentoDialog(true);
@@ -237,10 +243,14 @@ export const AlunoDetailSheet = (props: Props) => {
   // ── Taxa automática para "Confirmar pagamento" ──
   const confirmForma = confirmPagamentoForm.forma_pagamento || confirmingPagamento?.forma_pagamento || "";
   const confirmValorBase = parseFloat(String(confirmingPagamento?.valor || 0)) || 0;
+  const confirmParcelasCalc = parseInt(confirmPagamentoForm.parcelas_cartao) || 1;
   const confirmIsCartao = ["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(confirmForma);
   const confirmIsDebito = confirmForma === "debito";
   const confirmIsLink = confirmForma === "link";
   const confirmShowTaxa = confirmIsCartao || confirmIsDebito || confirmIsLink;
+  // Antes ficava fixo em "1x" pra crédito e link, então uma compra parcelada
+  // em várias vezes (taxa bem mais alta) calculava a taxa de 1x, errado — e
+  // não dava nem pra corrigir, porque não existia campo de parcelas aqui.
   const confirmTaxaAutoCalc = useMemo(() => {
     if (!confirmShowTaxa || !taxasSistema.length) return { percentual: 0, nome: "" };
     if (confirmIsDebito) {
@@ -248,15 +258,16 @@ export const AlunoDetailSheet = (props: Props) => {
       return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome: "Débito" };
     }
     if (confirmIsCartao) {
-      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === "Crédito 1x");
-      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome: "Crédito 1x" };
+      const nome = confirmParcelasCalc === 1 ? "Crédito 1x" : `Crédito ${confirmParcelasCalc}x`;
+      const f = taxasSistema.find((t: any) => t.tipo === "maquininha" && t.nome === nome);
+      return f ? { percentual: Number(f.percentual), nome: f.nome } : { percentual: 0, nome };
     }
     if (confirmIsLink) {
-      const f = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === "1x");
-      return f ? { percentual: Number(f.percentual), nome: `Link ${f.nome}` } : { percentual: 0, nome: "Link 1x" };
+      const f = taxasSistema.find((t: any) => t.tipo === "link" && t.nome === `${confirmParcelasCalc}x`);
+      return f ? { percentual: Number(f.percentual), nome: `Link ${f.nome}` } : { percentual: 0, nome: `Link ${confirmParcelasCalc}x` };
     }
     return { percentual: 0, nome: "" };
-  }, [confirmShowTaxa, confirmIsCartao, confirmIsDebito, confirmIsLink, taxasSistema]);
+  }, [confirmShowTaxa, confirmIsCartao, confirmIsDebito, confirmIsLink, confirmParcelasCalc, taxasSistema]);
   const confirmTaxaVal = confirmTaxaAutoCalc.percentual > 0
     ? Math.round(confirmValorBase * confirmTaxaAutoCalc.percentual / 100 * 100) / 100
     : 0;
@@ -940,6 +951,23 @@ export const AlunoDetailSheet = (props: Props) => {
                 </div>
               </div>
 
+              {/* Parcelas — cartão/link. Sem isto a taxa sempre calculava
+                  como se fosse 1x, mesmo quando a compra real foi parcelada
+                  em várias vezes na maquininha. */}
+              {(confirmIsCartao || confirmIsLink) && (
+                <div>
+                  <Label>Parcelas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={confirmPagamentoForm.parcelas_cartao}
+                    onChange={(e) =>
+                      setConfirmPagamentoForm((prev) => ({ ...prev, parcelas_cartao: e.target.value }))
+                    }
+                  />
+                </div>
+              )}
+
               {/* Taxa + absorção no confirmar */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -992,6 +1020,7 @@ export const AlunoDetailSheet = (props: Props) => {
                     taxa_valor: confirmPagamentoForm.taxa_valor,
                     taxa_absorvida_por: confirmPagamentoForm.taxa_absorvida_por,
                     valor_recebido: confirmPagamentoForm.valor_recebido,
+                    parcelas_cartao: (confirmIsCartao || confirmIsLink) ? confirmPagamentoForm.parcelas_cartao : undefined,
                   });
 
                   setConfirmPagamentoDialog(false);
