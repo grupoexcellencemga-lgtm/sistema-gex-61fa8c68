@@ -1,4 +1,13 @@
 project_id = "nsxigkgfvbzhpxrpwvhw"
+
+# Estava exposta publicamente: respondia 200 sem nenhuma autenticacao, e ela
+# dispara mensagem de WhatsApp para lead. Os chamadores reais (cron e
+# webhook-whatsapp) mandam Authorization: Bearer, entao exigir JWT nao quebra
+# nada. O trigger trg_bot_ativo manda so 'apikey', mas ja estava morto de outra
+# forma: app.settings.edge_function_url nunca foi configurado.
+[functions.processar-bot]
+verify_jwt = true
+
 [functions.chat]
 enabled = true
 verify_jwt = false

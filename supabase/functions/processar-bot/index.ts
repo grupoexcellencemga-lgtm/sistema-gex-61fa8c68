@@ -156,6 +156,10 @@ Deno.serve(async (req) => {
     let processados = 0;
 
     for (const agente of agentes) {
+      // sombra = escreve e nao envia | teste = envia so para o numero do dono
+      // copiloto = deixa pronto para o humano | ativo = fala com o cliente
+      const modoAgente: string = agente.modo ?? "sombra";
+
       // Verifica horário
       if (!dentroDoHorario(agente)) {
         console.log(`[processar-bot] agente ${agente.nome} fora do horário`);
@@ -233,32 +237,40 @@ Deno.serve(async (req) => {
 
       let leads: any[] | null = null;
 
+      // bot_ativo é a autorização para FALAR com o lead. Nos modos de
+      // avaliação nada é enviado, então exigir essa flag faria o agente nunca
+      // observar nada — hoje nenhum lead a tem ligada.
+      const exigeBotAtivo = modoAgente === "ativo";
+
       if (forceLeadId) {
         // Modo direto: processa o lead específico sem exigir status "fila"
-        // (bot_ativo=true já é a autorização — o status não deve bloquear)
-        const { data } = await supabase
+        let q = supabase
           .from("leads")
           .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
-          .eq("bot_ativo", true)
           .in("canal_id", agente.canais_ids)
-          .is("deleted_at", null)
-          .maybeSingle();
+          .is("deleted_at", null);
+        if (exigeBotAtivo) q = q.eq("bot_ativo", true);
+        const { data } = await q.maybeSingle();
         leads = data ? [data] : [];
       } else {
         // Modo cron: busca leads aguardando além do tempo configurado
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
-        const { data } = await supabase
+        let q = supabase
           .from("leads")
           .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
-          .eq("bot_ativo", true)
           .in("canal_id", agente.canais_ids)
           .lt("ultima_mensagem_em", cutoff)
           .is("deleted_at", null)
           .not("ultima_mensagem_em", "is", null);
+        if (exigeBotAtivo) q = q.eq("bot_ativo", true);
+        // Em avaliação, limita o volume: 279 leads gerariam uma conta alta de
+        // API sem necessidade — algumas dezenas por rodada já dão amostra.
+        if (!exigeBotAtivo) q = q.limit(15);
+        const { data } = await q;
         leads = data;
       }
 
@@ -268,7 +280,7 @@ Deno.serve(async (req) => {
         // Verifica se a última mensagem do lead já foi respondida pelo bot
         const { data: ultimaMensagem } = await supabase
           .from("mensagens_crm")
-          .select("direcao, bot_respondido")
+          .select("id, conteudo, direcao, bot_respondido")
           .eq("lead_id", lead.id)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -277,6 +289,19 @@ Deno.serve(async (req) => {
         // Só responde se a última mensagem foi de entrada (cliente) e ainda não foi respondida pelo bot
         if (!ultimaMensagem || ultimaMensagem.direcao !== "entrada") continue;
         if (ultimaMensagem.bot_respondido) continue;
+
+        // Nos modos de avaliação nada marca bot_respondido, então sem esta
+        // checagem a mesma mensagem seria reavaliada a cada rodada do cron —
+        // custo de API multiplicado e registros duplicados na revisão.
+        if (modoAgente !== "ativo") {
+          const { data: jaAvaliada } = await supabase
+            .from("respostas_sombra")
+            .select("id")
+            .eq("mensagem_entrada_id", ultimaMensagem.id)
+            .limit(1)
+            .maybeSingle();
+          if (jaAvaliada) continue;
+        }
 
         // Busca o protocolo ativo para delimitar o histórico da conversa atual
         const { data: protocoloAtual } = await supabase
@@ -540,6 +565,8 @@ Deno.serve(async (req) => {
         let resumoHandoff: string | null = null;
         let totalIteracoes = 0;
         const MAX_ITER = 5;
+        // O que o agente TERIA feito, quando ele não está em modo ativo.
+        const ferramentasIntencionadas: { nome: string; input: unknown }[] = [];
 
         for (let iter = 0; iter < MAX_ITER; iter++) {
           const response = await anthropic.messages.create({
@@ -557,7 +584,9 @@ Deno.serve(async (req) => {
             if (resposta?.includes("[HANDOFF]")) {
               resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
               handoff = true;
-              await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+              if (modoAgente === "ativo") {
+                await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+              }
               console.log(`[processar-bot] handoff (texto) para lead ${lead.id}`);
             }
             break;
@@ -573,6 +602,20 @@ Deno.serve(async (req) => {
               if (block.type !== "tool_use") continue;
               const input = block.input as Record<string, any>;
               let resultado = "ok";
+
+              // Fora do modo ativo a ferramenta é registrada, nunca executada:
+              // mover_etapa, criar_tarefa e solicitar_handoff alteram dados
+              // reais, e isso quebraria a promessa de avaliação sem risco.
+              // O agente recebe um "ok" para a conversa seguir naturalmente.
+              if (modoAgente !== "ativo") {
+                ferramentasIntencionadas.push({ nome: block.name, input });
+                toolResults.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  content: "ok",
+                });
+                continue;
+              }
 
               try {
                 if (block.name === "atualizar_lead") {
@@ -716,6 +759,59 @@ Deno.serve(async (req) => {
         }
 
         if (!resposta) continue;
+
+        // ── Modos de avaliação ────────────────────────────────────────────
+        // Guarda o que o agente responderia, sem falar com o cliente.
+        if (modoAgente !== "ativo") {
+          // upsert e nao insert: duas rodadas podem se sobrepor (a execucao leva
+          // ~70s, o cron dispara a cada 2 min) e ambas passam pela checagem de
+          // duplicata antes de qualquer uma gravar. O indice unico decide.
+          await supabase.from("respostas_sombra").upsert(
+            {
+              empresa_id: agente.empresa_id,
+              lead_id: lead.id,
+              agente_id: agente.id,
+              mensagem_entrada_id: ultimaMensagem.id,
+              mensagem_entrada: ultimaMensagem.conteudo,
+              resposta_ia: resposta,
+              ferramentas: ferramentasIntencionadas,
+              modelo: agente.modelo,
+            },
+            { onConflict: "mensagem_entrada_id", ignoreDuplicates: true }
+          );
+
+          // No modo teste a resposta sai de verdade, mas o destino vem da
+          // variável de ambiente — nunca do lead. É impossível acertar um
+          // cliente por engano.
+          if (modoAgente === "teste") {
+            const destinoTeste = Deno.env.get("SLA_ALERTA_WHATSAPP");
+            const { data: canalTeste } = await supabase
+              .from("canais_crm")
+              .select("evolution_url, evolution_token, evolution_instancia")
+              .eq("id", lead.canal_id)
+              .maybeSingle();
+
+            if (destinoTeste && canalTeste?.evolution_instancia) {
+              const apiKeyTeste =
+                canalTeste.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+              await fetch(
+                `${canalTeste.evolution_url}/message/sendText/${canalTeste.evolution_instancia}`,
+                {
+                  method: "POST",
+                  headers: { apikey: apiKeyTeste ?? "", "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    number: destinoTeste,
+                    text: `[TESTE — lead ${lead.nome ?? lead.id}]\n\nCliente: ${ultimaMensagem.conteudo}\n\nIA responderia: ${resposta}`,
+                  }),
+                }
+              ).catch((e) => console.error("[processar-bot] falha no envio de teste:", e));
+            }
+          }
+
+          console.log(`[processar-bot] modo ${modoAgente}: resposta registrada, nada enviado ao lead ${lead.id}`);
+          processados++;
+          continue;
+        }
 
         // Busca canal para enviar via Evolution API
         const { data: canal } = await supabase
