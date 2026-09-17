@@ -38,7 +38,10 @@ export function calcularPagamentoParcial(saldo: number, recebido: number) {
 export function calcularPagamentoComTaxa(saldo: number, recebido: number, taxa: number, absorvidaPor: string) {
   if (!Number.isFinite(taxa) || taxa < 0) throw new Error("A taxa deve ser um valor válido maior ou igual a zero.");
   const principal = ["aluno", "empresa"].includes(absorvidaPor) ? (centavos(recebido) - centavos(taxa)) / 100 : recebido;
-  const resultado = calcularPagamentoParcial(saldo, principal);
+  const comTaxa = taxa > 0 && ["aluno", "empresa"].includes(absorvidaPor);
+  const resultado = comTaxa
+    ? calcularPagamentoParcial(Math.max(saldo, principal), principal)
+    : calcularPagamentoParcial(saldo, principal);
   return { ...resultado, recebido: centavos(recebido) / 100, taxa: centavos(taxa) / 100 };
 }
 

@@ -42,12 +42,12 @@ describe("financeiro do aluno na tela", () => {
     fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
     fireEvent.change(screen.getByLabelText("Valor recebido agora (R$)"), { target: { value: "1407.60" } });
     expect(screen.getByRole("button", { name: "Confirmar pagamento" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Taxa da operação (R$)"), { target: { value: "234.60" } });
+    fireEvent.change(screen.getByLabelText("Taxa da operação (R$)"), { target: { value: "119.51" } });
     fireEvent.click(screen.getByRole("button", { name: responsavel, exact: true }));
     expect(screen.getByRole("button", { name: "Confirmar pagamento" })).toBeEnabled();
     expect(screen.getByText(/Abatido da matrícula:/)).toHaveTextContent("1.173,00");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
-    await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalledWith(pendente, expect.anything(), expect.objectContaining({ valor_recebido: "1407.60", taxa_valor: "234.60", taxa_absorvida_por: responsavel.toLowerCase() })));
+    await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalledWith(pendente, expect.anything(), expect.objectContaining({ valor_recebido: "1407.60", taxa_valor: "119.51", taxa_absorvida_por: responsavel.toLowerCase() })));
   });
   it("exibe a pendência antes do histórico e mantém o total pago bruto", () => {
     render(<AlunoDetailSheet {...props()} />);

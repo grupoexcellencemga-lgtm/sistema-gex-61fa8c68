@@ -701,7 +701,9 @@ const Alunos = () => {
       // próximo pagamento).
       const restante =
         status === "pago" && valor !== undefined && valorPago !== undefined
-          ? calcularPagamentoParcial(valor, valorPago).restante
+          ? (valorRecebido !== undefined
+              ? calcularPagamentoComTaxa(valor, valorRecebido, Number(taxaValor || 0), taxaAbsorvidaPor || "").restante
+              : calcularPagamentoParcial(valor, valorPago).restante)
           : 0;
       if (restante > 0 && (!alunoId || !empresaIdParcela)) {
         throw new Error("Não foi possível identificar o aluno e a empresa para registrar o saldo restante.");

@@ -846,7 +846,7 @@ export const AlunoDetailSheet = (props: Props) => {
                   onChange={(e) => setConfirmPagamentoForm((prev) => ({ ...prev, valor_recebido: e.target.value }))}
                 />
                 <p className="text-xs text-muted-foreground mt-1">Informe o total passado na maquininha e a taxa descontada. Ao selecionar Empresa ou Aluno, o valor líquido (total menos taxa) abate a matrícula.</p>
-                {!confirmValorValido && <p role="alert" className="text-xs text-destructive mt-1">O valor que abate a matrícula deve ser maior que zero e até {formatCurrency(Number(confirmingPagamento.valor))}. Para cobrar mais por taxas, informe a taxa e selecione “Empresa” ou “Aluno”.</p>}
+                {!confirmValorValido && <p role="alert" className="text-xs text-destructive mt-1">Informe um valor líquido maior que zero. Para receber acima do saldo, informe a taxa e selecione “Empresa” ou “Aluno”.</p>}
                 {confirmResultado && confirmResultado.restante > 0 && (
                     <p className="text-xs text-amber-600 mt-0.5">
                       Pagamento parcial — restante{" "}
@@ -996,7 +996,8 @@ export const AlunoDetailSheet = (props: Props) => {
 
               {confirmResultado && <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
                 <p>Total cobrado: <strong>{formatCurrency(confirmResultado.recebido)}</strong></p>
-                <p>Abatido da matrícula: <strong>{formatCurrency(confirmResultado.pago)}</strong></p>
+                <p>Abatido da matrícula: <strong>{formatCurrency(Math.min(confirmResultado.pago, Number(confirmingPagamento.valor)))}</strong></p>
+                {confirmResultado.pago > Number(confirmingPagamento.valor) && <p>Valor líquido acima da pendência: {formatCurrency(confirmResultado.pago - Number(confirmingPagamento.valor))}. O recebimento será registrado integralmente e esta pendência ficará zerada.</p>}
                 {confirmPagamentoForm.taxa_absorvida_por && <p>{confirmPagamentoForm.taxa_absorvida_por === "empresa" ? "Taxa descontada pela maquininha" : "Taxa cobrada do aluno"}: {formatCurrency(confirmResultado.taxa)}</p>}
               </div>}
 
