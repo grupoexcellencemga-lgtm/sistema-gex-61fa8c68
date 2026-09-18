@@ -866,7 +866,30 @@ const Funil = () => {
             {crmView === "conversas" ? (
               <div className="flex gap-2 items-center px-4 py-3 border-b flex-wrap bg-card">
                 <span className="text-xs font-medium text-muted-foreground mr-2">Canal de entrada</span>
-                {quadros.filter(q => q.fixo || q.canal).map(q => <button key={q.id} onClick={() => setSelectedQuadroId(q.id)} className={cn("px-3 py-1.5 rounded-md text-sm border", q.id === selectedQuadroId ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-muted-foreground hover:bg-muted")}>{q.canal === "instagram" ? "Instagram" : q.canal === "whatsapp" ? "WhatsApp" : q.nome}</button>)}
+                {quadros.filter(q => q.fixo || q.canal).map(q => {
+                  const selected = q.id === selectedQuadroId;
+                  const instagram = q.canal === "instagram";
+                  const whatsapp = q.canal === "whatsapp";
+                  return (
+                    <button key={q.id} type="button" aria-pressed={selected} onClick={() => setSelectedQuadroId(q.id)} className={cn(
+                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      instagram ? "text-pink-700 dark:text-pink-300" : whatsapp ? "text-green-700 dark:text-green-300" : "text-muted-foreground",
+                      selected
+                        ? instagram ? "border-pink-300 bg-pink-50 dark:border-pink-700 dark:bg-pink-950/40" : whatsapp ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/40" : "border-primary/30 bg-primary/10"
+                        : instagram ? "border-transparent hover:bg-pink-50 dark:hover:bg-pink-950/40" : whatsapp ? "border-transparent hover:bg-green-50 dark:hover:bg-green-950/40" : "border-transparent hover:bg-muted"
+                    )}>
+                      {instagram ? (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 text-white" aria-hidden="true"><Instagram className="h-4 w-4" /></span>
+                      ) : whatsapp ? (
+                        <svg viewBox="0 0 24 24" className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                          <path d="M21 11.5a9 9 0 0 1-13.3 8L3 21l1.5-4.7A9 9 0 1 1 21 11.5Z" />
+                          <path d="m8.2 6.9 1.5 2.9-1.1 1.1c.9 1.9 2.1 3.1 4 4l1.1-1.1 2.9 1.5c-.3 1.6-1.3 2.1-2.5 1.8-4.1-1.1-7.1-4.1-8.2-8.2-.3-1.2.2-2.2 1.8-2.5Z" />
+                        </svg>
+                      ) : <MessageSquare className="h-5 w-5" aria-hidden="true" />}
+                      {instagram ? "Instagram" : whatsapp ? "WhatsApp" : q.nome}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
             <PageHeader
