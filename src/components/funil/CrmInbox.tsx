@@ -27,6 +27,7 @@ import { slaLabel, type FunilEtapa } from "./funilUtils";
 import { matchesCrmQueue, crmResponsibility, type CrmQueue } from "./crmOrganization";
 import { FichaLeadPanel } from "./FichaLeadPanel";
 import { ConversationDrawer } from "./ConversationDrawer";
+import { AudioMessagePlayer } from "./AudioMessagePlayer";
 
 type Mensagem = {
   id: string;
@@ -1434,7 +1435,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       />
                     )}
                     {msg.media_url && msg.tipo === "audio" && (
-                      <audio controls src={msg.media_url} className="w-full mb-1" />
+                      <AudioMessagePlayer src={msg.media_url} outgoing={msg.direcao === "saida" && !msg.is_nota_interna} />
                     )}
                     {msg.media_url && msg.tipo === "video" && (
                       <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48 mb-1" />
