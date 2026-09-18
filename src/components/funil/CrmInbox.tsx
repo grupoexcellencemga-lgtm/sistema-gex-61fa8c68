@@ -28,6 +28,7 @@ import { matchesCrmQueue, crmResponsibility, type CrmQueue } from "./crmOrganiza
 import { FichaLeadPanel } from "./FichaLeadPanel";
 import { ConversationDrawer } from "./ConversationDrawer";
 import { AudioMessagePlayer } from "./AudioMessagePlayer";
+import { groupClosedProtocols, readAll } from "./contactHistory";
 
 type Mensagem = {
   id: string;
@@ -91,6 +92,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedProtocolo, setSelectedProtocolo] = useState<Protocolo | null>(null);
+  useEffect(() => { setSelectedProtocolo(null); setSelectedLeadId(null); }, [empresaId, userId]);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
@@ -341,7 +343,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   });
 
   // Protocolos finalizados
-  const { data: protocolos = [], isLoading: protocolosLoading } = useQuery<Protocolo[]>({
+  const { data: protocolos = [], isLoading: protocolosLoading, isError: protocolosError } = useQuery<Protocolo[]>({
     queryKey: ["protocolos-finalizados", empresaId, userId, isAdmin],
     queryFn: async () => {
       let query = (supabase as any)
@@ -350,16 +352,18 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         .eq("empresa_id", empresaId!)
         .eq("status", "finalizado");
       if (!isAdmin) query = query.eq("atendente_id", userId!);
-      const { data, error } = await query
-        .order("finalizado_em", { ascending: false, nullsFirst: false });
-      if (error) throw error;
-      return data as Protocolo[];
+      return readAll<Protocolo>((from, to) => query
+        .order("finalizado_em", { ascending: false, nullsFirst: false })
+        .order("id").range(from, to));
     },
     enabled: !!empresaId && !!userId && aba === "finalizadas",
     refetchInterval: 30000,
   });
 
   const buscaTrimmed = busca.toLowerCase().trim();
+  const finalizedContacts = groupClosedProtocols(protocolos);
+  const selectedHistory = finalizedContacts.find(group => group.latest.lead_id === selectedProtocolo?.lead_id)?.history ?? [];
+  const finalizedFiltered = finalizedContacts.filter(({ latest }) => !buscaTrimmed || latest.leads?.nome?.toLowerCase().includes(buscaTrimmed) || latest.leads?.contato_id?.includes(buscaTrimmed));
   const leadsFiltered = (filtroCanal === "todos" ? leads : leads.filter((l) => (l as any).canal_id === filtroCanal))
     .filter(l => matchesCrmQueue(l as any, aba, userId))
     .filter((l) => !buscaTrimmed || l.nome?.toLowerCase().includes(buscaTrimmed) || ((l as any).contato_id ?? "").includes(buscaTrimmed));
@@ -388,18 +392,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   });
 
   // Mensagens de um protocolo finalizado
-  const { data: mensagensProtocolo = [], isLoading: msgsProtoLoading } = useQuery<Mensagem[]>({
-    queryKey: ["mensagens-protocolo", selectedProtocolo?.id],
+  const { data: mensagensProtocolo = [], isLoading: msgsProtoLoading, isError: msgsProtoError } = useQuery<Mensagem[]>({
+    queryKey: ["mensagens-protocolo", empresaId, userId, selectedProtocolo?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      return readAll<Mensagem>((from, to) => (supabase as any)
         .from("mensagens_crm")
         .select("*")
+        .eq("empresa_id", empresaId!)
         .eq("protocolo_id", selectedProtocolo!.id)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data as Mensagem[];
+        .order("created_at", { ascending: true }).order("id").range(from, to));
     },
-    enabled: !!selectedProtocolo?.id && aba === "finalizadas",
+    enabled: !!empresaId && !!userId && !!selectedProtocolo?.id && protocolos.some(p => p.id === selectedProtocolo.id) && aba === "finalizadas",
     staleTime: 5 * 60 * 1000,
   });
 
@@ -922,14 +925,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         )}
 
         <div className="px-3 py-2 border-b flex items-center gap-3 flex-wrap">
-          {aba !== "finalizadas" && <div className="relative flex-1 min-w-[180px]">
+          {<div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input aria-label="Buscar contatos" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou telefone..." className="pl-8 h-8 text-xs" />
           </div>}
           {aba !== "finalizadas" && canais.length > 1 && <Button variant={showFilters ? "secondary" : "outline"} size="sm" className="h-8 gap-1.5" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal className="h-3.5 w-3.5" />Filtros{filtroCanal !== "todos" && " (1)"}</Button>}
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {aba === "finalizadas"
-              ? `${protocolos.length} protocolo${protocolos.length !== 1 ? "s" : ""}`
+              ? `${finalizedFiltered.length} pessoas · ${protocolos.length} protocolos`
               : `${leadsFiltered.length} conversa${leadsFiltered.length !== 1 ? "s" : ""}`}
           </p>
           <div className="flex items-center gap-1">
@@ -1092,20 +1095,22 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           {aba === "finalizadas" && (
             protocolosLoading ? (
               <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-            ) : protocolos.length === 0 ? (
+            ) : protocolosError ? (
+              <p role="alert" className="p-6 text-sm text-destructive">Não foi possível carregar os protocolos. Tente atualizar.</p>
+            ) : finalizedFiltered.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-8 text-center text-muted-foreground">
                 <CheckCircle2 className="h-8 w-8 opacity-20" />
                 <p className="text-xs">Nenhum protocolo finalizado.</p>
               </div>
             ) : (
               <div className="divide-y">
-                {protocolos.map((proto) => (
+                {finalizedFiltered.map(({ latest: proto, history }) => (
                   <button
                     key={proto.id}
                     onClick={() => setSelectedProtocolo(proto)}
                     className={cn(
                       "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center gap-3",
-                      selectedProtocolo?.id === proto.id && "bg-primary/10"
+                      selectedProtocolo?.lead_id === proto.lead_id && "bg-primary/10"
                     )}
                   >
                     <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
@@ -1124,6 +1129,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 flex items-center gap-0.5">
                           <Hash className="h-2.5 w-2.5" />{proto.numero_protocolo}
                         </Badge>
+                        <span className="text-xs text-muted-foreground">{history.length} protocolo{history.length !== 1 ? "s" : ""}</span>
                         {proto.leads?.contato_id && (
                           <p className="text-xs text-muted-foreground truncate flex items-center gap-0.5">
                             <Phone className="h-2.5 w-2.5 shrink-0" />{formatPhone(proto.leads.contato_id)}
@@ -1183,6 +1189,19 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 </div>
               </div>
             </div>
+
+            {aba === "finalizadas" && selectedProtocolo && (
+              <div className="w-full border-t pt-3 space-y-1.5">
+                <label className="text-xs font-medium" htmlFor="closed-protocol-history">Protocolos finalizados desta pessoa</label>
+                <Select value={selectedProtocolo.id} onValueChange={id => { const protocol = selectedHistory.find(p => p.id === id); if (protocol) setSelectedProtocolo(protocol); }}>
+                  <SelectTrigger id="closed-protocol-history" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {selectedHistory.map((protocol, index) => <SelectItem key={protocol.id} value={protocol.id}>{protocol.numero_protocolo} · {formatDate(protocol.finalizado_em || protocol.iniciado_em)}{index === 0 ? " · Mais recente" : ""}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">O último encerrado abre primeiro. Selecione um protocolo anterior para consultar a conversa.</p>
+              </div>
+            )}
 
             {aba !== "finalizadas" && selectedLead && (
               <div className="flex items-center gap-2 flex-wrap" aria-label="Ações de atendimento">
@@ -1382,6 +1401,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-muted/20">
             {msgsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : aba === "finalizadas" && msgsProtoError ? (
+              <p role="alert" className="text-center text-sm text-destructive py-8">Não foi possível carregar as mensagens deste protocolo. Tente novamente.</p>
             ) : mensagens.length === 0 ? (
               <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem neste protocolo.</p>
             ) : (
