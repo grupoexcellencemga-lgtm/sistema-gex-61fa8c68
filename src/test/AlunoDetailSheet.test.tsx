@@ -56,7 +56,7 @@ describe("financeiro do aluno na tela", () => {
     expect(saldo.compareDocumentPosition(historico) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("Pago pelo aluno").nextSibling?.textContent).toMatch(/797,00/);
     expect(screen.getByText(/Total da matrícula:/)).toHaveTextContent("1.970,00");
-    expect(screen.getByText(/Crédito · Pago em/)).toBeInTheDocument();
+    expect(screen.getByText(/Crédito 1x · Pago em/)).toBeInTheDocument();
     expect(screen.getByText(/PIX · Pago em/)).toBeInTheDocument();
   });
 

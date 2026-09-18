@@ -638,7 +638,6 @@ export const AlunoDetailSheet = (props: Props) => {
                                               {p.status === "pago" && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor)
                                                 ? formatCurrency(Number(p.valor_pago))
                                                 : formatCurrency(Number(p.valor))}
-                                              {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && p.parcelas_cartao && ` · ${p.parcelas_cartao}x`}
                                             </p>
                                             {p.status === "pago" && !temTaxaSeparada(p) && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor) && (
                                               <span className="text-xs text-muted-foreground">parcial de {formatCurrency(Number(p.valor))}</span>
@@ -657,6 +656,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                           )}
                                           <p className="text-xs text-muted-foreground mt-0.5">
                                             {getFormaLabel(p.forma_pagamento)}
+                                            {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && ` ${Number(p.parcelas_cartao) > 0 ? Number(p.parcelas_cartao) : 1}x`}
                                             {p.status === "pago" && p.data_pagamento
                                               ? ` · Pago em ${formatDate(p.data_pagamento)}`
                                               : p.data_vencimento
