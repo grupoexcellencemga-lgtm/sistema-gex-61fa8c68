@@ -470,7 +470,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   async function assumirOuAtribuir(leadId: string, paraUserId: string) {
     setAtribuindo(true);
     try {
-      // Cria protocolo
+      // Reutiliza o protocolo ativo; só abre outro se não houver um aberto.
       const { data: protoData, error: protoErr } = await supabase.rpc("criar_protocolo", {
         p_empresa_id: empresaId,
         p_lead_id: leadId,
@@ -488,7 +488,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       if (error) throw error;
 
       const nomeAgente = paraUserId === userId ? "você" : (usuariosMap[paraUserId] ?? "usuário");
-      toast.success(`Protocolo ${numero} aberto — atribuído para ${nomeAgente}`);
+      toast.success(`Protocolo ${numero} — atendimento atribuído para ${nomeAgente}`);
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
     } catch (err: any) {
       toast.error("Erro: " + err.message);
