@@ -24,6 +24,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/types";
 import { slaLabel, type FunilEtapa } from "./funilUtils";
+import { matchesCrmQueue, crmResponsibility, type CrmQueue } from "./crmOrganization";
+import { FichaLeadPanel } from "./FichaLeadPanel";
 
 type Mensagem = {
   id: string;
@@ -55,7 +57,7 @@ type Protocolo = {
   leads: { nome: string; foto_perfil: string | null; contato_id: string | null } | null;
 };
 
-type AbaAtendimento = "fila" | "minhas" | "finalizadas";
+type AbaAtendimento = CrmQueue;
 
 interface CrmInboxProps {
   quadroId: string;
@@ -91,6 +93,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
   const [aba, setAba] = useState<AbaAtendimento>("fila");
+  const [showContactPanel, setShowContactPanel] = useState(true);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveQuadroId, setMoveQuadroId] = useState("");
   const [moveEtapaId, setMoveEtapaId] = useState("");
@@ -345,12 +348,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         .in("etapa_id", etapaIds)
         .is("deleted_at", null);
 
-      if (aba === "fila") {
-        query = query.eq("status_atendimento", "fila");
-      } else {
-        query = query.eq("status_atendimento", "ativo");
-        if (!isAdmin) query = query.eq("atendente_id", userId);
-      }
+      query = query.in("status_atendimento", ["fila", "ativo", "em_atendimento"]);
+      if (!isAdmin) query = query.or(`status_atendimento.eq.fila,atendente_id.eq.${userId},bot_ativo.eq.true`);
 
       const { data, error } = await query
         .order("tem_mensagem_nova", { ascending: false })
@@ -384,13 +383,14 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const buscaTrimmed = busca.toLowerCase().trim();
   const leadsFiltered = (filtroCanal === "todos" ? leads : leads.filter((l) => (l as any).canal_id === filtroCanal))
+    .filter(l => matchesCrmQueue(l as any, aba, userId))
     .filter((l) => !buscaTrimmed || l.nome?.toLowerCase().includes(buscaTrimmed) || ((l as any).contato_id ?? "").includes(buscaTrimmed));
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) ?? null;
   const selectedStatus: string = (selectedLead as any)?.status_atendimento ?? "fila";
   const selectedAtendente: string | null = (selectedLead as any)?.atendente_id ?? null;
   const isMyLead = selectedAtendente === userId;
-  const canReply = canal === "whatsapp" && selectedStatus === "ativo" && (isMyLead || isAdmin);
+  const canReply = canal === "whatsapp" && ["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin);
 
   // Mensagens da conversa ativa (fila/minhas)
   const { data: mensagensLead = [], isLoading: msgsLeadLoading } = useQuery<Mensagem[]>({
@@ -502,7 +502,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       // Atualiza lead
       const { error } = await (supabase as any)
         .from("leads")
-        .update({ atendente_id: paraUserId, status_atendimento: "ativo", atribuido_em: new Date().toISOString() })
+        .update({ atendente_id: paraUserId, status_atendimento: "ativo", atribuido_em: new Date().toISOString(), bot_ativo: false })
         .eq("id", leadId);
       if (error) throw error;
 
@@ -858,8 +858,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     : mensagens;
 
   const abaConfig: { key: AbaAtendimento; label: string; icon: React.ReactNode }[] = [
-    { key: "fila", label: "Fila", icon: <Clock className="h-3.5 w-3.5" /> },
-    { key: "minhas", label: isAdmin ? "Em andamento" : "Minhas", icon: <UserCheck className="h-3.5 w-3.5" /> },
+    { key: "fila", label: "Precisa de você", icon: <Clock className="h-3.5 w-3.5" /> },
+    { key: "ia", label: "IA autorizada", icon: <Bot className="h-3.5 w-3.5" /> },
+    { key: "minhas", label: "Minhas conversas", icon: <UserCheck className="h-3.5 w-3.5" /> },
+    { key: "todos", label: "Todas", icon: <Users className="h-3.5 w-3.5" /> },
     { key: "finalizadas", label: "Finalizadas", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   ];
 
@@ -881,11 +883,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   return (
     <div className="flex overflow-hidden w-full flex-1 min-h-0">
       {/* Lista lateral */}
-      <div style={{ width: listWidth, minWidth: 200, maxWidth: 520 }} className="shrink-0 flex flex-col bg-card">
+      <div style={{ width: listWidth, minWidth: 200, maxWidth: 520 }} className={cn("shrink-0 flex flex-col bg-card border-r", showChatPanel && "hidden md:flex")}>
 
         {/* Abas de atendimento */}
         <div className="border-b">
-          <div className="flex">
+          <div className="grid grid-cols-2">
             {abaConfig.map((a) => (
               <button
                 key={a.key}
@@ -899,6 +901,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               >
                 {a.icon}
                 {a.label}
+                {a.key !== "finalizadas" && <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px]">{leads.filter(l => matchesCrmQueue(l as any, a.key, userId)).length}</span>}
               </button>
             ))}
           </div>
@@ -1061,6 +1064,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                             </span>
                           )}
                         </div>
+                        <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] mt-1", (lead as any).bot_ativo ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : (lead as any).atendente_id ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300")}>{crmResponsibility(lead as any, usuariosMap)}</span>
                         {/* Linha 2: canal + telefone */}
                         <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                           {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
@@ -1187,7 +1191,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
       {showChatPanel ? (
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Header */}
-          <div className="p-3 border-b flex items-center justify-between bg-card">
+          <div className="p-3 border-b flex items-center justify-between gap-3 flex-wrap bg-card">
+            <Button variant="ghost" size="sm" className="md:hidden" onClick={() => { setSelectedLeadId(null); setSelectedProtocolo(null); }}>Voltar às conversas</Button>
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
                 {chatHeaderFoto
@@ -1197,6 +1202,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold">{chatHeaderName}</p>
+                  {aba !== "finalizadas" && selectedLead && <Badge variant="secondary" className="text-[10px]">{crmResponsibility(selectedLead as any, usuariosMap)}</Badge>}
                   {aba === "finalizadas" && selectedProtocolo && (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5">
                       <Hash className="h-2.5 w-2.5" />{selectedProtocolo.numero_protocolo}
@@ -1224,7 +1230,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
             {/* Ações (só em fila/minhas) */}
             {aba !== "finalizadas" && (
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
+                <Button variant="outline" size="sm" className="hidden xl:inline-flex" onClick={() => setShowContactPanel(v => !v)}>Ficha do contato</Button>
                 {/* Toggle bot */}
                 {selectedLead && (
                   <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
@@ -1235,10 +1242,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       disabled={togglingBot}
                       className="scale-75"
                     />
-                    <span className="text-xs text-muted-foreground">Bot</span>
+                    <span className="text-xs text-muted-foreground">Autorizar IA</span>
                   </div>
                 )}
-                {selectedStatus === "fila" && (
+                {(selectedStatus === "fila" || (selectedLead as any)?.bot_ativo) && (
                   <>
                     <Button size="sm" variant="default" className="gap-1.5" onClick={() => assumirOuAtribuir(selectedLead!.id, userId!)} disabled={atribuindo}>
                       {atribuindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
@@ -1263,7 +1270,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   </>
                 )}
 
-                {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
+                {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -1294,7 +1301,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
                       <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />Mover para quadro
                     </DropdownMenuItem>
-                    {selectedStatus === "ativo" && (isMyLead || isAdmin) && (
+                    {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setTransferOpen(true)}>
@@ -1780,6 +1787,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             {aba === "finalizadas" ? "Selecione um protocolo para ver o histórico" : "Selecione uma conversa para visualizar"}
           </p>
         </div>
+      )}
+
+      {showChatPanel && selectedLead && aba !== "finalizadas" && (
+        <aside className={cn("shrink-0 border-l bg-card overflow-y-auto", showContactPanel ? "hidden xl:block w-[280px]" : "hidden")}>
+          <div className="p-4 border-b flex justify-between items-center"><h2 className="text-sm font-semibold">Ficha do contato</h2><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowContactPanel(false)} aria-label="Recolher ficha"><X className="h-3.5 w-3.5" /></Button></div>
+          <div className="p-4 space-y-5">
+            <div><p className="text-xs text-muted-foreground">Responsável pelo atendimento</p><p className="text-sm font-medium mt-1">{crmResponsibility(selectedLead as any, usuariosMap)}</p></div>
+            <Button variant="outline" className="w-full" onClick={() => onLeadClick(selectedLead)}>Abrir cadastro e oportunidade</Button>
+            <FichaLeadPanel leadId={selectedLead.id} tipoContato={(selectedLead as any).tipo_contato ?? null} temConversa={mensagens.length > 0} onTipoAlterado={() => queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId] })} />
+          </div>
+        </aside>
       )}
 
       {/* Dialog — Mover para quadro */}

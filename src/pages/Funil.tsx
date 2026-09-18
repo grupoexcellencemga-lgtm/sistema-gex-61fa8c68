@@ -22,6 +22,8 @@ import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
 import { LeadFormDialog } from "@/components/funil/LeadFormDialog";
 import { LeadDetailSheet } from "@/components/funil/LeadDetailSheet";
 import { CrmInbox } from "@/components/funil/CrmInbox";
+import { AgentesBotSection } from "@/components/configuracoes/AgentesBotSection";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type FunilQuadro = {
   id: string;
@@ -57,6 +59,7 @@ const Funil = () => {
   const { empresa } = useEmpresa();
   const empresaId = empresa?.id;
   const queryClient = useQueryClient();
+  const { canAccess } = usePermissions();
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const debouncedSearch = useDebounce(filters.search, 300);
   const [selectedLead, setSelectedLead] = useState<LeadRow | null>(null);
@@ -68,6 +71,7 @@ const Funil = () => {
 
   // Quadros
   const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
+  const [crmView, setCrmView] = useState<"conversas" | "oportunidades" | "agentes">("conversas");
   const [newQuadroName, setNewQuadroName] = useState("");
   const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
   const [editingQuadroName, setEditingQuadroName] = useState("");
@@ -106,10 +110,11 @@ const Funil = () => {
   });
 
   useEffect(() => {
-    if (!selectedQuadroId && quadros.length > 0) {
-      setSelectedQuadroId(quadros[0].id);
+    if (crmView !== "agentes" && quadros.length > 0) {
+      const eligible = quadros.filter(q => crmView === "conversas" ? q.fixo || q.canal : !q.fixo && !q.canal);
+      if (!eligible.some(q => q.id === selectedQuadroId)) setSelectedQuadroId(eligible[0]?.id ?? null);
     }
-  }, [quadros, selectedQuadroId]);
+  }, [quadros, selectedQuadroId, crmView]);
 
   const selectedQuadro = useMemo(
     () => quadros.find((q) => q.id === selectedQuadroId) ?? null,
@@ -652,8 +657,19 @@ const Funil = () => {
         }}
       />
 
-      <div className="flex rounded-lg overflow-hidden border bg-card" style={{ height: 'calc(100dvh - 8rem)' }}>
+      <section className="rounded-xl border bg-card overflow-hidden">
+        <header className="px-5 pt-4 border-b">
+          <h1 className="text-2xl font-semibold tracking-tight">CRM comercial</h1>
+          <p className="text-sm text-muted-foreground mt-1">Atendimento, oportunidades e supervisão da IA</p>
+          <nav aria-label="Áreas do CRM" className="flex gap-6 mt-4">
+            {([ ["conversas", "Conversas"], ["oportunidades", "Oportunidades"], ["agentes", "Agentes"] ] as const).map(([view, label]) => (
+              <button key={view} type="button" aria-current={crmView === view ? "page" : undefined} onClick={() => setCrmView(view)} className={cn("pb-3 text-sm font-medium border-b-2 transition-colors", crmView === view ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>{label}</button>
+            ))}
+          </nav>
+        </header>
+      <div className="flex overflow-hidden bg-card" style={{ height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
         {/* Sidebar — lista de quadros */}
+        {crmView === "oportunidades" && (
         <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[240px]" : "w-0")}>
           {/* Toggle handle — always visible on the right edge */}
           <button
@@ -675,8 +691,8 @@ const Funil = () => {
             <div className="p-4 border-b flex items-center gap-2">
               <LayoutDashboard className="h-5 w-5 text-primary" />
               <div>
-                <h2 className="text-sm font-semibold leading-tight">Quadros do Funil</h2>
-                <p className="text-xs text-muted-foreground">Cada quadro tem seu pipeline</p>
+                <h2 className="text-sm font-semibold leading-tight">Funis de vendas</h2>
+                <p className="text-xs text-muted-foreground">Escolha a oferta ou o quadro</p>
               </div>
             </div>
 
@@ -685,40 +701,14 @@ const Funil = () => {
                 <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
               ) : (
                 <>
-                  {/* Fixed CRM boards */}
-                  {quadros.filter((q) => q.fixo).map((quadro) => (
-                    <div
-                      key={quadro.id}
-                      onClick={() => setSelectedQuadroId(quadro.id)}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors",
-                        selectedQuadroId === quadro.id
-                          ? "bg-primary/15 text-primary font-medium"
-                          : "hover:bg-muted text-foreground"
-                      )}
-                    >
-                      {quadro.canal === "whatsapp" ? (
-                        <MessageSquare className="h-4 w-4 text-green-600 shrink-0" />
-                      ) : (
-                        <Instagram className="h-4 w-4 text-pink-600 shrink-0" />
-                      )}
-                      <span className="flex-1 truncate">{quadro.nome}</span>
-                    </div>
-                  ))}
-
-                  {/* Separator if there are both fixed and normal */}
-                  {quadros.some((q) => q.fixo) && quadros.some((q) => !q.fixo) && (
-                    <div className="border-t my-1" />
-                  )}
-
                   {/* Normal boards */}
-                  {quadros.filter((q) => !q.fixo).length === 0 && !quadros.some((q) => q.fixo) && (
+                  {quadros.filter((q) => !q.fixo && !q.canal).length === 0 && (
                     <div className="text-center p-6 space-y-2">
                       <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/30" />
                       <p className="text-xs text-muted-foreground">Crie o primeiro quadro de funil.</p>
                     </div>
                   )}
-                  {quadros.filter((q) => !q.fixo).map((quadro) => (
+                  {quadros.filter((q) => !q.fixo && !q.canal).map((quadro) => (
                     <div
                       key={quadro.id}
                       className={cn(
@@ -867,15 +857,23 @@ const Funil = () => {
           </aside>
           )}
         </div>
+        )}
 
         {/* Área principal */}
-        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-hidden">
-          <div className={selectedQuadro?.fixo ? "flex flex-col flex-1 min-h-0 p-4 gap-4" : "p-6 space-y-6 min-h-full"}>
+        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
+          {crmView === "agentes" ? <div className="p-5">{canAccess("configuracoes") ? <AgentesBotSection /> : <p className="text-sm text-muted-foreground">Você precisa de acesso às configurações para gerenciar os agentes.</p>}</div> : (
+          <div className={crmView === "conversas" ? "flex flex-col flex-1 min-h-0" : "p-6 space-y-6 min-h-full"}>
+            {crmView === "conversas" ? (
+              <div className="flex gap-2 items-center px-4 py-3 border-b flex-wrap bg-card">
+                <span className="text-xs font-medium text-muted-foreground mr-2">Canal de entrada</span>
+                {quadros.filter(q => q.fixo || q.canal).map(q => <button key={q.id} onClick={() => setSelectedQuadroId(q.id)} className={cn("px-3 py-1.5 rounded-md text-sm border", q.id === selectedQuadroId ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-muted-foreground hover:bg-muted")}>{q.canal === "instagram" ? "Instagram" : q.canal === "whatsapp" ? "WhatsApp" : q.nome}</button>)}
+              </div>
+            ) : (
             <PageHeader
               title={selectedQuadro?.nome || "Funil Comercial"}
-              description={selectedQuadro?.fixo ? "Mensagens recebidas e conversas ativas" : "Pipeline de leads e conversão"}
+              description={isInboxQuadro ? "Mensagens recebidas e conversas ativas" : "Oportunidades e etapas de venda"}
             >
-              {selectedQuadroId && !selectedQuadro?.fixo && (
+              {selectedQuadroId && !isInboxQuadro && (
                 <>
                   <Button variant="outline" onClick={() => { setEditEtapa(null); setEtapaDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />Nova Coluna
@@ -890,13 +888,14 @@ const Funil = () => {
                 </>
               )}
             </PageHeader>
+            )}
 
             {!selectedQuadroId ? (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
                 <LayoutDashboard className="h-12 w-12 opacity-20" />
                 <p className="text-sm">Selecione ou crie um quadro de funil na barra lateral.</p>
               </div>
-            ) : selectedQuadro?.fixo ? (
+            ) : isInboxQuadro ? (
               <CrmInbox
                 quadroId={selectedQuadroId}
                 etapas={etapas}
@@ -966,8 +965,10 @@ const Funil = () => {
               </>
             )}
           </div>
+          )}
         </main>
       </div>
+      </section>
     </>
   );
 };

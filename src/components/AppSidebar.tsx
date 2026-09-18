@@ -51,7 +51,7 @@ const menuGroups = [
     items: [
       { title: "Agenda", url: "/agenda", icon: CalendarDays, pageKey: "agenda" as PageKey },
       { title: "Metas", url: "/metas", icon: Target, pageKey: "metas" as PageKey },
-      { title: "Funil de Vendas", url: "/funil", icon: Filter, pageKey: "funil" as PageKey },
+      { title: "CRM comercial", url: "/funil", icon: Filter, pageKey: "funil" as PageKey },
       { title: "Dashboard CRM", url: "/crm/dashboard", icon: LayoutDashboard, pageKey: "crm-dashboard" as PageKey },
       { title: "Tarefas", url: "/tarefas", icon: CheckSquare, pageKey: "tarefas" as PageKey },
       { title: "Quadros de Divulgação", url: "/divulgacao", icon: Megaphone, pageKey: "divulgacao" as PageKey },
