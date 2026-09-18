@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { calcularPagamentoParcial, calcularPagamentoComTaxa, resumirMatricula, ordenarPagamentos, valorPagoAluno, temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 describe("financeiro da matrícula", () => {
+  it("recalcula edição de pagamento antigo com taxa da empresa, sem depender do valor anterior", () => {
+    expect(calcularPagamentoComTaxa(500, 500, 23.35, "empresa").pago).toBe(476.65);
+    expect(calcularPagamentoComTaxa(500, 500, 44.95, "empresa").pago).toBe(455.05);
+    expect(calcularPagamentoComTaxa(600, 600, 23.35, "empresa").pago).toBe(576.65);
+    expect(calcularPagamentoComTaxa(500, 500, 0, "").pago).toBe(500);
+  });
   it("aceita o valor líquido acima do saldo após descontar a taxa real", () => {
     expect(calcularPagamentoComTaxa(1173, 1407.60, 119.51, "empresa")).toEqual({ pago: 1288.09, restante: 0, recebido: 1407.60, taxa: 119.51 });
     expect(resumirMatricula(1970, [{ status: "pago", valor: 797 }, { status: "pago", valor: 1407.60, valor_pago: 1288.09, taxa_valor: 119.51, taxa_absorvida_por: "empresa" }]).pendente).toBe(0);

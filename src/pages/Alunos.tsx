@@ -855,8 +855,7 @@ const Alunos = () => {
       if (isPago) {
         updatePayload.data_vencimento = editPagForm.data_vencimento;
         updatePayload.data_pagamento = editPagForm.data_vencimento;
-        updatePayload.valor_pago = temPrincipalSeparado && ["aluno", "empresa"].includes(editPagForm.taxa_absorvida_por || "")
-          ? Math.round((valor - taxaValorEdit) * 100) / 100 : valor;
+        updatePayload.valor_pago = calcularPagamentoComTaxa(valor, valor, taxaValorEdit, editPagForm.taxa_absorvida_por || "").pago;
         if (updatePayload.valor_pago <= 0) throw new Error("O total cobrado precisa ser maior que a taxa.");
       } else {
         if (temPrincipalSeparado) {
