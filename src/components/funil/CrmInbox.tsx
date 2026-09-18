@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
@@ -26,6 +26,7 @@ import type { LeadRow } from "@/types";
 import { slaLabel, type FunilEtapa } from "./funilUtils";
 import { matchesCrmQueue, crmResponsibility, type CrmQueue } from "./crmOrganization";
 import { FichaLeadPanel } from "./FichaLeadPanel";
+import { ConversationDrawer } from "./ConversationDrawer";
 
 type Mensagem = {
   id: string;
@@ -93,7 +94,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const [sending, setSending] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>("todos");
   const [aba, setAba] = useState<AbaAtendimento>("fila");
-  const [showContactPanel, setShowContactPanel] = useState(true);
+  const [showContactPanel, setShowContactPanel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveQuadroId, setMoveQuadroId] = useState("");
   const [moveEtapaId, setMoveEtapaId] = useState("");
@@ -131,33 +132,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
   const [togglingBot, setTogglingBot] = useState(false);
-  const [listWidth, setListWidth] = useState(() => {
-    try { const v = localStorage.getItem("crm-inbox-list-width"); return v ? Math.max(200, Math.min(520, Number(v))) : 360; } catch { return 360; }
-  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const isResizing = useRef(false);
-
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    const startX = e.clientX;
-    const startWidth = listWidth;
-
-    function onMouseMove(ev: MouseEvent) {
-      if (!isResizing.current) return;
-      const newWidth = Math.max(200, Math.min(520, startWidth + ev.clientX - startX));
-      setListWidth(newWidth);
-      try { localStorage.setItem("crm-inbox-list-width", String(newWidth)); } catch {}
-    }
-    function onMouseUp() {
-      isResizing.current = false;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    }
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  }, [listWidth]);
 
   const etapaIds = etapas.map((e) => e.id);
 
@@ -883,11 +859,11 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   return (
     <div className="flex overflow-hidden w-full flex-1 min-h-0">
       {/* Lista lateral */}
-      <div style={{ width: listWidth, minWidth: 200, maxWidth: 520 }} className={cn("shrink-0 flex flex-col bg-card border-r", showChatPanel && "hidden md:flex")}>
+      <div className="w-full min-w-0 flex flex-col bg-card">
 
         {/* Abas de atendimento */}
         <div className="border-b">
-          <div className="grid grid-cols-2 gap-2 p-3 bg-muted/20">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-3 bg-muted/20">
             {abaConfig.map((a) => (
               <button
                 key={a.key}
@@ -896,7 +872,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 onClick={() => mudarAba(a.key)}
                 className={cn(
                   "flex items-center justify-center gap-1.5 min-h-10 px-2 py-2.5 text-xs font-medium rounded-lg border shadow-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px",
-                  a.key === "finalizadas" && "col-span-2",
+                  a.key === "finalizadas" && "col-span-2 sm:col-span-1",
                   aba === a.key
                     ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/20"
                     : "border-border bg-card text-muted-foreground hover:bg-muted hover:border-primary/40 hover:text-foreground"
@@ -1181,21 +1157,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         </ScrollArea>
       </div>
 
-      {/* Handle de resize */}
-      <div
-        onMouseDown={startResize}
-        className="w-1.5 shrink-0 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors bg-border/60 group relative"
-        title="Arraste para redimensionar"
-      >
-        <div className="absolute inset-y-0 -left-1 -right-1" />
-      </div>
-
-      {/* Painel de chat */}
-      {showChatPanel ? (
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <ConversationDrawer open={showChatPanel} title={aba === "finalizadas" ? "Histórico da conversa" : "Atendimento"} onClose={() => { setSelectedLeadId(null); setSelectedProtocolo(null); setShowContactPanel(false); }}>
+        <div className={cn("flex-1 flex flex-col min-w-0 overflow-hidden", showContactPanel && selectedLead && "hidden sm:flex")}>
           {/* Header */}
           <div className="p-3 border-b flex items-center justify-between gap-3 flex-wrap bg-card">
-            <Button variant="ghost" size="sm" className="md:hidden" onClick={() => { setSelectedLeadId(null); setSelectedProtocolo(null); }}>Voltar às conversas</Button>
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
                 {chatHeaderFoto
@@ -1234,7 +1199,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             {/* Ações (só em fila/minhas) */}
             {aba !== "finalizadas" && (
               <div className="flex gap-2 items-center flex-wrap">
-                <Button variant="outline" size="sm" className="hidden xl:inline-flex" onClick={() => setShowContactPanel(v => !v)}>Ficha do contato</Button>
+                <Button variant="outline" size="sm" className="inline-flex" onClick={() => setShowContactPanel(v => !v)}>Ficha do contato</Button>
                 {/* Toggle bot */}
                 {selectedLead && (
                   <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
@@ -1783,17 +1748,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             </div>
           )}
         </div>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-          <MessageSquare className="h-10 w-10 opacity-20" />
-          <p className="text-sm">
-            {aba === "finalizadas" ? "Selecione um protocolo para ver o histórico" : "Selecione uma conversa para visualizar"}
-          </p>
-        </div>
-      )}
-
       {showChatPanel && selectedLead && aba !== "finalizadas" && (
-        <aside className={cn("shrink-0 border-l bg-card overflow-y-auto", showContactPanel ? "hidden xl:block w-[280px]" : "hidden")}>
+        <aside className={cn("shrink-0 border-l bg-card overflow-y-auto", showContactPanel ? "block w-full sm:w-[280px]" : "hidden")}>
           <div className="p-4 border-b flex justify-between items-center"><h2 className="text-sm font-semibold">Ficha do contato</h2><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowContactPanel(false)} aria-label="Recolher ficha"><X className="h-3.5 w-3.5" /></Button></div>
           <div className="p-4 space-y-5">
             <div><p className="text-xs text-muted-foreground">Responsável pelo atendimento</p><p className="text-sm font-medium mt-1">{crmResponsibility(selectedLead as any, usuariosMap)}</p></div>
@@ -1802,6 +1758,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
         </aside>
       )}
+
+
 
       {/* Dialog — Mover para quadro */}
       <Dialog open={moveOpen} onOpenChange={(v) => { setMoveOpen(v); if (!v) { setMoveQuadroId(""); setMoveEtapaId(""); } }}>
@@ -1907,6 +1865,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           />
         </div>
       )}
+      </ConversationDrawer>
     </div>
   );
 }
