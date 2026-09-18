@@ -36,6 +36,11 @@ function props() {
 afterEach(cleanup);
 
 describe("financeiro do aluno na tela", () => {
+  it.each([1, 10, 12])("mostra a quantidade %sx salva no pagamento", (quantidade) => {
+    const p = props();
+    render(<AlunoDetailSheet {...p} pagamentos={p.pagamentos.map(item => item.id === "p1" ? { ...item, parcelas_cartao: quantidade } : item)} />);
+    expect(screen.getByText(new RegExp(`Crédito ${quantidade}x · Pago em`))).toBeInTheDocument();
+  });
   it.each(["Aluno", "Empresa"])("aceita valor maior que o saldo com taxa marcada como %s", async (responsavel) => {
     const p = props();
     render(<AlunoDetailSheet {...p} />);
@@ -56,7 +61,7 @@ describe("financeiro do aluno na tela", () => {
     expect(saldo.compareDocumentPosition(historico) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("Pago pelo aluno").nextSibling?.textContent).toMatch(/797,00/);
     expect(screen.getByText(/Total da matrícula:/)).toHaveTextContent("1.970,00");
-    expect(screen.getByText(/Crédito 1x · Pago em/)).toBeInTheDocument();
+    expect(screen.getByText(/Crédito · Parcelas não informadas · Pago em/)).toBeInTheDocument();
     expect(screen.getByText(/PIX · Pago em/)).toBeInTheDocument();
   });
 

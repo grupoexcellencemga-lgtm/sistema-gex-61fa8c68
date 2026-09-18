@@ -531,6 +531,8 @@ const Alunos = () => {
             valor: entradaValor,
             valor_pago: entradaValor,
             forma_pagamento: matriculaForm.entrada_forma_pagamento || null,
+            parcelas_cartao: ["credito", "cartao", "cartao_credito", "recorrencia_cartao", "link", "link_pagamento"].includes(matriculaForm.entrada_forma_pagamento)
+              ? parseInt(matriculaForm.entrada_parcelas) || 1 : null,
             conta_bancaria_id: matriculaForm.entrada_conta_bancaria_id || null,
             data_vencimento: matriculaForm.entrada_data || dataVencimentoResolvida,
             data_pagamento: matriculaForm.entrada_data || dataVencimentoResolvida,

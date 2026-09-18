@@ -656,7 +656,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                           )}
                                           <p className="text-xs text-muted-foreground mt-0.5">
                                             {getFormaLabel(p.forma_pagamento)}
-                                            {["credito", "cartao", "cartao_credito", "recorrencia_cartao"].includes(p.forma_pagamento) && ` ${Number(p.parcelas_cartao) > 0 ? Number(p.parcelas_cartao) : 1}x`}
+                                            {["credito", "cartao", "cartao_credito", "recorrencia_cartao", "link", "link_pagamento"].includes(p.forma_pagamento) && (Number(p.parcelas_cartao) > 0 ? ` ${Number(p.parcelas_cartao)}x` : " · Parcelas não informadas")}
                                             {p.status === "pago" && p.data_pagamento
                                               ? ` · Pago em ${formatDate(p.data_pagamento)}`
                                               : p.data_vencimento
