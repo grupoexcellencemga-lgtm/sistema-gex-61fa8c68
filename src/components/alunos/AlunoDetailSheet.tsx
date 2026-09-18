@@ -646,8 +646,12 @@ export const AlunoDetailSheet = (props: Props) => {
                                               <Badge variant="outline" className="text-xs border-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Entrada</Badge>
                                             )}
                                             {valorTaxaMaquina > 0 && (
-                                              <Badge variant="outline" className="text-xs border-0 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                                                taxa {formatCurrency(valorTaxaMaquina)}
+                                              <Badge variant="outline" className={cn("text-xs border-0", p.taxa_absorvida_por === "empresa"
+                                                ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                                : p.taxa_absorvida_por === "aluno"
+                                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400")}>
+                                                {p.taxa_absorvida_por === "empresa" ? "Taxa da empresa" : p.taxa_absorvida_por === "aluno" ? "Taxa do aluno" : "Taxa"} {formatCurrency(valorTaxaMaquina)}
                                               </Badge>
                                             )}
                                           </div>
