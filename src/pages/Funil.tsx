@@ -658,16 +658,16 @@ const Funil = () => {
       />
 
       <section className="rounded-xl border bg-card overflow-hidden">
-        <header className="px-5 pt-4 border-b">
-          <h1 className="text-2xl font-semibold tracking-tight">CRM comercial</h1>
-          <p className="text-sm text-muted-foreground mt-1">Atendimento, oportunidades e supervisão da IA</p>
-          <nav aria-label="Áreas do CRM" className="flex gap-6 mt-4">
+        <header className="px-4 pt-3 border-b">
+          <h1 className="text-xl font-semibold tracking-tight">CRM comercial</h1>
+          <p className="sr-only">Atendimento, oportunidades e supervisão da IA</p>
+          <nav aria-label="Áreas do CRM" className="flex gap-6 mt-2">
             {([ ["conversas", "Conversas"], ["oportunidades", "Oportunidades"], ["agentes", "Agentes"] ] as const).map(([view, label]) => (
               <button key={view} type="button" aria-current={crmView === view ? "page" : undefined} onClick={() => setCrmView(view)} className={cn("pb-3 text-sm font-medium border-b-2 transition-colors", crmView === view ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>{label}</button>
             ))}
           </nav>
         </header>
-      <div className="flex overflow-hidden bg-card" style={{ height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
+      <div className="flex overflow-hidden bg-card" style={crmView === "conversas" ? undefined : { height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
         {/* Sidebar — lista de quadros */}
         {crmView === "oportunidades" && (
         <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[240px]" : "w-0")}>
@@ -860,11 +860,11 @@ const Funil = () => {
         )}
 
         {/* Área principal */}
-        <main className="flex-1 min-w-0 flex flex-col bg-background overflow-auto">
+        <main className={cn("flex-1 min-w-0 flex flex-col bg-background", crmView !== "conversas" && "overflow-auto")}>
           {crmView === "agentes" ? <div className="p-5">{canAccess("configuracoes") ? <AgentesBotSection /> : <p className="text-sm text-muted-foreground">Você precisa de acesso às configurações para gerenciar os agentes.</p>}</div> : (
           <div className={crmView === "conversas" ? "flex flex-col flex-1 min-h-0" : "p-6 space-y-6 min-h-full"}>
             {crmView === "conversas" ? (
-              <div className="flex gap-2 items-center px-4 py-3 border-b flex-wrap bg-card">
+              <div className="flex gap-2 items-center px-4 py-2 border-b flex-wrap bg-card">
                 <span className="text-xs font-medium text-muted-foreground mr-2">Canal de entrada</span>
                 {quadros.filter(q => q.fixo || q.canal).map(q => {
                   const selected = q.id === selectedQuadroId;

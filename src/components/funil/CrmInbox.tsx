@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +15,7 @@ import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
   ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
   FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
-  Tag, Zap, Reply, X, ArrowRightLeft, Sparkles,
+  Tag, Zap, Reply, X, ArrowRightLeft, Sparkles, SlidersHorizontal,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -129,6 +129,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   // Distribuição automática
   const [distributing, setDistributing] = useState(false);
   const [busca, setBusca] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const { status: pushStatus, loading: pushLoading, activate: activatePush, deactivate: deactivatePush } = usePushNotifications();
   const [finalizando, setFinalizando] = useState(false);
   const [togglingBot, setTogglingBot] = useState(false);
@@ -857,13 +858,13 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const showChatPanel = aba === "finalizadas" ? !!selectedProtocolo : !!selectedLead;
 
   return (
-    <div className="flex overflow-hidden w-full flex-1 min-h-0">
+    <div className="flex w-full min-w-0">
       {/* Lista lateral */}
       <div className="w-full min-w-0 flex flex-col bg-card">
 
         {/* Abas de atendimento */}
         <div className="border-b">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-3 bg-muted/20">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-2 bg-muted/20">
             {abaConfig.map((a) => (
               <button
                 key={a.key}
@@ -887,7 +888,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         </div>
 
         {/* Canal tabs (só nas abas de leads ativos) */}
-        {aba !== "finalizadas" && canais.length > 1 && (
+        {aba !== "finalizadas" && showFilters && canais.length > 1 && (
           <div className="border-b overflow-x-auto">
             <div className="flex min-w-max">
               <button
@@ -919,22 +920,12 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
         )}
 
-        {/* Campo de busca */}
-        {aba !== "finalizadas" && (
-          <div className="px-3 py-2 border-b">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome ou telefone..."
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="px-3 py-2 border-b flex items-center justify-between">
+        <div className="px-3 py-2 border-b flex items-center gap-3 flex-wrap">
+          {aba !== "finalizadas" && <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input aria-label="Buscar contatos" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou telefone..." className="pl-8 h-8 text-xs" />
+          </div>}
+          {aba !== "finalizadas" && canais.length > 1 && <Button variant={showFilters ? "secondary" : "outline"} size="sm" className="h-8 gap-1.5" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal className="h-3.5 w-3.5" />Filtros{filtroCanal !== "todos" && " (1)"}</Button>}
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {aba === "finalizadas"
               ? `${protocolos.length} protocolo${protocolos.length !== 1 ? "s" : ""}`
@@ -984,7 +975,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div>
+          {aba !== "finalizadas" && <div className="hidden lg:grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_70px] gap-3 pl-[60px] pr-3 py-2 border-b bg-muted/30 text-[11px] font-medium text-muted-foreground"><span>Contato</span><span>Última mensagem</span><span>Responsável</span><span>Número comercial</span><span>Espera</span></div>}
           {/* Lista de leads (fila/minhas) */}
           {aba !== "finalizadas" && (
             leadsLoading ? (
@@ -999,7 +991,6 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             ) : (
               <div className="divide-y">
                 {leadsFiltered.map((lead) => {
-                  const atendente: string | null = (lead as any).atendente_id ?? null;
                   return (
                     <button
                       key={lead.id}
@@ -1008,12 +999,12 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         if ((lead as any).tem_mensagem_nova) marcarComoLido(lead.id);
                       }}
                       className={cn(
-                        "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
+                        "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center gap-3",
                         selectedLeadId === lead.id && "bg-primary/10"
                       )}
                     >
                       <div className="relative shrink-0">
-                        <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                        <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                           {(lead as any).foto_perfil
                             ? <img src={(lead as any).foto_perfil} alt={lead.nome} className="h-full w-full object-cover" />
                             : <User className="h-5 w-5 text-muted-foreground" />}
@@ -1031,9 +1022,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                           </span>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_70px] lg:items-center lg:gap-3">
                         {/* Linha 1: nome + horário */}
-                        <div className="flex items-start justify-between gap-1 min-w-0">
+                        <div className="flex items-start justify-between gap-1 min-w-0 lg:col-start-1 lg:row-start-1">
                           <p className={cn("text-sm truncate leading-tight", (lead as any).tem_mensagem_nova ? "font-bold" : "font-medium")}>
                             {lead.nome}
                           </p>
@@ -1043,9 +1034,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                             </span>
                           )}
                         </div>
-                        <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] mt-1", (lead as any).bot_ativo ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : (lead as any).atendente_id ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300")}>{crmResponsibility(lead as any, usuariosMap)}</span>
+                        <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] mt-1 lg:mt-0 lg:col-start-3 lg:row-start-1 lg:justify-self-start", (lead as any).bot_ativo ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : (lead as any).atendente_id ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300")}>{crmResponsibility(lead as any, usuariosMap)}</span>
                         {/* Linha 2: canal + telefone */}
-                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0 lg:mt-0 lg:col-start-4 lg:row-start-1 lg:flex-wrap">
                           {(lead as any).canal_id && canaisMap[(lead as any).canal_id] && (
                             <span
                               className="shrink-0 inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap"
@@ -1067,7 +1058,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                         {/* Linha 3: prévia da última mensagem */}
                         {(lead as any).ultima_mensagem_texto && (
                           <p className={cn(
-                            "text-xs truncate mt-0.5 leading-tight",
+                            "text-xs truncate mt-0.5 leading-tight lg:mt-0 lg:col-start-2 lg:row-start-1",
                             (lead as any).ultima_mensagem_direcao === "entrada"
                               ? "text-amber-600 dark:text-amber-400 font-medium"
                               : "text-muted-foreground"
@@ -1079,13 +1070,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                           </p>
                         )}
                         {/* Linha 4: atendente + SLA */}
-                        {(atendente && usuariosMap[atendente] || slaLabel(lead)) && (
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {atendente && usuariosMap[atendente] && (
-                              <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                                <Users className="h-2.5 w-2.5 shrink-0" />{usuariosMap[atendente]}
-                              </p>
-                            )}
+                        {slaLabel(lead) && (
+                          <div className="flex items-center gap-2 mt-0.5 lg:mt-0 lg:col-start-5 lg:row-start-1">
                             {slaLabel(lead) && (
                               <span className={`text-[10px] shrink-0 flex items-center gap-0.5 ${slaLabel(lead)!.color}`}>
                                 <Clock className="h-2.5 w-2.5" />{slaLabel(lead)!.text}
@@ -1117,17 +1103,17 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     key={proto.id}
                     onClick={() => setSelectedProtocolo(proto)}
                     className={cn(
-                      "w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-2",
+                      "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center gap-3",
                       selectedProtocolo?.id === proto.id && "bg-primary/10"
                     )}
                   >
-                    <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
                       {proto.leads?.foto_perfil
                         ? <img src={proto.leads.foto_perfil} alt={proto.leads?.nome} className="h-full w-full object-cover" />
                         : <User className="h-5 w-5 text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-1 min-w-0">
+                      <div className="flex items-start justify-between gap-1 min-w-0 lg:col-start-1 lg:row-start-1">
                         <p className="text-sm font-medium truncate leading-tight">{proto.leads?.nome ?? "—"}</p>
                         <span className="text-[10px] text-muted-foreground shrink-0 leading-tight mt-px">
                           {formatRelative(proto.finalizado_em)}
@@ -1154,7 +1140,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
             )
           )}
-        </ScrollArea>
+        </div>
       </div>
 
       <ConversationDrawer open={showChatPanel} title={aba === "finalizadas" ? "Histórico da conversa" : "Atendimento"} onClose={() => { setSelectedLeadId(null); setSelectedProtocolo(null); setShowContactPanel(false); }}>
