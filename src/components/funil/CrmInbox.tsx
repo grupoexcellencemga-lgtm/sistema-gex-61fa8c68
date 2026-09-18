@@ -887,21 +887,24 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
         {/* Abas de atendimento */}
         <div className="border-b">
-          <div className="grid grid-cols-2">
+          <div className="grid grid-cols-2 gap-2 p-3 bg-muted/20">
             {abaConfig.map((a) => (
               <button
                 key={a.key}
+                type="button"
+                aria-pressed={aba === a.key}
                 onClick={() => mudarAba(a.key)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-medium border-b-2 transition-colors",
+                  "flex items-center justify-center gap-1.5 min-h-10 px-2 py-2.5 text-xs font-medium rounded-lg border shadow-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px",
+                  a.key === "finalizadas" && "col-span-2",
                   aba === a.key
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/20"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:border-primary/40 hover:text-foreground"
                 )}
               >
                 {a.icon}
                 {a.label}
-                {a.key !== "finalizadas" && <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px]">{leads.filter(l => matchesCrmQueue(l as any, a.key, userId)).length}</span>}
+                {a.key !== "finalizadas" && <span className={cn("ml-1 rounded-full px-1.5 text-[10px]", aba === a.key ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground")}>{leads.filter(l => matchesCrmQueue(l as any, a.key, userId)).length}</span>}
               </button>
             ))}
           </div>
