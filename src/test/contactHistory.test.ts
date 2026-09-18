@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { groupClosedProtocols, readAll } from "@/components/funil/contactHistory";
 const protocol = (id: string, lead_id: string, date: string) => ({ id, lead_id, finalizado_em: date, iniciado_em: date });
 describe("protocolos finalizados por pessoa", () => {
+  it("reúne o mesmo telefone WhatsApp em comerciais diferentes sem perder a origem", () => {
+    const a = { ...protocol("1", "a", "2026-09-01"), empresa_id: "gex", leads: { telefone: "+55 (44) 9116-4706", canal_id: "c1", comercial: { tipo: "whatsapp" } } };
+    const b = { ...protocol("2", "b", "2026-09-02"), empresa_id: "gex", leads: { telefone: "554491164706", canal_id: "c2", comercial: { tipo: "whatsapp" } } };
+    const groups = groupClosedProtocols([a, b]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].history.map(p => p.leads.canal_id)).toEqual(["c2", "c1"]);
+  });
+  it("não reúne telefones diferentes, empresas distintas ou identificadores internos", () => {
+    const p = (id: string, phone: string, company = "gex", type = "whatsapp") => ({ ...protocol(id, id, "2026-09-01"), empresa_id: company, leads: { telefone: phone, contato_id: phone, comercial: { tipo: type } } });
+    expect(groupClosedProtocols([p("a", "554491164706"), p("b", "554491164707")])).toHaveLength(2);
+    expect(groupClosedProtocols([p("a", "554491164706"), p("b", "554491164706", "outra")])).toHaveLength(2);
+    expect(groupClosedProtocols([p("a", "123456789012345@lid"), p("b", "123456789012345@lid")])).toHaveLength(2);
+    expect(groupClosedProtocols([p("a", "123456789012345", "gex", "instagram"), p("b", "123456789012345", "gex", "instagram")])).toHaveLength(2);
+  });
   it("exibe uma pessoa uma vez com o último protocolo primeiro e os antigos preservados", () => {
     const groups = groupClosedProtocols([protocol("1", "a", "2026-09-01"), protocol("2", "b", "2026-09-02"), protocol("3", "a", "2026-09-03")]);
     expect(groups.map(g => g.latest.id)).toEqual(["3", "2"]);

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuPortal } from "@/components/ui/dropdown-menu";
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine,
@@ -51,13 +51,14 @@ type RespostaRapida = { id: string; titulo: string; conteudo: string; atalho: st
 
 type Protocolo = {
   id: string;
+  empresa_id: string;
   numero_protocolo: string;
   lead_id: string;
   atendente_id: string | null;
   status: string;
   iniciado_em: string;
   finalizado_em: string | null;
-  leads: { nome: string; foto_perfil: string | null; contato_id: string | null } | null;
+  leads: { nome: string; foto_perfil: string | null; contato_id: string | null; telefone: string | null; canal_id: string | null; comercial: { nome: string; tipo: string; identificador: string | null } | null } | null;
 };
 
 type AbaAtendimento = CrmQueue;
@@ -348,7 +349,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
     queryFn: async () => {
       let query = (supabase as any)
         .from("protocolos_atendimento")
-        .select("*, leads(nome, foto_perfil, contato_id)")
+        .select("*, leads(nome, foto_perfil, contato_id, telefone, canal_id, comercial:canais_crm(nome, tipo, identificador))")
         .eq("empresa_id", empresaId!)
         .eq("status", "finalizado");
       if (!isAdmin) query = query.eq("atendente_id", userId!);
@@ -362,8 +363,13 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const buscaTrimmed = busca.toLowerCase().trim();
   const finalizedContacts = groupClosedProtocols(protocolos);
-  const selectedHistory = finalizedContacts.find(group => group.latest.lead_id === selectedProtocolo?.lead_id)?.history ?? [];
-  const finalizedFiltered = finalizedContacts.filter(({ latest }) => !buscaTrimmed || latest.leads?.nome?.toLowerCase().includes(buscaTrimmed) || latest.leads?.contato_id?.includes(buscaTrimmed));
+  const selectedHistory = finalizedContacts.find(group => group.history.some(p => p.id === selectedProtocolo?.id))?.history ?? [];
+  const commercialHistories = [...new Set(selectedHistory.map(p => p.leads?.canal_id || "unknown"))].map(id => ({ id, protocols: selectedHistory.filter(p => (p.leads?.canal_id || "unknown") === id) }));
+  const commercialLabel = (p: Protocolo) => {
+    const commercial = p.leads?.comercial;
+    return commercial ? `${commercial.nome}${commercial.identificador ? ` · ${formatPhone(commercial.identificador)}` : ""}` : "Comercial não identificado";
+  };
+  const finalizedFiltered = finalizedContacts.filter(({ history }) => !buscaTrimmed || history.some(p => p.leads?.nome?.toLowerCase().includes(buscaTrimmed) || p.leads?.contato_id?.includes(buscaTrimmed) || p.leads?.telefone?.includes(buscaTrimmed)));
   const leadsFiltered = (filtroCanal === "todos" ? leads : leads.filter((l) => (l as any).canal_id === filtroCanal))
     .filter(l => matchesCrmQueue(l as any, aba, userId))
     .filter((l) => !buscaTrimmed || l.nome?.toLowerCase().includes(buscaTrimmed) || ((l as any).contato_id ?? "").includes(buscaTrimmed));
@@ -1110,7 +1116,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     onClick={() => setSelectedProtocolo(proto)}
                     className={cn(
                       "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center gap-3",
-                      selectedProtocolo?.lead_id === proto.lead_id && "bg-primary/10"
+                      history.some(p => p.id === selectedProtocolo?.id) && "bg-primary/10"
                     )}
                   >
                     <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
@@ -1192,14 +1198,21 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
             {aba === "finalizadas" && selectedProtocolo && (
               <div className="w-full border-t pt-3 space-y-1.5">
-                <label className="text-xs font-medium" htmlFor="closed-protocol-history">Protocolos finalizados desta pessoa</label>
+                <label className="text-xs font-medium" htmlFor="closed-protocol-history">Protocolos por telefone comercial</label>
+                <div className="flex flex-wrap gap-2">
+                  {commercialHistories.map(group => <Badge key={group.id} variant="outline">{commercialLabel(group.protocols[0])} · {group.protocols.length} protocolos</Badge>)}
+                </div>
                 <Select value={selectedProtocolo.id} onValueChange={id => { const protocol = selectedHistory.find(p => p.id === id); if (protocol) setSelectedProtocolo(protocol); }}>
                   <SelectTrigger id="closed-protocol-history" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {selectedHistory.map((protocol, index) => <SelectItem key={protocol.id} value={protocol.id}>{protocol.numero_protocolo} · {formatDate(protocol.finalizado_em || protocol.iniciado_em)}{index === 0 ? " · Mais recente" : ""}</SelectItem>)}
+                    {commercialHistories.map(group => <SelectGroup key={group.id}>
+                      <SelectLabel>{commercialLabel(group.protocols[0])}</SelectLabel>
+                      {group.protocols.map(protocol => <SelectItem key={protocol.id} value={protocol.id}>{protocol.numero_protocolo} · {formatDate(protocol.finalizado_em || protocol.iniciado_em)}{protocol.id === selectedHistory[0]?.id ? " · Mais recente" : ""}</SelectItem>)}
+                    </SelectGroup>)}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">O último encerrado abre primeiro. Selecione um protocolo anterior para consultar a conversa.</p>
+                <p className="text-xs font-medium">Este atendimento: {commercialLabel(selectedProtocolo)}</p>
               </div>
             )}
 
