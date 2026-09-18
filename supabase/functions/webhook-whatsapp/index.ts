@@ -15,10 +15,22 @@ const corsHeaders = {
 
 type TipoMensagem = "texto" | "imagem" | "audio" | "video" | "documento" | "sticker";
 
+// Mensagens como view-once e ephemeral encapsulam o conteúdo real num nível a mais.
+// Desaninha antes de inspecionar o tipo.
+function desaninharMsg(msg: Record<string, unknown>): Record<string, unknown> {
+  const inner =
+    (msg.viewOnceMessage as any)?.message ??
+    (msg.viewOnceMessageV2 as any)?.message?.message ??
+    (msg.ephemeralMessage as any)?.message ??
+    (msg.editedMessage as any)?.message;
+  if (inner) return desaninharMsg(inner as Record<string, unknown>);
+  return msg;
+}
+
 function detectarTipo(message: Record<string, unknown>): TipoMensagem {
   if (message.imageMessage)    return "imagem";
   if (message.audioMessage)    return "audio";
-  if (message.videoMessage)    return "video";
+  if (message.videoMessage || message.ptvMessage) return "video";
   if (message.documentMessage || message.documentWithCaptionMessage) return "documento";
   if (message.stickerMessage)  return "sticker";
   return "texto";
@@ -142,7 +154,10 @@ Deno.serve(async (req) => {
       const telefone = remoteJid.replace("@s.whatsapp.net", "");
 
       // --- Tipo e conteúdo ---
-      const message = (msg.message ?? {}) as Record<string, unknown>;
+      const rawMessage = (msg.message ?? {}) as Record<string, unknown>;
+      // Reações emoji não têm conteúdo legível — ignorar silenciosamente
+      if (rawMessage.reactionMessage) continue;
+      const message = desaninharMsg(rawMessage);
       const tipo = detectarTipo(message);
 
       const docMsg = (message.documentMessage ?? (message.documentWithCaptionMessage as any)?.message?.documentMessage) as Record<string, unknown> | undefined;
@@ -161,6 +176,9 @@ Deno.serve(async (req) => {
         (docMsg?.caption as string) ||
         (tipo !== "texto" ? `[${tipo.charAt(0).toUpperCase() + tipo.slice(1)}]` : "[Mídia]");
 
+      if (texto === "[Mídia]") {
+        console.warn("[webhook] tipo nao detectado. Keys:", Object.keys(rawMessage).join(","));
+      }
       console.log("[webhook] msg de:", telefone, "fromMe:", fromMe, "tipo:", tipo, "texto:", texto.substring(0, 50));
 
       // Resolve nome do contato.
