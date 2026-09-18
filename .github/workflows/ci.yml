@@ -8,6 +8,13 @@ on:
 jobs:
   verificar:
     runs-on: ubuntu-latest
+    env:
+      # Chave publica (publishable/anon) do Supabase -- sem ela, qualquer teste
+      # que importe src/integrations/supabase/client.ts quebra no import, antes
+      # de rodar qualquer asserção (SupabaseClient valida a URL no construtor).
+      # Não é segredo: é a mesma chave que já vai para o bundle do navegador.
+      VITE_SUPABASE_URL: "https://nsxigkgfvbzhpxrpwvhw.supabase.co"
+      VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ZSU1OH7eNXmKqfwTG3DoSw_TUyIkzEa"
     steps:
       - uses: actions/checkout@v4
 
