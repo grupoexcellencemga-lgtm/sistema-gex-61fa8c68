@@ -179,19 +179,17 @@ async function gerarFicha(leadId: string): Promise<Resultado> {
   }
   partes.push(`<conversa>\n${transcricao}\n</conversa>`);
 
-  const response = await anthropic.beta.messages.create({
+  const response = await anthropic.messages.create({
     model: MODELO,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    // Se o classificador de segurança do Opus 5 recusar, o próprio servidor
-    // refaz a chamada no modelo recomendado para aquele tipo de recusa.
-    fallbacks: "default",
-    output_config: {
-      // Resumo em lote: "medium" é o degrau de economia que mantém a
-      // qualidade. Suba para "high" se as fichas saírem rasas.
-      effort: "medium",
-      format: { type: "json_schema", schema: SCHEMA_FICHA },
-    },
+    max_tokens: 4096,
+    tools: [
+      {
+        name: "salvar_ficha",
+        description: "Salva a ficha estruturada do contato.",
+        input_schema: SCHEMA_FICHA as Anthropic.Tool["input_schema"],
+      },
+    ],
+    tool_choice: { type: "tool", name: "salvar_ficha" },
     system: SYSTEM,
     messages: [
       {
@@ -201,24 +199,18 @@ async function gerarFicha(leadId: string): Promise<Resultado> {
     ],
   });
 
-  if (response.stop_reason === "refusal") {
-    return { leadId, ok: false, motivo: "recusado pelo modelo" };
-  }
   if (response.stop_reason === "max_tokens") {
     return { leadId, ok: false, motivo: "resposta cortada por max_tokens" };
   }
 
-  const texto = response.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-
-  let ficha: Ficha;
-  try {
-    ficha = JSON.parse(texto) as Ficha;
-  } catch {
-    return { leadId, ok: false, motivo: "resposta fora do formato" };
+  const toolBlock = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolBlock) {
+    return { leadId, ok: false, motivo: "resposta sem ferramenta" };
   }
+
+  const ficha = toolBlock.input as Ficha;
 
   const { error } = await supabase.from("leads_ficha_ia").upsert({
     lead_id: leadId,
@@ -276,7 +268,7 @@ Deno.serve(async (req) => {
     }
     const resultado = await gerarComSeguranca(leadId);
     if (!resultado.ok) console.error("[atualizar-ficha-lead]", resultado);
-    return json(resultado, resultado.ok ? 200 : 422);
+    return json(resultado);
   }
 
   const { data: fila, error } = await supabase.rpc("leads_para_ficha", { p_limite: LOTE });
