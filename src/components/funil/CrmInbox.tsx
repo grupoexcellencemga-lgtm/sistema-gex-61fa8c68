@@ -10,14 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuPortal } from "@/components/ui/dropdown-menu";
 import {
-  Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine, Settings2,
-  ExternalLink, ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
+  Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine,
+  ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
   FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
-  Tag, Zap, Reply, X, ArrowRightLeft, Sparkles, SlidersHorizontal,
+  Tag, Zap, Reply, X, ArrowRightLeft, SlidersHorizontal,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -1164,6 +1164,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">{canal === "whatsapp" ? "WhatsApp" : "Instagram"}</Badge>
                   {chatHeaderSub && (
                     <p className="text-xs text-muted-foreground">{chatHeaderSub}</p>
                   )}
@@ -1182,144 +1183,40 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
             </div>
 
-            {/* Ações (só em fila/minhas) */}
-            {aba !== "finalizadas" && (
-              <div className="flex gap-2 items-center flex-wrap">
-                <Button variant="outline" size="sm" className="inline-flex" onClick={() => setShowContactPanel(v => !v)}>Ficha do contato</Button>
-                {/* Toggle bot */}
-                {selectedLead && (
-                  <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
-                    <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                    <Switch
-                      checked={(selectedLead as any).bot_ativo ?? false}
-                      onCheckedChange={(v) => toggleBotAtivo(selectedLead.id, v)}
-                      disabled={togglingBot}
-                      className="scale-75"
-                    />
-                    <span className="text-xs text-muted-foreground">Autorizar IA</span>
-                  </div>
-                )}
-                {(selectedStatus === "fila" || (selectedLead as any)?.bot_ativo) && (
-                  <>
-                    <Button size="sm" variant="default" className="gap-1.5" onClick={() => assumirOuAtribuir(selectedLead!.id, userId!)} disabled={atribuindo}>
-                      {atribuindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
-                      Assumir
-                    </Button>
-                    {isAdmin && usuarios.length > 0 && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="outline" className="gap-1" disabled={atribuindo}>
-                            <Users className="h-3.5 w-3.5" />Atribuir<ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          {usuarios.map((u) => (
-                            <DropdownMenuItem key={u.user_id} onClick={() => assumirOuAtribuir(selectedLead!.id, u.user_id)}>
-                              <User className="h-4 w-4 mr-2 text-muted-foreground" />{u.nome}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </>
-                )}
-
-                {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                    onClick={() => finalizar(selectedLead!.id)}
-                    disabled={finalizando}
-                  >
-                    {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Finalizar
+            {aba !== "finalizadas" && selectedLead && (
+              <div className="flex items-center gap-2 flex-wrap" aria-label="Ações de atendimento">
+                {(selectedStatus === "fila" || (selectedLead as any).bot_ativo) && (
+                  <Button size="sm" className="gap-1.5" onClick={() => assumirOuAtribuir(selectedLead.id, userId!)} disabled={atribuindo}>
+                    {atribuindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}Assumir atendimento
                   </Button>
                 )}
-
+                {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && (
+                  <Button size="sm" variant="outline" className="gap-1.5 border-green-500 text-green-700 dark:text-green-400" onClick={() => finalizar(selectedLead.id)} disabled={finalizando}>
+                    {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}Finalizar atendimento
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="gap-1.5" aria-pressed={showContactPanel} onClick={() => setShowContactPanel(v => !v)}><User className="h-3.5 w-3.5" />Dados do contato</Button>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="gap-1.5">
-                      <Settings2 className="h-3.5 w-3.5" /><ChevronDown className="h-3 w-3 text-muted-foreground" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    {onLeadClick && selectedLead && (
-                      <>
-                        <DropdownMenuItem onClick={() => onLeadClick(selectedLead)}>
-                          <ExternalLink className="h-4 w-4 mr-2 text-muted-foreground" />Ver lead
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
+                  <DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="gap-1.5">Mais ações<ChevronDown className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onClick={() => { setShowMsgSearch(true); setMsgSearch(""); }}><Search className="h-4 w-4 mr-2" />Buscar mensagens</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTagManageLeadId(tagManageLeadId === selectedLeadId ? null : selectedLeadId)}><Tag className="h-4 w-4 mr-2" />Gerenciar etiquetas</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {isAdmin && usuarios.length > 0 && (selectedStatus === "fila" || (selectedLead as any).bot_ativo) && (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger disabled={atribuindo}><Users className="h-4 w-4 mr-2" />Atribuir responsável</DropdownMenuSubTrigger>
+                        <DropdownMenuPortal><DropdownMenuSubContent className="w-52">{usuarios.map(u => <DropdownMenuItem key={u.user_id} onClick={() => assumirOuAtribuir(selectedLead.id, u.user_id)}><User className="h-4 w-4 mr-2" />{u.nome}</DropdownMenuItem>)}</DropdownMenuSubContent></DropdownMenuPortal>
+                      </DropdownMenuSub>
                     )}
-                    <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}>
-                      <ArrowRightFromLine className="h-4 w-4 mr-2 text-muted-foreground" />Mover para quadro
-                    </DropdownMenuItem>
-                    {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setTransferOpen(true)}>
-                          <ArrowRightLeft className="h-4 w-4 mr-2 text-muted-foreground" />Transferir atendimento
-                        </DropdownMenuItem>
-                      </>
-                    )}
+                    {["ativo", "em_atendimento"].includes(selectedStatus) && (isMyLead || isAdmin) && <DropdownMenuItem onClick={() => setTransferOpen(true)}><ArrowRightLeft className="h-4 w-4 mr-2" />Transferir atendimento</DropdownMenuItem>}
+                    <DropdownMenuItem onClick={() => { setMoveQuadroId(""); setMoveEtapaId(""); setMoveOpen(true); }}><ArrowRightFromLine className="h-4 w-4 mr-2" />Mover para outro funil</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem checked={(selectedLead as any).bot_ativo ?? false} disabled={togglingBot} onCheckedChange={value => toggleBotAtivo(selectedLead.id, value)}><Bot className="h-4 w-4 mr-2" />Autorizar IA nesta conversa</DropdownMenuCheckboxItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                {/* A ficha da IA mora no detalhe do lead; sem este atalho ela só era
-                    alcançável pelo menu de engrenagem. */}
-                {onLeadClick && selectedLead && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 gap-1 px-2 text-xs"
-                        onClick={() => onLeadClick(selectedLead)}
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ficha
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">Ficha do lead feita pela IA</TooltipContent>
-                  </Tooltip>
-                )}
-                {/* Busca na conversa */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={showMsgSearch ? "default" : "ghost"}
-                      className="h-7 w-7 p-0"
-                      onClick={() => { setShowMsgSearch(!showMsgSearch); if (showMsgSearch) setMsgSearch(""); }}
-                    >
-                      <Search className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">Buscar na conversa</TooltipContent>
-                </Tooltip>
-                {/* Tags */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={tagManageLeadId === selectedLeadId ? "default" : "ghost"}
-                      className="h-7 w-7 p-0"
-                      onClick={() => setTagManageLeadId(tagManageLeadId === selectedLeadId ? null : (selectedLeadId ?? null))}
-                    >
-                      <Tag className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">Tags do contato</TooltipContent>
-                </Tooltip>
-                <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
               </div>
             )}
-
-            {aba === "finalizadas" && (
-              <Badge variant="outline" className="text-xs capitalize">{canal}</Badge>
-            )}
           </div>
-
           {/* Barra de busca na conversa */}
           {aba !== "finalizadas" && showMsgSearch && (
             <div className="px-3 py-2 border-b flex items-center gap-2 bg-card">
@@ -1736,7 +1633,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         </div>
       {showChatPanel && selectedLead && aba !== "finalizadas" && (
         <aside className={cn("shrink-0 border-l bg-card overflow-y-auto", showContactPanel ? "block w-full sm:w-[280px]" : "hidden")}>
-          <div className="p-4 border-b flex justify-between items-center"><h2 className="text-sm font-semibold">Ficha do contato</h2><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowContactPanel(false)} aria-label="Recolher ficha"><X className="h-3.5 w-3.5" /></Button></div>
+          <div className="p-4 border-b flex justify-between items-center"><h2 className="text-sm font-semibold">Dados do contato</h2><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowContactPanel(false)} aria-label="Voltar à conversa"><X className="h-3.5 w-3.5" /></Button></div>
           <div className="p-4 space-y-5">
             <div><p className="text-xs text-muted-foreground">Responsável pelo atendimento</p><p className="text-sm font-medium mt-1">{crmResponsibility(selectedLead as any, usuariosMap)}</p></div>
             <Button variant="outline" className="w-full" onClick={() => onLeadClick(selectedLead)}>Abrir cadastro e oportunidade</Button>
