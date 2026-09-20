@@ -933,8 +933,12 @@ Deno.serve(async (req) => {
         // Marca a última mensagem de entrada como respondida pelo bot
         await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
 
-        // Reset do contador de follow-up (lead respondeu e bot respondeu de volta)
-        await supabase.from("leads").update({ followup_count: 0 }).eq("id", lead.id);
+        // Reset do contador de follow-up + atualiza última mensagem no lead
+        await supabase.from("leads").update({
+          followup_count: 0,
+          ultima_mensagem_em: new Date().toISOString(),
+          ultima_mensagem_direcao: "saida",
+        }).eq("id", lead.id);
 
         // Finaliza o registro na conversas_ia
         if (conversaId) {
