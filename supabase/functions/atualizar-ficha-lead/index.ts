@@ -14,7 +14,7 @@ const supabase = createClient(
 );
 const anthropic = new Anthropic();
 
-const MODELO = "claude-opus-5";
+const MODELO = "claude-haiku-4-5-20251001";
 const MAX_MENSAGENS = 60;
 const LOTE = 5;
 // Evita gerar duas vezes seguidas por clique duplo no botão.
@@ -181,7 +181,7 @@ async function gerarFicha(leadId: string): Promise<Resultado> {
 
   const response = await anthropic.messages.create({
     model: MODELO,
-    max_tokens: 4096,
+    max_tokens: 1024,
     tools: [
       {
         name: "salvar_ficha",
