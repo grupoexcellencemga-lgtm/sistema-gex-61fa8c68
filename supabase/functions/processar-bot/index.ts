@@ -327,9 +327,10 @@ Deno.serve(async (req) => {
 
               if (canalFora?.evolution_instancia) {
                 const apiKeyFora = canalFora.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+                const assinatura = `*${agente.nome} - Comercial GEx*`;
                 const msgFora = agente.horario_inicio && agente.horario_fim
-                  ? `Oi! Recebi sua mensagem. Nosso atendimento é das ${agente.horario_inicio.substring(0,5)} às ${agente.horario_fim.substring(0,5)}. Em breve um de nossos consultores retorna com você!`
-                  : "Oi! Recebi sua mensagem e retornaremos em breve. Nosso time está fora do horário de atendimento no momento.";
+                  ? `${assinatura}\nOi! Recebi sua mensagem. Nosso atendimento é das ${agente.horario_inicio.substring(0,5)} às ${agente.horario_fim.substring(0,5)}. Em breve um de nossos consultores retorna com você!`
+                  : `${assinatura}\nOi! Recebi sua mensagem e retornaremos em breve. Nosso time está fora do horário de atendimento no momento.`;
 
                 await fetch(
                   `${canalFora.evolution_url}/message/sendText/${canalFora.evolution_instancia}`,
