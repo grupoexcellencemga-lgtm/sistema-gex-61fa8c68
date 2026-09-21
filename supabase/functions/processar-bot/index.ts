@@ -1258,6 +1258,24 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Em modo teste salva no chat do sistema para a resposta aparecer no CRM.
+          // Em sombra não salva para não poluir a conversa real.
+          if (modoAgente === "teste" && !naoResponder) {
+            await supabase.from("mensagens_crm").insert({
+              lead_id: lead.id,
+              empresa_id: agente.empresa_id,
+              conteudo: resposta,
+              direcao: "saida",
+              canal: "whatsapp",
+              protocolo_id: protocoloAtual?.id ?? null,
+            });
+            await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
+            await supabase.from("leads").update({
+              ultima_mensagem_em: new Date().toISOString(),
+              ultima_mensagem_direcao: "saida",
+            }).eq("id", lead.id);
+          }
+
           console.log(`[processar-bot] modo ${modoAgente}: resposta registrada, nada enviado ao lead ${lead.id}`);
           processados++;
           continue;
