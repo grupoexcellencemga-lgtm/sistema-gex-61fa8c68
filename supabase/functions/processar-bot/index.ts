@@ -428,7 +428,7 @@ Deno.serve(async (req) => {
         // Modo direto: processa o lead específico sem exigir status "fila"
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .in("canal_id", agente.canais_ids)
@@ -442,7 +442,7 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .in("canal_id", agente.canais_ids)
@@ -533,7 +533,7 @@ Deno.serve(async (req) => {
         if (protocoloAtual) {
           const { data: porId } = await supabase
             .from("mensagens_crm")
-            .select("conteudo, direcao, created_at")
+            .select("conteudo, direcao, created_at, media_url, tipo")
             .eq("lead_id", lead.id)
             .eq("protocolo_id", protocoloAtual.id)
             .order("created_at", { ascending: false })
@@ -542,7 +542,7 @@ Deno.serve(async (req) => {
           if (!porId?.length) {
             const { data: porData } = await supabase
               .from("mensagens_crm")
-              .select("conteudo, direcao, created_at")
+              .select("conteudo, direcao, created_at, media_url, tipo")
               .eq("lead_id", lead.id)
               .gte("created_at", protocoloAtual.created_at)
               .order("created_at", { ascending: false })
@@ -554,7 +554,7 @@ Deno.serve(async (req) => {
         } else {
           const { data: semProtocolo } = await supabase
             .from("mensagens_crm")
-            .select("conteudo, direcao, created_at")
+            .select("conteudo, direcao, created_at, media_url, tipo")
             .eq("lead_id", lead.id)
             .order("created_at", { ascending: false })
             .limit(agente.max_mensagens_contexto);
@@ -566,14 +566,35 @@ Deno.serve(async (req) => {
 
         // Monta mensagens para Anthropic
         // [Mídia] é preservado como aviso para o bot saber que foi enviada uma mídia
-        const rawMsgs = historico
-          .filter((m: any) => m.conteudo)
-          .map((m: any) => ({
-            role: (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant",
-            content: m.conteudo === "[Mídia]"
-              ? "[A pessoa enviou uma mídia (áudio, foto ou vídeo) — você não consegue visualizá-la]"
-              : m.conteudo as string,
-          }));
+        const TIPOS_IMAGEM = new Set(["imagem", "image", "foto", "sticker"]);
+        const rawMsgs: Anthropic.MessageParam[] = historico
+          .filter((m: any) => m.conteudo || m.media_url)
+          .map((m: any) => {
+            const role = (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant";
+            // Mensagens de saída (bot) sempre texto puro
+            if (role === "assistant") {
+              return { role, content: m.conteudo ?? "" };
+            }
+            // Mensagem de entrada com imagem: bloco vision
+            const ehImagem = m.media_url && TIPOS_IMAGEM.has((m.tipo ?? "").toLowerCase());
+            if (ehImagem) {
+              const blocos: Anthropic.ContentBlockParam[] = [];
+              if (m.conteudo && m.conteudo !== "[Mídia]") {
+                blocos.push({ type: "text", text: m.conteudo });
+              }
+              blocos.push({
+                type: "image",
+                source: { type: "url", url: m.media_url } as any,
+              });
+              return { role, content: blocos };
+            }
+            return {
+              role,
+              content: m.conteudo === "[Mídia]"
+                ? "[A pessoa enviou uma mídia (áudio, foto ou vídeo) — você não consegue visualizá-la]"
+                : (m.conteudo ?? ""),
+            };
+          });
 
         // Remove mensagens consecutivas com o mesmo role,
         // mantendo a ÚLTIMA (mais recente) de cada sequência consecutiva
@@ -681,16 +702,34 @@ Deno.serve(async (req) => {
           }
         } catch (_) {}
 
-        // Contexto do contato (nome + telefone + perfil) injetado no system prompt
+        // Etapa e temperatura do lead injetadas no contexto
+        let etapaNome: string | null = null;
+        try {
+          if ((lead as any).etapa_id) {
+            const { data: etapaLead } = await supabase
+              .from("funil_etapas")
+              .select("nome")
+              .eq("id", (lead as any).etapa_id)
+              .maybeSingle();
+            etapaNome = etapaLead?.nome ?? null;
+          }
+        } catch (_) {}
+
+        const score = lead.lead_score ?? 0;
+        const temperaturaNome = score >= 61 ? "quente" : score >= 31 ? "morno" : score > 0 ? "frio" : null;
+
+        // Contexto do contato (nome + telefone + perfil + dados do funil) injetado no system prompt
         const nomeContato = lead.nome && lead.nome !== lead.contato_id ? lead.nome : null;
-        const contextoContato =
-          `\n\n---\n# CONTATO ATUAL\n` +
-          (nomeContato ? `Nome: ${nomeContato}\n` : "") +
-          `Telefone: ${lead.contato_id}\n` +
-          `Perfil: ${perfilContato}\n` +
-          (nomeContato
-            ? `Use o nome da pessoa naturalmente na conversa quando fizer sentido.`
-            : ``);
+        const linhasCtx: string[] = [`\n\n---\n# CONTATO ATUAL`];
+        if (nomeContato) linhasCtx.push(`Nome: ${nomeContato}`);
+        linhasCtx.push(`Telefone: ${lead.contato_id}`);
+        linhasCtx.push(`Perfil: ${perfilContato}`);
+        if (etapaNome) linhasCtx.push(`Etapa no funil: ${etapaNome}`);
+        if ((lead as any).produto_interesse) linhasCtx.push(`Produto de interesse: ${(lead as any).produto_interesse}`);
+        if (temperaturaNome) linhasCtx.push(`Temperatura: ${temperaturaNome} (score ${score})`);
+        if ((lead as any).origem) linhasCtx.push(`Origem: ${(lead as any).origem}`);
+        if (nomeContato) linhasCtx.push(`Use o nome da pessoa naturalmente na conversa quando fizer sentido.`);
+        const contextoContato = linhasCtx.join("\n");
 
         // Ficha que a IA mantém do contato: dores, momento, objeções e
         // compromissos de conversas anteriores, que o histórico recente sozinho
@@ -1403,7 +1442,32 @@ Deno.serve(async (req) => {
 
         const partes = splitMensagem(resposta);
         let envioOk = true;
+
+        // Calcula delay de digitação proporcional ao tamanho da mensagem
+        // (simula o tempo que uma pessoa levaria para digitar + pensar)
+        const calcTypingMs = (texto: string, minMs: number) =>
+          Math.min(40_000, Math.max(minMs, Math.floor(texto.length * 60 + Math.random() * 8_000)));
+
         for (let pi = 0; pi < partes.length; pi++) {
+          // Delay de typing: primeira parte min 12s, demais min 5s
+          const typingMs = calcTypingMs(partes[pi], pi === 0 ? 12_000 : 5_000);
+
+          // Envia indicador "digitando..." via Evolution API (fire-and-forget)
+          fetch(
+            `${canal.evolution_url}/chat/whatsApp/presence/${canal.evolution_instancia}`,
+            {
+              method: "POST",
+              headers: { apikey: apiKey, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                number: lead.contato_id,
+                options: { presence: "composing", delay: typingMs },
+              }),
+            }
+          ).catch(() => { /* indicador não-crítico */ });
+
+          // Aguarda o tempo de "digitação" antes de enviar
+          await new Promise((r) => setTimeout(r, typingMs));
+
           const evoRes = await fetch(
             `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`,
             {
@@ -1419,7 +1483,7 @@ Deno.serve(async (req) => {
             break;
           }
           if (pi < partes.length - 1) {
-            await new Promise((r) => setTimeout(r, 1500));
+            await new Promise((r) => setTimeout(r, 1200));
           }
         }
 
@@ -1444,6 +1508,21 @@ Deno.serve(async (req) => {
           ultima_mensagem_em: new Date().toISOString(),
           ultima_mensagem_direcao: "saida",
         }).eq("id", lead.id);
+
+        // Dispara atualização da ficha do lead em background (fire-and-forget)
+        // usa a função atualizar-ficha-lead que tem anti-duplicata de 2 min
+        const supabaseUrlFicha = Deno.env.get("SUPABASE_URL");
+        const serviceKeyFicha = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (supabaseUrlFicha && serviceKeyFicha) {
+          fetch(`${supabaseUrlFicha}/functions/v1/atualizar-ficha-lead`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${serviceKeyFicha}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ leadId: lead.id }),
+          }).catch((e) => console.error("[processar-bot] erro ao disparar atualizar-ficha:", e));
+        }
 
         // Finaliza o registro na conversas_ia
         if (conversaId) {
