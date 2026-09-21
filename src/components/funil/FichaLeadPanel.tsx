@@ -35,10 +35,11 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
-function Lista({ itens }: { itens: string[] }) {
+function Lista({ itens }: { itens: unknown }) {
+  const arr = Array.isArray(itens) ? itens as string[] : typeof itens === "string" && itens ? [itens] : [];
   return (
     <ul className="space-y-1">
-      {itens.map((item, i) => (
+      {arr.map((item, i) => (
         <li key={i} className="flex gap-2">
           <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" aria-hidden />
           <span>{item}</span>
@@ -211,7 +212,7 @@ export function FichaLeadPanel({ leadId, tipoContato, onTipoAlterado, temConvers
             </div>
           )}
 
-          {ficha.alertas.length > 0 && (
+          {Array.isArray(ficha.alertas) && ficha.alertas.length > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
               <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5" /> Atenção
@@ -223,19 +224,19 @@ export function FichaLeadPanel({ leadId, tipoContato, onTipoAlterado, temConvers
           )}
 
           {ficha.necessidade && <Secao titulo="O que busca">{ficha.necessidade}</Secao>}
-          {ficha.dores.length > 0 && (
+          {Array.isArray(ficha.dores) && ficha.dores.length > 0 && (
             <Secao titulo="Dores">
               <Lista itens={ficha.dores} />
             </Secao>
           )}
           {ficha.momento && <Secao titulo="Momento">{ficha.momento}</Secao>}
-          {ficha.objecoes.length > 0 && (
+          {Array.isArray(ficha.objecoes) && ficha.objecoes.length > 0 && (
             <Secao titulo="Objeções">
               <Lista itens={ficha.objecoes} />
             </Secao>
           )}
           {ficha.perfil && <Secao titulo="Como a pessoa é">{ficha.perfil}</Secao>}
-          {ficha.interesses.length > 0 && (
+          {Array.isArray(ficha.interesses) && ficha.interesses.length > 0 && (
             <Secao titulo="Interesses">
               <div className="flex flex-wrap gap-1.5">
                 {ficha.interesses.map((i) => (
