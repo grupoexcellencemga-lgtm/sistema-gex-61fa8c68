@@ -68,18 +68,141 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "mover_etapa",
-    description: "Move o lead para outra etapa do pipeline de vendas.",
+    description: "Move o lead para outra etapa do funil de vendas. Use sempre que o comportamento do contato indicar uma mudança real de estágio.",
     input_schema: {
       type: "object",
       properties: {
         etapa: {
           type: "string",
-          enum: ["lead", "contato", "negociacao", "matricula", "perdido"],
-          description: "Nova etapa do pipeline",
+          enum: [
+            "Novo lead", "Primeiro contato", "Em conversa", "Interesse identificado",
+            "Produto apresentado", "Proposta enviada", "Aguardando decisão",
+            "Dados recebidos", "Aguardando pagamento", "Pagamento em conferência",
+            "Inscrição confirmada", "Perdido ou sem interesse", "Atendimento humano",
+          ],
+          description: "Nova etapa do funil",
         },
         motivo: { type: "string", description: "Motivo da mudança de etapa" },
       },
       required: ["etapa"],
+    },
+  },
+  {
+    name: "consultar_turmas",
+    description: "Consulta as turmas abertas no sistema com datas, local, status e link de pagamento.",
+    input_schema: {
+      type: "object",
+      properties: {
+        produto: { type: "string", description: "Filtrar por nome do produto ou turma (opcional)" },
+      },
+    },
+  },
+  {
+    name: "consultar_pagamento",
+    description: "Retorna as chaves Pix oficiais e link de pagamento da turma indicada.",
+    input_schema: {
+      type: "object",
+      properties: {
+        turma_nome: { type: "string", description: "Nome da turma para buscar link e chave específicos (opcional)" },
+      },
+    },
+  },
+  {
+    name: "classificar_lead",
+    description: "Classifica o lead como frio, morno ou quente com base no interesse demonstrado.",
+    input_schema: {
+      type: "object",
+      properties: {
+        temperatura: {
+          type: "string",
+          enum: ["frio", "morno", "quente"],
+          description: "Classificação: frio = sem interesse claro, morno = interesse mas sem decisão, quente = pronto para comprar",
+        },
+        motivo: { type: "string", description: "Justificativa da classificação" },
+      },
+      required: ["temperatura"],
+    },
+  },
+  {
+    name: "reservar_vaga",
+    description: "Registra a reserva de vaga do contato em uma turma com prazo de pagamento.",
+    input_schema: {
+      type: "object",
+      properties: {
+        turma_nome: { type: "string", description: "Nome da turma ou produto" },
+        prazo_pagamento: { type: "string", description: "Data ou prazo combinado para o pagamento" },
+        observacoes: { type: "string", description: "Observações adicionais" },
+      },
+      required: ["turma_nome"],
+    },
+  },
+  {
+    name: "cadastrar_aluno",
+    description: "Cria tarefa para o time cadastrar o aluno no sistema com os dados coletados.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nome_completo: { type: "string", description: "Nome completo do aluno" },
+        telefone: { type: "string", description: "Telefone com DDD" },
+        email: { type: "string", description: "E-mail" },
+        data_nascimento: { type: "string", description: "Data de nascimento" },
+        cpf: { type: "string", description: "CPF" },
+        turma_nome: { type: "string", description: "Nome da turma ou produto" },
+      },
+      required: ["nome_completo"],
+    },
+  },
+  {
+    name: "agendar_reuniao",
+    description: "Agenda uma reunião presencial ou online e cria tarefa para notificar Laura (B2B).",
+    input_schema: {
+      type: "object",
+      properties: {
+        assunto: { type: "string", description: "Assunto ou objetivo da reunião" },
+        tipo: { type: "string", description: "Tipo da reunião (B2B, apresentação, etc.)" },
+        data_hora: { type: "string", description: "Data e hora da reunião" },
+        contato: { type: "string", description: "Nome e empresa do contato" },
+        observacoes: { type: "string", description: "Detalhes adicionais" },
+      },
+      required: ["assunto"],
+    },
+  },
+  {
+    name: "adicionar_grupo_turma",
+    description: "Cria tarefa para adicionar o aluno ao grupo da turma no WhatsApp.",
+    input_schema: {
+      type: "object",
+      properties: {
+        turma_nome: { type: "string", description: "Nome da turma" },
+        telefone: { type: "string", description: "Telefone do aluno a ser adicionado" },
+      },
+      required: ["turma_nome"],
+    },
+  },
+  {
+    name: "enviar_material",
+    description: "Cria tarefa para o time enviar um material ao contato (imagem, PDF, link, localização).",
+    input_schema: {
+      type: "object",
+      properties: {
+        tipo: {
+          type: "string",
+          enum: ["imagem", "pdf", "link", "localizacao", "apresentacao"],
+          description: "Tipo de material a enviar",
+        },
+        descricao: { type: "string", description: "Descrição do material (nome do arquivo, URL ou endereço)" },
+      },
+      required: ["tipo", "descricao"],
+    },
+  },
+  {
+    name: "marcar_nao_contatar",
+    description: "Marca o contato para não receber mensagens ativas e desativa o bot.",
+    input_schema: {
+      type: "object",
+      properties: {
+        motivo: { type: "string", description: "Motivo para não contatar (pediu stop, irritação, etc.)" },
+      },
     },
   },
   {
@@ -701,7 +824,28 @@ Deno.serve(async (req) => {
                   console.log(`[processar-bot] registrar_nota lead=${lead.id}`);
 
                 } else if (block.name === "mover_etapa") {
-                  await supabase.from("leads").update({ etapa: input.etapa }).eq("id", lead.id);
+                  // Busca o funil_card do lead para pegar o quadro_id
+                  const { data: card } = await supabase
+                    .from("funil_cards")
+                    .select("id, quadro_id")
+                    .eq("lead_id", lead.id)
+                    .limit(1)
+                    .maybeSingle();
+
+                  const etapaQuery = card?.quadro_id
+                    ? supabase.from("funil_etapas").select("id").eq("quadro_id", card.quadro_id).ilike("nome", input.etapa).limit(1)
+                    : supabase.from("funil_etapas").select("id").eq("empresa_id", agente.empresa_id).ilike("nome", input.etapa).limit(1);
+                  const { data: etapaEncontrada } = await etapaQuery.maybeSingle();
+
+                  if (etapaEncontrada?.id) {
+                    await supabase.from("leads").update({ etapa_id: etapaEncontrada.id }).eq("id", lead.id);
+                    if (card?.id) {
+                      await supabase.from("funil_cards").update({ etapa_id: etapaEncontrada.id }).eq("id", card.id);
+                    }
+                    resultado = `Etapa movida para "${input.etapa}"`;
+                  } else {
+                    resultado = `Etapa "${input.etapa}" não encontrada no funil — registre via nota`;
+                  }
                   if (input.motivo) {
                     await supabase.from("atividades").insert({
                       lead_id: lead.id,
@@ -710,8 +854,7 @@ Deno.serve(async (req) => {
                       descricao: `[IA] Etapa movida para "${input.etapa}": ${input.motivo}`,
                     });
                   }
-                  resultado = `Etapa movida para ${input.etapa}`;
-                  console.log(`[processar-bot] mover_etapa lead=${lead.id} etapa=${input.etapa}`);
+                  console.log(`[processar-bot] mover_etapa lead=${lead.id} etapa=${input.etapa} etapa_id=${etapaEncontrada?.id ?? "não encontrada"}`);
 
                 } else if (block.name === "criar_tarefa") {
                   await supabase.from("tarefas").insert({
@@ -789,6 +932,190 @@ Deno.serve(async (req) => {
 
                   resultado = "Handoff registrado — bot desativado";
                   console.log(`[processar-bot] handoff (tool) para lead ${lead.id}`);
+
+                } else if (block.name === "consultar_turmas") {
+                  const hoje = new Date().toISOString().split("T")[0];
+                  const { data: turmasList } = await supabase
+                    .from("turmas")
+                    .select("nome, cidade, modalidade, data_inicio, data_fim, status, pix_chave, asaas_link_pagamento, produtos(nome)")
+                    .eq("empresa_id", agente.empresa_id)
+                    .is("deleted_at", null)
+                    .gte("data_fim", hoje)
+                    .order("data_inicio");
+                  if (!turmasList?.length) {
+                    resultado = "Nenhuma turma aberta encontrada.";
+                  } else {
+                    let filtradas = turmasList as any[];
+                    if (input.produto) {
+                      const needle = String(input.produto).toLowerCase();
+                      filtradas = filtradas.filter((t) =>
+                        ((t.produtos as any)?.nome ?? t.nome)?.toLowerCase().includes(needle)
+                      );
+                    }
+                    resultado = filtradas.map((t: any) => {
+                      const prod = (t.produtos as any)?.nome ?? t.nome;
+                      let linha = `${prod}`;
+                      if (t.cidade) linha += ` — ${t.cidade}`;
+                      if (t.modalidade) linha += ` (${t.modalidade})`;
+                      if (t.data_inicio) linha += ` | Início: ${t.data_inicio}`;
+                      if (t.data_fim) linha += ` | Fim: ${t.data_fim}`;
+                      if (t.status) linha += ` | Status: ${t.status}`;
+                      if (t.asaas_link_pagamento) linha += ` | Link pagamento: ${t.asaas_link_pagamento}`;
+                      if (t.pix_chave) linha += ` | Pix específico: ${t.pix_chave}`;
+                      return linha;
+                    }).join("\n") || "Nenhuma turma corresponde ao filtro.";
+                  }
+                  console.log(`[processar-bot] consultar_turmas lead=${lead.id}`);
+
+                } else if (block.name === "consultar_pagamento") {
+                  const pixSicredi = "8fd6bbb9-89a2-4498-9c2d-01b3a3c3cb23";
+                  const pixSicoob = "31.674.942/0001-89";
+                  let linhasTurma = "";
+                  if (input.turma_nome) {
+                    const { data: tPag } = await supabase
+                      .from("turmas")
+                      .select("nome, pix_chave, asaas_link_pagamento")
+                      .eq("empresa_id", agente.empresa_id)
+                      .ilike("nome", `%${input.turma_nome}%`)
+                      .limit(1)
+                      .maybeSingle();
+                    if (tPag) {
+                      linhasTurma = `\nTurma: ${tPag.nome}`;
+                      if (tPag.pix_chave) linhasTurma += ` | Pix específico: ${tPag.pix_chave}`;
+                      if (tPag.asaas_link_pagamento) linhasTurma += ` | Link pagamento: ${tPag.asaas_link_pagamento}`;
+                    }
+                  }
+                  resultado = `Pix Sicredi (preferencial): ${pixSicredi}\nPix Sicoob CNPJ: ${pixSicoob}${linhasTurma}`;
+                  console.log(`[processar-bot] consultar_pagamento lead=${lead.id}`);
+
+                } else if (block.name === "classificar_lead") {
+                  const tempMap: Record<string, number> = { frio: 20, morno: 50, quente: 80 };
+                  const score = tempMap[input.temperatura] ?? 50;
+                  await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Temperatura: ${input.temperatura}${input.motivo ? ` — ${input.motivo}` : ""}`,
+                  });
+                  resultado = `Lead classificado como ${input.temperatura} (score ${score})`;
+                  console.log(`[processar-bot] classificar_lead lead=${lead.id} temperatura=${input.temperatura}`);
+
+                } else if (block.name === "reservar_vaga") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: `Reserva de vaga — ${input.turma_nome}`,
+                    descricao: `Prazo de pagamento: ${input.prazo_pagamento ?? "a combinar"}${input.observacoes ? ` | ${input.observacoes}` : ""}`,
+                    prioridade: "alta",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Vaga reservada em ${input.turma_nome}. Pagamento previsto: ${input.prazo_pagamento ?? "a combinar"}.`,
+                  });
+                  resultado = `Reserva de vaga registrada para ${input.turma_nome}`;
+                  console.log(`[processar-bot] reservar_vaga lead=${lead.id}`);
+
+                } else if (block.name === "cadastrar_aluno") {
+                  const dadosAluno = [
+                    input.nome_completo && `Nome: ${input.nome_completo}`,
+                    input.telefone && `Telefone: ${input.telefone}`,
+                    input.email && `E-mail: ${input.email}`,
+                    input.data_nascimento && `Nascimento: ${input.data_nascimento}`,
+                    input.cpf && `CPF: (recebido)`,
+                    input.turma_nome && `Turma: ${input.turma_nome}`,
+                  ].filter(Boolean).join(" | ");
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: `Cadastrar aluno — ${input.nome_completo ?? lead.nome ?? lead.id}`,
+                    descricao: dadosAluno,
+                    prioridade: "alta",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Dados coletados para cadastro: ${dadosAluno}`,
+                  });
+                  resultado = `Tarefa de cadastro criada — use solicitar_handoff para acionar o time`;
+                  console.log(`[processar-bot] cadastrar_aluno lead=${lead.id}`);
+
+                } else if (block.name === "agendar_reuniao") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: `Reunião: ${input.assunto}`,
+                    descricao: [
+                      input.tipo && `Tipo: ${input.tipo}`,
+                      input.data_hora && `Data/hora: ${input.data_hora}`,
+                      input.contato && `Contato: ${input.contato}`,
+                      input.observacoes && input.observacoes,
+                    ].filter(Boolean).join(" | "),
+                    prioridade: "alta",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Reunião agendada: ${input.assunto}${input.data_hora ? ` em ${input.data_hora}` : ""}. Tarefa criada para Laura.`,
+                  });
+                  resultado = `Reunião agendada e tarefa criada para Laura`;
+                  console.log(`[processar-bot] agendar_reuniao lead=${lead.id}`);
+
+                } else if (block.name === "adicionar_grupo_turma") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: `Adicionar ao grupo — ${input.turma_nome}`,
+                    descricao: input.telefone ? `Telefone: ${input.telefone}` : "Adicionar ao grupo da turma após confirmação do pagamento.",
+                    prioridade: "media",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  resultado = `Tarefa criada para adicionar ao grupo de ${input.turma_nome}`;
+                  console.log(`[processar-bot] adicionar_grupo_turma lead=${lead.id}`);
+
+                } else if (block.name === "enviar_material") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: `Enviar ${input.tipo} — ${String(input.descricao ?? "").slice(0, 60)}`,
+                    descricao: `Material: ${input.tipo} | ${input.descricao}`,
+                    prioridade: "media",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  resultado = `Tarefa criada para envio de ${input.tipo}`;
+                  console.log(`[processar-bot] enviar_material lead=${lead.id}`);
+
+                } else if (block.name === "marcar_nao_contatar") {
+                  await supabase.from("tarefas").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    titulo: "Marcar como não contatar",
+                    descricao: input.motivo ? `Motivo: ${input.motivo}` : "Contato solicitou para não ser contactado.",
+                    prioridade: "alta",
+                    status: "pendente",
+                    tipo: "contato",
+                  });
+                  await supabase.from("atividades").insert({
+                    lead_id: lead.id,
+                    empresa_id: agente.empresa_id,
+                    tipo: "nota",
+                    descricao: `[IA] Não contatar — ${input.motivo ?? "solicitado pelo contato"}`,
+                  });
+                  await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                  resultado = "Lead marcado como não contatar — bot desativado";
+                  console.log(`[processar-bot] marcar_nao_contatar lead=${lead.id}`);
                 }
               } catch (toolErr) {
                 resultado = `Erro ao executar ferramenta: ${String(toolErr)}`;
