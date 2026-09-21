@@ -247,6 +247,31 @@ function dentroDoHorario(agente: any): boolean {
   return agoraMin >= hIni * 60 + mIni && agoraMin < hFim * 60 + mFim;
 }
 
+// Quebra respostas longas em partes para envio sequencial.
+// Regras: separa por parágrafo duplo; assinatura fica com o 1º parágrafo;
+// se algum parágrafo intermediário terminar com "?", ele vai para o final.
+function splitMensagem(resposta: string): string[] {
+  const matchAss = resposta.match(/^(\*[^\n*]+\*)\n\n/);
+  const assinatura = matchAss ? matchAss[1] : null;
+  const corpo = assinatura ? resposta.slice(matchAss[0].length) : resposta;
+
+  const paragrafos = corpo.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+
+  if (paragrafos.length <= 1 || resposta.length < 300) return [resposta];
+
+  // Move a primeira pergunta intermediária para o final
+  for (let i = 0; i < paragrafos.length - 1; i++) {
+    if (paragrafos[i].trimEnd().endsWith("?")) {
+      paragrafos.push(paragrafos.splice(i, 1)[0]);
+      break;
+    }
+  }
+
+  return paragrafos.map((p, i) =>
+    i === 0 && assinatura ? `${assinatura}\n\n${p}` : p
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -1194,17 +1219,42 @@ Deno.serve(async (req) => {
             if (destinoTeste && canalTeste?.evolution_instancia) {
               const apiKeyTeste =
                 canalTeste.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
-              await fetch(
-                `${canalTeste.evolution_url}/message/sendText/${canalTeste.evolution_instancia}`,
-                {
-                  method: "POST",
-                  headers: { apikey: apiKeyTeste ?? "", "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    number: destinoTeste,
-                    text: `[TESTE — lead ${lead.nome ?? lead.id}]\n\nCliente: ${ultimaMensagem.conteudo}\n\nIA responderia: ${naoResponder ? "(nada — consideraria a conversa encerrada)" : resposta}`,
-                  }),
+
+              if (naoResponder) {
+                await fetch(
+                  `${canalTeste.evolution_url}/message/sendText/${canalTeste.evolution_instancia}`,
+                  {
+                    method: "POST",
+                    headers: { apikey: apiKeyTeste ?? "", "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      number: destinoTeste,
+                      text: `[TESTE — lead ${lead.nome ?? lead.id}]\nCliente: "${ultimaMensagem.conteudo}"\nJulia ficaria em silêncio (conversa encerrada).`,
+                    }),
+                  }
+                ).catch((e) => console.error("[processar-bot] falha no envio de teste:", e));
+              } else {
+                const partesTeste = splitMensagem(resposta);
+                const header = `[TESTE — lead ${lead.nome ?? lead.id}] Cliente: "${ultimaMensagem.conteudo}"`;
+                for (let pi = 0; pi < partesTeste.length; pi++) {
+                  const prefixo = partesTeste.length > 1
+                    ? `[TESTE ${pi + 1}/${partesTeste.length}]\n`
+                    : `[TESTE]\n`;
+                  const texto = pi === 0
+                    ? `${header}\n\n${prefixo}${partesTeste[pi]}`
+                    : `${prefixo}${partesTeste[pi]}`;
+                  await fetch(
+                    `${canalTeste.evolution_url}/message/sendText/${canalTeste.evolution_instancia}`,
+                    {
+                      method: "POST",
+                      headers: { apikey: apiKeyTeste ?? "", "Content-Type": "application/json" },
+                      body: JSON.stringify({ number: destinoTeste, text: texto }),
+                    }
+                  ).catch((e) => console.error("[processar-bot] falha no envio de teste:", e));
+                  if (pi < partesTeste.length - 1) {
+                    await new Promise((r) => setTimeout(r, 1200));
+                  }
                 }
-              ).catch((e) => console.error("[processar-bot] falha no envio de teste:", e));
+              }
             }
           }
 
@@ -1233,20 +1283,29 @@ Deno.serve(async (req) => {
         const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
         if (!apiKey) continue;
 
-        const evoRes = await fetch(
-          `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`,
-          {
-            method: "POST",
-            headers: { apikey: apiKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ number: lead.contato_id, text: resposta }),
+        const partes = splitMensagem(resposta);
+        let envioOk = true;
+        for (let pi = 0; pi < partes.length; pi++) {
+          const evoRes = await fetch(
+            `${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`,
+            {
+              method: "POST",
+              headers: { apikey: apiKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ number: lead.contato_id, text: partes[pi] }),
+            }
+          );
+          if (!evoRes.ok) {
+            const err = await evoRes.text();
+            console.error(`[processar-bot] erro Evolution parte ${pi + 1}: ${err}`);
+            envioOk = false;
+            break;
           }
-        );
-
-        if (!evoRes.ok) {
-          const err = await evoRes.text();
-          console.error(`[processar-bot] erro Evolution: ${err}`);
-          continue;
+          if (pi < partes.length - 1) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
         }
+
+        if (!envioOk) continue;
 
         // Salva mensagem de saída do bot (usa o mesmo protocolo já buscado acima)
         await supabase.from("mensagens_crm").insert({
