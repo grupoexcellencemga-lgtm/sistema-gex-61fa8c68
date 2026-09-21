@@ -56,6 +56,24 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "consultar_contexto_lead",
+    description: "Retorna o contexto atual do lead: etapa do funil, produto de interesse, origem, temperatura, tags e observações registradas.",
+    input_schema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "consultar_produtos",
+    description: "Retorna a lista de produtos ativos da empresa com nome, descrição, valor e condições de pagamento.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nome: { type: "string", description: "Filtrar por nome do produto (opcional)" },
+      },
+    },
+  },
+  {
     name: "registrar_nota",
     description: "Registra uma nota ou observação relevante sobre o lead no histórico de atividades.",
     input_schema: {
@@ -247,10 +265,19 @@ function dentroDoHorario(agente: any): boolean {
   return agoraMin >= hIni * 60 + mIni && agoraMin < hFim * 60 + mFim;
 }
 
-// Quebra respostas longas em partes para envio sequencial.
-// Regras: separa por parágrafo duplo; assinatura fica com o 1º parágrafo;
-// se algum parágrafo intermediário terminar com "?", ele vai para o final.
+// Quebra respostas em bolhas para envio sequencial.
+// [[NOVA_MENSAGEM]] é o separador explícito do prompt (prioridade máxima).
+// Fallback: separa por parágrafo duplo quando a resposta é longa.
 function splitMensagem(resposta: string): string[] {
+  const MARCADOR = "[[NOVA_MENSAGEM]]";
+
+  if (resposta.includes(MARCADOR)) {
+    return resposta
+      .split(MARCADOR)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }
+
   const matchAss = resposta.match(/^(\*[^\n*]+\*)\n\n/);
   const assinatura = matchAss ? matchAss[1] : null;
   const corpo = assinatura ? resposta.slice(matchAss[0].length) : resposta;
@@ -838,6 +865,79 @@ Deno.serve(async (req) => {
                   });
                   resultado = `Score ${score} registrado`;
                   console.log(`[processar-bot] pontuar_lead lead=${lead.id} score=${score}`);
+
+                } else if (block.name === "consultar_contexto_lead") {
+                  try {
+                    const { data: leadCtx } = await supabase
+                      .from("leads")
+                      .select("nome, email, telefone, cidade, produto_interesse, origem, observacoes, lead_score, empresa_nome, cargo, perfil_lead, etapa_id")
+                      .eq("id", lead.id)
+                      .maybeSingle();
+                    let linhas: string[] = [];
+                    if (leadCtx) {
+                      if (leadCtx.nome) linhas.push(`Nome: ${leadCtx.nome}`);
+                      if (leadCtx.email) linhas.push(`E-mail: ${leadCtx.email}`);
+                      if (leadCtx.telefone) linhas.push(`Telefone: ${leadCtx.telefone}`);
+                      if (leadCtx.cidade) linhas.push(`Cidade: ${leadCtx.cidade}`);
+                      if (leadCtx.produto_interesse) linhas.push(`Produto de interesse: ${leadCtx.produto_interesse}`);
+                      if (leadCtx.origem) linhas.push(`Origem: ${leadCtx.origem}`);
+                      if (leadCtx.empresa_nome) linhas.push(`Empresa: ${leadCtx.empresa_nome}`);
+                      if (leadCtx.cargo) linhas.push(`Cargo: ${leadCtx.cargo}`);
+                      if (leadCtx.perfil_lead) linhas.push(`Perfil: ${leadCtx.perfil_lead}`);
+                      if (leadCtx.lead_score) linhas.push(`Score: ${leadCtx.lead_score}`);
+                      if (leadCtx.observacoes) linhas.push(`Observações: ${leadCtx.observacoes}`);
+                      if (leadCtx.etapa_id) {
+                        const { data: etapaCtx } = await supabase
+                          .from("funil_etapas")
+                          .select("nome")
+                          .eq("id", leadCtx.etapa_id)
+                          .maybeSingle();
+                        if (etapaCtx?.nome) linhas.push(`Etapa: ${etapaCtx.nome}`);
+                      }
+                    }
+                    const { data: tagsLead } = await supabase
+                      .from("lead_tags")
+                      .select("tags_crm(nome)")
+                      .eq("lead_id", lead.id);
+                    if (tagsLead?.length) {
+                      const nomesTags = tagsLead.map((t: any) => t.tags_crm?.nome).filter(Boolean);
+                      if (nomesTags.length) linhas.push(`Tags: ${nomesTags.join(", ")}`);
+                    }
+                    resultado = linhas.length ? linhas.join("\n") : "Sem dados adicionais registrados.";
+                  } catch (e) {
+                    resultado = "Erro ao consultar contexto do lead.";
+                  }
+                  console.log(`[processar-bot] consultar_contexto_lead lead=${lead.id}`);
+
+                } else if (block.name === "consultar_produtos") {
+                  try {
+                    let q = supabase
+                      .from("produtos")
+                      .select("nome, descricao, valor, parcelas_cartao, valor_parcela, tipo, duracao")
+                      .eq("empresa_id", agente.empresa_id)
+                      .is("deleted_at", null)
+                      .order("nome");
+                    if (input.nome) {
+                      q = q.ilike("nome", `%${input.nome}%`);
+                    }
+                    const { data: prodList } = await q;
+                    if (!prodList?.length) {
+                      resultado = "Nenhum produto encontrado.";
+                    } else {
+                      resultado = prodList.map((p: any) => {
+                        let linha = `**${p.nome}**`;
+                        if (p.tipo) linha += ` (${p.tipo})`;
+                        if (p.duracao) linha += ` | Duração: ${p.duracao}`;
+                        if (p.valor) linha += ` | Valor: R$ ${Number(p.valor).toFixed(2)}`;
+                        if (p.parcelas_cartao && p.valor_parcela) linha += ` | ${p.parcelas_cartao}x R$ ${Number(p.valor_parcela).toFixed(2)}`;
+                        if (p.descricao) linha += `\n  ${p.descricao}`;
+                        return linha;
+                      }).join("\n");
+                    }
+                  } catch (e) {
+                    resultado = "Erro ao consultar produtos.";
+                  }
+                  console.log(`[processar-bot] consultar_produtos lead=${lead.id}`);
 
                 } else if (block.name === "registrar_nota") {
                   await supabase.from("atividades").insert({
