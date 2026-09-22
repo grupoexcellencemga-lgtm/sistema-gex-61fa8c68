@@ -565,32 +565,26 @@ Deno.serve(async (req) => {
         const historico = (historicoDesc ?? []).reverse();
 
         // Monta mensagens para Anthropic
-        // [Mídia] é preservado como aviso para o bot saber que foi enviada uma mídia
+        // [Mídia] e [Imagem] são preservados como avisos; não fazemos fetch de URLs
+        // de imagem pois a API pode travar aguardando o download.
         const TIPOS_IMAGEM = new Set(["imagem", "image", "foto", "sticker"]);
         const rawMsgs: Anthropic.MessageParam[] = historico
           .filter((m: any) => m.conteudo || m.media_url)
           .map((m: any) => {
             const role = (m.direcao === "saida" ? "assistant" : "user") as "user" | "assistant";
-            // Mensagens de saída (bot) sempre texto puro
             if (role === "assistant") {
               return { role, content: m.conteudo ?? "" };
             }
-            // Mensagem de entrada com imagem: bloco vision
             const ehImagem = m.media_url && TIPOS_IMAGEM.has((m.tipo ?? "").toLowerCase());
             if (ehImagem) {
-              const blocos: Anthropic.ContentBlockParam[] = [];
-              if (m.conteudo && m.conteudo !== "[Mídia]") {
-                blocos.push({ type: "text", text: m.conteudo });
-              }
-              blocos.push({
-                type: "image",
-                source: { type: "url", url: m.media_url } as any,
-              });
-              return { role, content: blocos };
+              return {
+                role,
+                content: "[A pessoa enviou uma imagem — você não consegue visualizá-la]",
+              };
             }
             return {
               role,
-              content: m.conteudo === "[Mídia]"
+              content: (m.conteudo === "[Mídia]" || m.conteudo === "[Imagem]")
                 ? "[A pessoa enviou uma mídia (áudio, foto ou vídeo) — você não consegue visualizá-la]"
                 : (m.conteudo ?? ""),
             };
