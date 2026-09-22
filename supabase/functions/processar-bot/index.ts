@@ -419,10 +419,11 @@ Deno.serve(async (req) => {
 
       let leads: any[] | null = null;
 
-      // bot_ativo é a autorização para FALAR com o lead. Nos modos de
-      // avaliação nada é enviado, então exigir essa flag faria o agente nunca
-      // observar nada — hoje nenhum lead a tem ligada.
-      const exigeBotAtivo = modoAgente === "ativo";
+      // bot_ativo = true significa que o lead ainda não foi atendido por humano.
+      // O trigger trg_humano_desativa_bot seta false automaticamente quando
+      // qualquer humano responde. Julia só processa leads com bot_ativo = true
+      // em todos os modos, inclusive sombra/teste.
+      const exigeBotAtivo = true;
 
       if (forceLeadId) {
         // Modo direto: processa o lead específico sem exigir status "fila"
@@ -451,9 +452,8 @@ Deno.serve(async (req) => {
           .is("deleted_at", null)
           .not("ultima_mensagem_em", "is", null);
         if (exigeBotAtivo) q = q.eq("bot_ativo", true);
-        // Em avaliação, limita o volume: 279 leads gerariam uma conta alta de
-        // API sem necessidade — algumas dezenas por rodada já dão amostra.
-        if (!exigeBotAtivo) q = q.limit(15);
+        // Em modos de avaliação limita o volume por rodada.
+        if (modoAgente !== "ativo") q = q.limit(15);
         const { data } = await q;
         leads = data;
       }
@@ -1401,6 +1401,7 @@ Deno.serve(async (req) => {
               direcao: "saida",
               canal: "whatsapp",
               protocolo_id: protocoloAtual?.id ?? null,
+              agente_bot_id: agente.id,
             });
             await supabase.rpc("marcar_bot_respondido", { p_lead_id: lead.id });
             await supabase.from("leads").update({
@@ -1491,6 +1492,7 @@ Deno.serve(async (req) => {
           direcao: "saida",
           canal: "whatsapp",
           protocolo_id: protocoloAtual?.id ?? null,
+          agente_bot_id: agente.id,
         });
 
         // Marca a última mensagem de entrada como respondida pelo bot

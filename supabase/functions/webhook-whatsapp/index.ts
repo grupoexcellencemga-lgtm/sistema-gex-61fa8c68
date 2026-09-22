@@ -240,6 +240,7 @@ Deno.serve(async (req) => {
             contato_id: telefone,
             etapa_id: ETAPA_WHATSAPP_ID,
             status_atendimento: "fila",
+            bot_ativo: true,
           })
           .select("id, status_atendimento")
           .maybeSingle();
