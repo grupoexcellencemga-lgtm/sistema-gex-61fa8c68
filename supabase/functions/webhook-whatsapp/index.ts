@@ -16,6 +16,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function runInBackground(task: Promise<unknown>): void {
+  const edgeRuntime = (globalThis as any).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(task);
+  } else {
+    task.catch((error) => console.error("[webhook] tarefa em segundo plano falhou:", error));
+  }
+}
+
 type TipoMensagem = "texto" | "imagem" | "audio" | "video" | "documento" | "sticker";
 
 // Mensagens como view-once e ephemeral encapsulam o conteúdo real num nível a mais.
@@ -261,11 +270,13 @@ Deno.serve(async (req) => {
       // --- Download de mídia (best-effort) ---
       let mediaUrl: string | null = null;
       let mediaMime: string | null = null;
+      let mediaBase64: string | null = null;
 
       if (tipo !== "texto" && globalKey && leadId) {
         const midia = await baixarMidia(instance, msg, globalKey);
         if (midia) {
           mediaMime = midia.mimetype;
+          mediaBase64 = midia.base64;
           mediaUrl = await uploadMidia(empresaId, leadId, tipo, midia.base64, midia.mimetype, nomeArquivo);
         }
       }
@@ -340,7 +351,9 @@ Deno.serve(async (req) => {
         }
 
         // 3. Insere mensagem
-        await supabase.from("mensagens_crm").insert({
+        const { data: mensagemInserida, error: mensagemInsertError } = await supabase
+          .from("mensagens_crm")
+          .insert({
           lead_id: leadId,
           empresa_id: empresaId,
           conteudo: texto,
@@ -351,7 +364,11 @@ Deno.serve(async (req) => {
           direcao: "entrada",
           canal: "whatsapp",
           protocolo_id: protocoloId,
-        });
+          })
+          .select("id")
+          .single();
+        if (mensagemInsertError) throw mensagemInsertError;
+        if (!mensagemInserida) throw new Error("Mensagem recebida não retornou id");
 
         // 4. Foto de perfil (best-effort)
         if (globalKey) {
@@ -408,43 +425,58 @@ Deno.serve(async (req) => {
           }),
         }).catch(e => console.error("[webhook] erro enviar-push:", e));
 
-        // 7. Fluxo e bot (texto + imagem para visão no nó AI)
-        const tiposFluxo = ["texto", "imagem"];
+        // 7. O fluxo visual tem prioridade. O agente geral só é acionado
+        // quando nenhum fluxo visual consumiu a mensagem.
+        const tiposFluxo = ["texto", "imagem", "documento"];
         if (tiposFluxo.includes(tipo)) {
-          // Para imagens, repassar base64 para o fluxo poder enviar à IA com visão
           const fluxoBody: Record<string, any> = {
             leadId,
             canalId: canal.id,
             empresaId,
             ultimaMensagem: texto,
             telefone,
+            protocoloId,
+            mensagemId: mensagemInserida.id,
           };
-          if (tipo === "imagem" && mediaUrl && mediaMime && VISION_MIME_TYPES_WEBHOOK.includes(mediaMime.toLowerCase())) {
-            // Re-baixar mídia como base64 para o fluxo (já foi baixada acima)
-            try {
-              const midia2 = await baixarMidia(instance, msg, globalKey);
-              if (midia2?.base64) {
-                fluxoBody.mediaBase64 = midia2.base64;
-                fluxoBody.mediaMimeType = midia2.mimetype;
-                fluxoBody.mediaCaption = (message as any)?.imageMessage?.caption ?? null;
-              }
-            } catch (e) {
-              console.error("[webhook] erro re-baixar midia para fluxo:", e);
-            }
+          const mime = mediaMime?.toLowerCase() ?? "";
+          const supportedDocument = mime === "application/pdf" || mime.startsWith("text/") || mime === "application/json";
+          if (
+            mediaBase64 &&
+            mediaMime &&
+            ((tipo === "imagem" && VISION_MIME_TYPES_WEBHOOK.includes(mime)) ||
+              (tipo === "documento" && supportedDocument))
+          ) {
+            fluxoBody.mediaBase64 = mediaBase64;
+            fluxoBody.mediaMimeType = mediaMime;
+            fluxoBody.mediaCaption =
+              (message as any)?.imageMessage?.caption ??
+              (message as any)?.documentMessage?.caption ??
+              texto;
+            fluxoBody.mediaName = nomeArquivo ?? null;
           }
-          fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
+
+          const automationTask = fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
             body: JSON.stringify(fluxoBody),
-          }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
-
-          if (existingLead?.bot_ativo) {
-            fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
+          }).then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`executar-fluxo retornou ${response.status}: ${await response.text()}`);
+            }
+            const result = await response.json().catch(() => ({}));
+            const botAtivo = existingLead?.bot_ativo ?? true;
+            if (botAtivo && result?.msg === "sem fluxo") {
+              const botResponse = await fetch(`${supabaseUrl}/functions/v1/processar-bot`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
               body: JSON.stringify({ forceLeadId: leadId, delayMs: 8000 }),
-            }).catch(e => console.error("[webhook] erro processar-bot:", e));
-          }
+              });
+              if (!botResponse.ok) {
+                throw new Error(`processar-bot retornou ${botResponse.status}: ${await botResponse.text()}`);
+              }
+            }
+          });
+          runInBackground(automationTask);
         }
       }
     }

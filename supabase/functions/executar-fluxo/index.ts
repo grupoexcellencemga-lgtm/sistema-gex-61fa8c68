@@ -1,5 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.36.3";
+import {
+  attachMediaToLatestUserMessage,
+  buildClaudeMessages,
+  parseStructuredAiOutput,
+  resolveConditionRoute,
+  type StructuredField,
+} from "../_shared/whatsapp-flow-runtime.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -17,16 +24,6 @@ const corsHeaders = {
 type FluxoNode = { id: string; type: string; data: Record<string, any> };
 type FluxoEdge = { id: string; source: string; target: string; sourceHandle?: string | null };
 type FluxoJson = { nodes: FluxoNode[]; edges: FluxoEdge[] };
-
-type StructuredField = {
-  name: string;
-  type: "text" | "enum";
-  required?: boolean;
-  options?: string[];
-};
-
-// MIME types que o Claude aceita como imagem via vision
-const VISION_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +68,7 @@ function evalCondition(data: any, subject: string): boolean {
     if (noVals.some(v => subj.includes(v))) return false;
   }
 
-  const vals = (value ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+  const vals: string[] = (value ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
   if (!vals.length) return false;
   switch (operator) {
     case "contains":     return vals.some(v => subj.includes(v));
@@ -81,20 +78,11 @@ function evalCondition(data: any, subject: string): boolean {
   }
 }
 
-// Retorna o handle ID da opção que casou (ou da última como fallback).
+// Retorna o handle ID da opção que casou ou null quando não existe rota.
 // exactMatch=true usa comparação exata em vez de substring (para node_output/variable).
-function evalConditionHandle(data: any, subject: string, exactMatch = false): string {
+function evalConditionHandle(data: any, subject: string, exactMatch = false): string | null {
   if (Array.isArray(data.opcoes) && data.opcoes.length > 0) {
-    const subj = subject.toLowerCase().trim();
-    for (const opcao of data.opcoes) {
-      const palavras = (opcao.palavras ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
-      if (!palavras.length) return opcao.id; // catch-all sem palavras
-      const hit = exactMatch
-        ? palavras.some((p: string) => subj === p)
-        : palavras.some((p: string) => subj.includes(p));
-      if (hit) return opcao.id;
-    }
-    return data.opcoes[data.opcoes.length - 1].id; // fallback: última opção
+    return resolveConditionRoute(data.opcoes, subject, exactMatch);
   }
   // Legado: retorna "yes" ou "no"
   return evalCondition(data, subject) ? "yes" : "no";
@@ -106,11 +94,15 @@ function interpolate(text: string, vars: Record<string, string>): string {
 
 async function enviar(canal: any, telefone: string, texto: string): Promise<void> {
   const apiKey = canal.evolution_token || Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
-  await fetch(`${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`, {
+  const response = await fetch(`${canal.evolution_url}/message/sendText/${canal.evolution_instancia}`, {
     method: "POST",
     headers: { apikey: apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ number: telefone, text: texto }),
   });
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(`Evolution sendText falhou (${response.status}): ${details.slice(0, 300)}`);
+  }
 }
 
 async function enviarBotoes(canal: any, telefone: string, pergunta: string): Promise<void> {
@@ -167,11 +159,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { leadId, canalId, empresaId, ultimaMensagem, telefone } = body;
+    const { leadId, canalId, empresaId, ultimaMensagem, telefone, protocoloId, mensagemId } = body;
     // Mídia opcional — passada pelo webhook quando a mensagem contém imagem
     const mediaBase64: string | null = body.mediaBase64 ?? null;
     const mediaMimeType: string | null = body.mediaMimeType ?? null;
     const mediaCaption: string | null = body.mediaCaption ?? null;
+    const mediaName: string | null = body.mediaName ?? null;
 
     if (!leadId || !canalId || !empresaId) {
       return new Response(JSON.stringify({ error: "params missing" }), {
@@ -242,10 +235,10 @@ Deno.serve(async (req) => {
       const { data } = await supabase
         .from("fluxos_bot")
         .select("id, fluxo_json")
+        .eq("id", sessao.fluxo_id)
         .eq("ativo", true)
         .eq("empresa_id", empresaId)
         .contains("canal_ids", [canalId])
-        .limit(1)
         .maybeSingle();
       fluxo = data;
     } else {
@@ -443,11 +436,27 @@ Deno.serve(async (req) => {
           const handleId = evalConditionHandle(node.data, subject, exactMatch);
           console.log(`[executar-fluxo] condition handle=${handleId}`);
 
-          const next =
-            getNextByHandle(fj, node.id, handleId) ??
-            getNext(fj, node.id);
-          if (!next) { finalStatus = "completed"; run = false; }
-          else currentNodeId = next.id;
+          const hasOptions = Array.isArray(node.data.opcoes) && node.data.opcoes.length > 0;
+          const next = handleId
+            ? getNextByHandle(fj, node.id, handleId) ?? (!hasOptions ? getNext(fj, node.id) : undefined)
+            : undefined;
+          if (!next) {
+            console.error(
+              `[executar-fluxo] condição ${node.id} sem rota válida para ${JSON.stringify(subject)}`,
+            );
+            if (sourceType === "node_output" || sourceType === "variable") {
+              const fallbackMsg = "Preciso verificar mais alguns detalhes. Nossa equipe dará continuidade ao seu atendimento em breve.";
+              await enviar(canal, telefone, fallbackMsg);
+              await salvarMensagem(leadId, empresaId, fallbackMsg);
+              await supabase.from("leads")
+                .update({ status_atendimento: "fila", atendente_id: null, bot_ativo: false })
+                .eq("id", leadId);
+            }
+            finalStatus = "completed";
+            run = false;
+          } else {
+            currentNodeId = next.id;
+          }
           break;
         }
 
@@ -485,71 +494,33 @@ Deno.serve(async (req) => {
             } | undefined;
             const useStructured = structuredCfg?.enabled === true && (structuredCfg?.fields?.length ?? 0) > 0;
 
-            // Histórico de mensagens
-            const { data: historico } = await supabase
+            // Histórico recente do protocolo atual. A consulta vem em ordem
+            // decrescente para o limit selecionar as mensagens mais novas.
+            let historyQuery = supabase
               .from("mensagens_crm")
-              .select("conteudo, direcao")
+              .select("id, conteudo, direcao, created_at")
               .eq("lead_id", leadId)
-              .order("created_at", { ascending: true })
+              .or("is_nota_interna.eq.false,is_nota_interna.is.null")
+              .order("created_at", { ascending: false })
               .limit(20);
+            if (protocoloId) historyQuery = historyQuery.eq("protocolo_id", protocoloId);
+            const { data: historico } = await historyQuery;
 
-            const rawMsgs: Array<{ role: "user" | "assistant"; content: any }> = [];
-            for (const m of (historico ?? [])) {
-              if (!m.conteudo) continue;
-              rawMsgs.push({
-                role: m.direcao === "saida" ? "assistant" : "user",
-                content: m.conteudo === "[Mídia]" ? "[arquivo recebido]" : m.conteudo,
+            const messages = buildClaudeMessages(historico ?? [], {
+              currentMessageId: mensagemId,
+              currentMessage: lastMsg || mediaCaption || "[arquivo recebido]",
+            });
+
+            // Anexa o conteúdo real da mídia à mensagem atual.
+            if (mediaBase64 && mediaMimeType) {
+              const attached = attachMediaToLatestUserMessage(messages, {
+                base64: mediaBase64,
+                mimeType: mediaMimeType,
+                caption: mediaCaption,
+                name: mediaName,
               });
-            }
-
-            // Injetar imagem na última mensagem do usuário (se presente e suportado)
-            if (mediaBase64 && mediaMimeType && VISION_MIME_TYPES.includes(mediaMimeType.toLowerCase())) {
-              let injected = false;
-              for (let i = rawMsgs.length - 1; i >= 0; i--) {
-                if (rawMsgs[i].role === "user") {
-                  const existingText = typeof rawMsgs[i].content === "string"
-                    ? rawMsgs[i].content
-                    : (mediaCaption ?? "Imagem enviada");
-                  rawMsgs[i].content = [
-                    {
-                      type: "image",
-                      source: {
-                        type: "base64",
-                        media_type: mediaMimeType,
-                        data: mediaBase64,
-                      },
-                    },
-                    {
-                      type: "text",
-                      text: existingText === "[arquivo recebido]"
-                        ? (mediaCaption ?? "Imagem enviada")
-                        : existingText,
-                    },
-                  ];
-                  injected = true;
-                  break;
-                }
-              }
-              if (!injected) {
-                rawMsgs.push({
-                  role: "user",
-                  content: [
-                    { type: "image", source: { type: "base64", media_type: mediaMimeType, data: mediaBase64 } },
-                    { type: "text", text: mediaCaption ?? "Imagem enviada" },
-                  ],
-                });
-              }
-            }
-
-            if (!rawMsgs.length || rawMsgs[0].role !== "user") {
-              rawMsgs.unshift({ role: "user" as const, content: lastMsg || "Olá" });
-            }
-
-            // Deduplicar mensagens consecutivas com mesmo role
-            const messages: Array<{ role: "user" | "assistant"; content: any }> = [];
-            for (const m of rawMsgs) {
-              if (messages.length === 0 || messages[messages.length - 1].role !== m.role) {
-                messages.push(m);
+              if (!attached) {
+                console.warn("[executar-fluxo] tipo de mídia sem suporte para análise:", mediaMimeType);
               }
             }
 
@@ -583,35 +554,17 @@ Deno.serve(async (req) => {
             const rawText = aiResp.content[0]?.type === "text" ? aiResp.content[0].text : null;
 
             if (useStructured && rawText) {
-              // Parsear JSON estruturado
-              let parsed: Record<string, any> = {};
-              let parseOk = false;
-
-              try {
-                // Remover blocos de código markdown antes de extrair JSON
-                const cleaned = rawText
-                  .replace(/```json\s*/gi, "")
-                  .replace(/```\s*/g, "")
-                  .trim();
-                // Extração não-greedy: pega o primeiro objeto JSON completo
-                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                  parsed = JSON.parse(jsonMatch[0]);
-                  parseOk = true;
-                } else {
-                  console.error("[executar-fluxo] ai - sem JSON na resposta. raw:", rawText.substring(0, 300));
-                }
-              } catch (e) {
-                console.error("[executar-fluxo] ai - falha parse JSON:", String(e), "raw:", rawText.substring(0, 300));
-              }
-
-              const messageText = parsed.message as string | undefined;
               const fields = structuredCfg!.fields!;
-              const allRequiredOk = !fields.some(f => f.required && !parsed[f.name]);
+              const parseResult = parseStructuredAiOutput(rawText, fields);
 
-              if (!parseOk || !messageText || !allRequiredOk) {
+              if (!parseResult.ok) {
                 // FALLBACK SEGURO — nunca liberar automaticamente, nunca COMPROVANTE_RECEBIDO
-                console.error("[executar-fluxo] ai - saída estruturada inválida → ATENDIMENTO_HUMANO");
+                console.error(
+                  "[executar-fluxo] ai - saída estruturada inválida → ATENDIMENTO_HUMANO:",
+                  parseResult.error,
+                  "raw:",
+                  rawText.substring(0, 300),
+                );
                 const fallbackMsg = "Preciso verificar mais alguns detalhes. Nossa equipe dará continuidade ao seu atendimento em breve.";
                 await enviar(canal, telefone, fallbackMsg);
                 await salvarMensagem(leadId, empresaId, fallbackMsg);
@@ -620,6 +573,8 @@ Deno.serve(async (req) => {
                   nodeOutputs[node.id][f.name] = "ATENDIMENTO_HUMANO";
                 }
               } else {
+                const parsed = parseResult.output;
+                const messageText = parsed.message;
                 await enviar(canal, telefone, messageText);
                 await salvarMensagem(leadId, empresaId, messageText);
                 nodeOutputs[node.id] = { message: messageText };
@@ -640,7 +595,14 @@ Deno.serve(async (req) => {
             console.error("[executar-fluxo] ERRO no nó ai:", String(aiErr));
             // Garantir fallback seguro em caso de erro total
             if (node.data.structuredOutput?.enabled) {
-              nodeOutputs[node.id] = nodeOutputs[node.id] ?? {};
+              const fallbackMsg = "Preciso verificar mais alguns detalhes. Nossa equipe dará continuidade ao seu atendimento em breve.";
+              try {
+                await enviar(canal, telefone, fallbackMsg);
+                await salvarMensagem(leadId, empresaId, fallbackMsg);
+              } catch (fallbackError) {
+                console.error("[executar-fluxo] falha ao enviar fallback:", String(fallbackError));
+              }
+              nodeOutputs[node.id] = { message: fallbackMsg };
               for (const f of (node.data.structuredOutput.fields ?? []) as StructuredField[]) {
                 if (!nodeOutputs[node.id][f.name]) {
                   nodeOutputs[node.id][f.name] = "ATENDIMENTO_HUMANO";
@@ -657,7 +619,7 @@ Deno.serve(async (req) => {
 
         case "assign": {
           await supabase.from("leads")
-            .update({ status_atendimento: "fila", atendente_id: null })
+            .update({ status_atendimento: "fila", atendente_id: null, bot_ativo: false })
             .eq("id", leadId);
           finalStatus = "completed";
           run = false;

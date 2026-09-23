@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildEnumRoutes, validateFlowGraph } from "@/lib/fluxoValidation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -464,7 +465,10 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
               {aiNodes.length === 0 ? (
                 <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded p-2">Nenhum nó IA com saída estruturada ativa encontrado.</p>
               ) : (
-                <Select value={d.sourceNodeId ?? ""} onValueChange={(v) => up({ sourceNodeId: v, sourceField: undefined })}>
+                <Select
+                  value={d.sourceNodeId ?? ""}
+                  onValueChange={(v) => up({ sourceNodeId: v, sourceField: undefined, opcoes: [] })}
+                >
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar nó" /></SelectTrigger>
                   <SelectContent position="popper" className="z-[9999]">
                     {aiNodes.map(n => (
@@ -480,7 +484,18 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
                 {sourceAiFields.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">Nenhum campo configurado nesse nó.</p>
                 ) : (
-                  <Select value={d.sourceField ?? ""} onValueChange={(v) => up({ sourceField: v })}>
+                  <Select
+                    value={d.sourceField ?? ""}
+                    onValueChange={(v) => {
+                      const field = sourceAiFields.find((item) => item.name === v);
+                      up({
+                        sourceField: v,
+                        opcoes: field?.type === "enum"
+                          ? buildEnumRoutes(field.options ?? [])
+                          : d.opcoes ?? [],
+                      });
+                    }}
+                  >
                     <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar campo" /></SelectTrigger>
                     <SelectContent position="popper" className="z-[9999]">
                       {sourceAiFields.map(f => (
@@ -803,6 +818,12 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   async function salvar() {
     if (!nome.trim()) return toast.error("Nome obrigatório");
     if (canalIds.length === 0) return toast.error("Selecione ao menos um canal");
+    const graphErrors = validateFlowGraph(nodes, edges);
+    if (graphErrors.length > 0) {
+      return toast.error(graphErrors[0], {
+        description: "Conecte todas as rotas antes de salvar o fluxo.",
+      });
+    }
     setSaving(true);
     try {
       const payload = {
