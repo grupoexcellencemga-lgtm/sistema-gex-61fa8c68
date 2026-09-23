@@ -701,7 +701,7 @@ const Funil = () => {
       <div className="flex overflow-hidden bg-card" style={crmView === "conversas" ? undefined : { height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
         {/* Sidebar — lista de quadros */}
         {crmView === "oportunidades" && (
-        <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[280px]" : "w-0")}>
+        <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[320px]" : "w-0")}>
           {/* Toggle handle — always visible on the right edge */}
           <button
             onClick={() => setQuadrosVisible((v) => !v)}
