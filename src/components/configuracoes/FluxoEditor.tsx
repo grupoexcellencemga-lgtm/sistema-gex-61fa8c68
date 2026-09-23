@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft, Save, MessageSquare, GitBranch, Bot,
-  UserCheck, Clock, CircleDot, Play, Loader2,
+  UserCheck, Clock, CircleDot, Play, Loader2, Plus, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -40,11 +40,15 @@ import { cn } from "@/lib/utils";
 
 type StartData    = { label: string; trigger: "message_received" | "keyword" | "outside_hours"; keywords: string };
 type MessageData  = { label: string; text: string };
-type ConditionData = { label: string; pergunta?: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value: string; no_value?: string };
+type OpcaoCondicao = { id: string; label: string; palavras: string };
+type ConditionData = { label: string; pergunta?: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value?: string; no_value?: string; opcoes?: OpcaoCondicao[] };
 type AIData       = { label: string; model: string; prompt: string };
 type AssignData   = { label: string; action: "queue" | "agent" };
 type WaitData     = { label: string; value: number; unit: "s" | "min"; mode?: "timer" | "input"; save_to?: string };
 type EndData      = { label: string };
+
+// Cores hex para as opções de condição (usadas como inline style para evitar purge do Tailwind)
+const OPCAO_CORES = ["#10b981","#f59e0b","#3b82f6","#8b5cf6","#f43f5e","#06b6d4","#f97316","#ec4899"];
 
 // ─── Custom Nodes ─────────────────────────────────────────────────────────────
 
@@ -86,8 +90,11 @@ function MessageNode({ data, selected }: { data: MessageData; selected?: boolean
 function ConditionNode({ data, selected }: { data: ConditionData; selected?: boolean }) {
   const d = data as any;
   const hasPergunta = !!d.pergunta?.trim();
-  const hasValue    = !!d.value?.trim();
-  const hasNoValue  = !!d.no_value?.trim();
+  const hasOpcoes = Array.isArray(d.opcoes) && d.opcoes.length > 0;
+  const hasValue   = !!d.value?.trim();
+  const hasNoValue = !!d.no_value?.trim();
+  const opcoes: OpcaoCondicao[] = hasOpcoes ? d.opcoes : [];
+  const n = opcoes.length;
 
   return (
     <div className={cn(
@@ -98,21 +105,27 @@ function ConditionNode({ data, selected }: { data: ConditionData; selected?: boo
     )}>
       <Handle type="target" position={Position.Top} className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white" />
 
-      {/* Título */}
       <div className="flex items-center gap-2 font-semibold">
         <GitBranch className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{d.label || "Condição"}</span>
       </div>
 
-      {/* Pergunta */}
       {hasPergunta && (
         <p className="mt-1.5 text-[10px] leading-snug italic text-amber-600 dark:text-amber-400 line-clamp-2 border-t border-amber-200 dark:border-amber-800 pt-1">
           {d.pergunta}
         </p>
       )}
 
-      {/* Keywords Sim / Não */}
-      {(hasValue || hasNoValue) && (
+      {hasOpcoes ? (
+        <div className="mt-1.5 space-y-0.5 border-t border-amber-200 dark:border-amber-800 pt-1">
+          {opcoes.map((op, i) => (
+            <div key={op.id} className="flex items-center gap-1 text-[10px]">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: OPCAO_CORES[i % OPCAO_CORES.length] }} />
+              <span className="truncate font-medium" style={{ color: OPCAO_CORES[i % OPCAO_CORES.length] }}>{op.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : (hasValue || hasNoValue) && (
         <div className="mt-1.5 space-y-0.5 border-t border-amber-200 dark:border-amber-800 pt-1">
           {hasValue && (
             <div className="flex items-center gap-1 text-[10px]">
@@ -129,10 +142,36 @@ function ConditionNode({ data, selected }: { data: ConditionData; selected?: boo
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} id="yes" style={{ left: "28%" }} className="!bg-emerald-500 !w-3 !h-3 !border-2 !border-white" />
-      <Handle type="source" position={Position.Bottom} id="no"  style={{ left: "72%" }} className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white" />
-      <span className="absolute bottom-1.5 left-[18%] text-[10px] font-bold text-emerald-600">Sim</span>
-      <span className="absolute bottom-1.5 left-[63%] text-[10px] font-bold text-rose-500">Não</span>
+      {/* Handles dinâmicos para múltiplas opções */}
+      {hasOpcoes ? opcoes.map((op, i) => {
+        const pct = Math.round((i + 1) * 100 / (n + 1));
+        const cor = OPCAO_CORES[i % OPCAO_CORES.length];
+        const shortLabel = op.label.length > 5 ? op.label.slice(0, 5) : op.label;
+        return (
+          <span key={op.id}>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id={op.id}
+              style={{ left: `${pct}%`, background: cor, border: "2px solid white" }}
+              className="!w-3 !h-3"
+            />
+            <span
+              className="absolute bottom-1.5 text-[9px] font-bold"
+              style={{ left: `${pct}%`, transform: "translateX(-50%)", color: cor }}
+            >
+              {shortLabel}
+            </span>
+          </span>
+        );
+      }) : (
+        <>
+          <Handle type="source" position={Position.Bottom} id="yes" style={{ left: "28%" }} className="!bg-emerald-500 !w-3 !h-3 !border-2 !border-white" />
+          <Handle type="source" position={Position.Bottom} id="no"  style={{ left: "72%" }} className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white" />
+          <span className="absolute bottom-1.5 left-[18%] text-[10px] font-bold text-emerald-600">Sim</span>
+          <span className="absolute bottom-1.5 left-[63%] text-[10px] font-bold text-rose-500">Não</span>
+        </>
+      )}
     </div>
   );
 }
@@ -264,86 +303,173 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
     </div>
   );
 
-  if (node.type === "condition") return (
-    <div className="space-y-3">
-      {LabelField}
+  if (node.type === "condition") {
+    const hasOpcoes = Array.isArray(d.opcoes) && d.opcoes.length > 0;
+    const opcoes: OpcaoCondicao[] = d.opcoes ?? [];
 
-      {/* Pergunta que o bot envia antes de avaliar */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Pergunta do bot (opcional)</Label>
-        <Textarea
-          value={d.pergunta ?? ""}
-          onChange={(e) => up({ pergunta: e.target.value })}
-          rows={3}
-          className="text-sm resize-none"
-          placeholder="Ex: Quer saber mais sobre o curso? Responda SIM ou NÃO."
-        />
-        <p className="text-[11px] text-muted-foreground">Se preenchido, o bot envia esta mensagem e aguarda resposta antes de avaliar.</p>
+    const addOpcao = () => {
+      const nova: OpcaoCondicao = { id: `opt_${Date.now()}`, label: `Opção ${opcoes.length + 1}`, palavras: "" };
+      up({ opcoes: [...opcoes, nova] });
+    };
+
+    const removeOpcao = (id: string) => {
+      up({ opcoes: opcoes.filter((o) => o.id !== id) });
+    };
+
+    const updateOpcao = (id: string, patch: Partial<OpcaoCondicao>) => {
+      up({ opcoes: opcoes.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
+    };
+
+    const switchToOpcoes = () => {
+      up({
+        opcoes: [
+          { id: "opt_yes", label: "Sim", palavras: d.value ?? "" },
+          { id: "opt_no",  label: "Não", palavras: d.no_value ?? "" },
+        ],
+        value: undefined,
+        no_value: undefined,
+      });
+    };
+
+    return (
+      <div className="space-y-3">
+        {LabelField}
+
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Pergunta do bot (opcional)</Label>
+          <Textarea
+            value={d.pergunta ?? ""}
+            onChange={(e) => up({ pergunta: e.target.value })}
+            rows={3}
+            className="text-sm resize-none"
+            placeholder="Ex: Como posso ajudar? Responda 1, 2 ou 3."
+          />
+          <p className="text-[11px] text-muted-foreground">Se preenchido, o bot envia esta mensagem e aguarda resposta antes de avaliar.</p>
+        </div>
+
+        <hr className="border-border" />
+
+        {!hasOpcoes ? (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Campo avaliado</Label>
+              <Select value={d.field ?? "message"} onValueChange={(v) => up({ field: v })}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="message">Conteúdo da mensagem</SelectItem>
+                  <SelectItem value="time">Horário atual</SelectItem>
+                  <SelectItem value="weekday">Dia da semana</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Operador</Label>
+              <Select value={d.operator ?? "contains"} onValueChange={(v) => up({ operator: v })}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="contains">Contém</SelectItem>
+                  <SelectItem value="not_contains">Não contém</SelectItem>
+                  <SelectItem value="equals">Igual a</SelectItem>
+                  <SelectItem value="between">Entre (ex: 08:00-18:00)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <hr className="border-border" />
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                Palavras para <span className="text-emerald-600">Sim</span>
+              </Label>
+              <Input
+                value={d.value ?? ""}
+                onChange={(e) => up({ value: e.target.value })}
+                className="h-8 text-sm"
+                placeholder={d.field === "time" ? "08:00-18:00" : "sim, 1, quero, aceito"}
+              />
+              <p className="text-[11px] text-muted-foreground">Separe com vírgula. Basta uma coincidir.</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                Palavras para <span className="text-rose-500">Não</span>
+                <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                value={d.no_value ?? ""}
+                onChange={(e) => up({ no_value: e.target.value })}
+                className="h-8 text-sm"
+                placeholder="não, 2, nope, cancelar"
+              />
+              <p className="text-[11px] text-muted-foreground">Se vazio, qualquer resposta que não for Sim vai para Não.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={switchToOpcoes}
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors"
+            >
+              <Plus className="h-3 w-3" /> Adicionar mais opções
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Opções de resposta</Label>
+              <p className="text-[11px] text-muted-foreground">Avaliadas em ordem. A última sem palavras = padrão (qualquer outra resposta).</p>
+
+              {opcoes.map((op, i) => {
+                const cor = OPCAO_CORES[i % OPCAO_CORES.length];
+                return (
+                  <div key={op.id} className="rounded-md border p-2 space-y-1.5" style={{ borderColor: cor + "60" }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor }} />
+                      <Input
+                        value={op.label}
+                        onChange={(e) => updateOpcao(op.id, { label: e.target.value })}
+                        className="h-7 text-xs flex-1"
+                        placeholder="Nome da opção"
+                      />
+                      {opcoes.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => removeOpcao(op.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      value={op.palavras}
+                      onChange={(e) => updateOpcao(op.id, { palavras: e.target.value })}
+                      className="h-7 text-xs"
+                      placeholder={
+                        i === opcoes.length - 1
+                          ? "Deixar vazio = padrão (qualquer resposta)"
+                          : "sim, 1, quero (separe com vírgula)"
+                      }
+                    />
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={addOpcao}
+                className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors"
+              >
+                <Plus className="h-3 w-3" /> Adicionar opção
+              </button>
+            </div>
+          </>
+        )}
       </div>
-
-      <hr className="border-border" />
-
-      {/* Campo avaliado */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Campo avaliado</Label>
-        <Select value={d.field ?? "message"} onValueChange={(v) => up({ field: v })}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999]">
-            <SelectItem value="message">Conteúdo da mensagem</SelectItem>
-            <SelectItem value="time">Horário atual</SelectItem>
-            <SelectItem value="weekday">Dia da semana</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Operador */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Operador</Label>
-        <Select value={d.operator ?? "contains"} onValueChange={(v) => up({ operator: v })}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999]">
-            <SelectItem value="contains">Contém</SelectItem>
-            <SelectItem value="not_contains">Não contém</SelectItem>
-            <SelectItem value="equals">Igual a</SelectItem>
-            <SelectItem value="between">Entre (ex: 08:00-18:00)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <hr className="border-border" />
-
-      {/* Palavras para Sim */}
-      <div className="space-y-1">
-        <Label className="text-xs font-semibold flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-          Palavras para <span className="text-emerald-600">Sim</span>
-        </Label>
-        <Input
-          value={d.value ?? ""}
-          onChange={(e) => up({ value: e.target.value })}
-          className="h-8 text-sm"
-          placeholder={d.field === "time" ? "08:00-18:00" : "sim, 1, quero, aceito"}
-        />
-        <p className="text-[11px] text-muted-foreground">Separe com vírgula. Basta uma coincidir.</p>
-      </div>
-
-      {/* Palavras para Não */}
-      <div className="space-y-1">
-        <Label className="text-xs font-semibold flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
-          Palavras para <span className="text-rose-500">Não</span>
-          <span className="text-muted-foreground font-normal">(opcional)</span>
-        </Label>
-        <Input
-          value={d.no_value ?? ""}
-          onChange={(e) => up({ no_value: e.target.value })}
-          className="h-8 text-sm"
-          placeholder="não, 2, nope, cancelar"
-        />
-        <p className="text-[11px] text-muted-foreground">Se vazio, qualquer resposta que não for Sim vai para Não.</p>
-      </div>
-    </div>
-  );
+    );
+  }
 
   if (node.type === "ai") return (
     <div className="space-y-3">

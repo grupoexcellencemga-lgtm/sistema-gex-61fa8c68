@@ -56,7 +56,6 @@ function evalCondition(data: any, lastMsg: string): boolean {
   if (field !== "message") return false;
   const subject = lastMsg.toLowerCase().trim();
 
-  // Palavras do caminho Não têm precedência quando a mensagem casa com elas
   if (no_value) {
     const noVals = (no_value as string).split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
     if (noVals.some(v => subject.includes(v))) return false;
@@ -70,6 +69,22 @@ function evalCondition(data: any, lastMsg: string): boolean {
     case "equals":       return vals.some(v => subject === v);
     default:             return false;
   }
+}
+
+// Retorna o handle ID da opção que casou (ou da última como padrão).
+// Suporta o novo formato `opcoes[]` e o legado `value`/`no_value`.
+function evalConditionHandle(data: any, lastMsg: string): string {
+  if (Array.isArray(data.opcoes) && data.opcoes.length > 0) {
+    const subject = lastMsg.toLowerCase().trim();
+    for (const opcao of data.opcoes) {
+      const palavras = (opcao.palavras ?? "").split(",").map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+      if (!palavras.length) return opcao.id; // sem palavras = catch-all
+      if (palavras.some((p: string) => subject.includes(p))) return opcao.id;
+    }
+    return data.opcoes[data.opcoes.length - 1].id; // fallback: última opção
+  }
+  // Legado: retorna "yes" ou "no"
+  return evalCondition(data, lastMsg) ? "yes" : "no";
 }
 
 function interpolate(text: string, vars: Record<string, string>): string {
@@ -398,9 +413,9 @@ Deno.serve(async (req) => {
             break;
           }
           // Avalia a condição com a mensagem recebida
-          const passed = evalCondition(node.data, lastMsg);
+          const handleId = evalConditionHandle(node.data, lastMsg);
           const next =
-            getNextByHandle(fj, node.id, passed ? "yes" : "no") ??
+            getNextByHandle(fj, node.id, handleId) ??
             getNext(fj, node.id);
           if (!next) { finalStatus = "completed"; run = false; }
           else currentNodeId = next.id;
