@@ -407,6 +407,20 @@ const Funil = () => {
     onError: (err: any) => toast.error("Erro ao renomear pasta: " + err.message),
   });
 
+  const reorderPastasMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const updates = orderedIds.map((id, index) =>
+        (supabase as any).from("funil_pastas").update({ ordem: index }).eq("id", id)
+      );
+      const results = await Promise.all(updates);
+      for (const { error } of results) {
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-pastas"] }),
+    onError: (err: any) => toast.error("Erro ao reordenar pastas: " + err.message),
+  });
+
   const updateQuadroOrganizationMutation = useMutation({
     mutationFn: async ({ id, changes }: { id: string; changes: Record<string, unknown> }) => {
       const { error } = await (supabase as any).from("funil_quadros").update(changes).eq("id", id);
@@ -740,6 +754,7 @@ const Funil = () => {
             onMove={(funnel, folderId) => updateQuadroOrganizationMutation.mutate({ id: funnel.id, changes: { pasta_id: folderId, recebe_novos_leads: false, status_ciclo: funnel.recebe_novos_leads ? "encerrando" : funnel.status_ciclo } })}
             onRename={(funnel, name) => renameQuadroMutation.mutate({ id: funnel.id, nome: name })}
             onRenameFolder={(folder, name) => renamePastaMutation.mutate({ id: folder.id, nome: name })}
+            onReorderFolders={(ids) => reorderPastasMutation.mutate(ids)}
             onDelete={(funnel) => deleteQuadroMutation.mutate(funnel)}
             createOptions={(
               <div className="space-y-2">

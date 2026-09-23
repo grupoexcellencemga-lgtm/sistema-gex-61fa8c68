@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronDown, ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus, Search, Star, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderPlus, GripVertical, MoreHorizontal, Plus, Search, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,8 +18,24 @@ import {
   buildFunnelNavigation,
   type FunilPasta,
   type FunilQuadroOrganizado,
+  type FunnelNavigationGroup,
   type StatusCiclo,
 } from "./funilFolders";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const statusLabel: Record<StatusCiclo, string> = {
   preparacao: "Preparação",
@@ -48,6 +64,7 @@ type Props = {
   onMove: (funnel: FunilQuadroOrganizado, folderId: string | null) => void;
   onRename: (funnel: FunilQuadroOrganizado, name: string) => void;
   onRenameFolder: (folder: FunilPasta, name: string) => void;
+  onReorderFolders: (orderedIds: string[]) => void;
   onDelete: (funnel: FunilQuadroOrganizado) => void;
   createOptions?: ReactNode;
 };
@@ -133,6 +150,116 @@ function FunnelRow({
   );
 }
 
+function SortableFolderGroup({
+  group, folder, isEditing, editingFolderName, isOpen,
+  onToggle, onStartEdit, onFinishEdit, onCancelEdit, onEditNameChange,
+  children, props,
+}: {
+  group: FunnelNavigationGroup;
+  folder: FunilPasta | undefined;
+  isEditing: boolean;
+  editingFolderName: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onStartEdit: () => void;
+  onFinishEdit: () => void;
+  onCancelEdit: () => void;
+  onEditNameChange: (v: string) => void;
+  children: ReactNode;
+  props: Pick<Props, "onRenameFolder">;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <section ref={setNodeRef} style={style}>
+      {isEditing && folder ? (
+        <form
+          className="flex items-center gap-1 px-1 py-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (editingFolderName.trim()) props.onRenameFolder(folder, editingFolderName.trim());
+            onFinishEdit();
+          }}
+        >
+          <Input
+            autoFocus
+            value={editingFolderName}
+            onChange={(e) => onEditNameChange(e.target.value)}
+            className="h-7 flex-1 text-xs"
+            onBlur={onCancelEdit}
+            onKeyDown={(e) => { if (e.key === "Escape") onCancelEdit(); }}
+          />
+          <Button type="submit" size="icon" className="h-7 w-7 shrink-0">
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </form>
+      ) : (
+        <div className="group/folder flex items-center gap-1 rounded-md pr-1 hover:bg-muted">
+          {/* Drag handle */}
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="cursor-grab p-1 text-muted-foreground opacity-0 transition-opacity group-hover/folder:opacity-100 active:cursor-grabbing"
+            aria-label="Arrastar pasta"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex flex-1 cursor-pointer items-center gap-2 py-1.5 pr-1 text-xs font-semibold"
+          >
+            {isOpen ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+            <Folder className="h-4 w-4 shrink-0 text-primary" />
+            <span className="flex-1 truncate text-left">{group.name}</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              {group.funnels.length}
+            </span>
+          </button>
+
+          {folder && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover/folder:opacity-100"
+                  aria-label={`Ações da pasta ${group.name}`}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onStartEdit}>
+                  Renomear pasta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+
+      {isOpen && (
+        <div className="mt-0.5 ml-3 border-l pl-1.5 space-y-0.5">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 type CreateMode = null | "folder" | "funnel";
 
 export function FunilSidebar(props: Props) {
@@ -152,10 +279,28 @@ export function FunilSidebar(props: Props) {
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
 
+  // Ordem local das pastas (optimistic update para DnD)
+  const [localFolderOrder, setLocalFolderOrder] = useState<string[]>([]);
+  useEffect(() => {
+    setLocalFolderOrder(props.folders.map((f) => f.id));
+  }, [props.folders]);
+
   const navigation = useMemo(
     () => buildFunnelNavigation(props.folders, props.funnels, search),
     [props.folders, props.funnels, search],
   );
+
+  // Reordenar os grupos de acordo com localFolderOrder (preserva "unfiled" no final)
+  const sortedGroups = useMemo(() => {
+    const folderGroups = navigation.groups.filter((g) => g.id !== "unfiled");
+    const unfiled = navigation.groups.find((g) => g.id === "unfiled");
+    const ordered = localFolderOrder
+      .map((id) => folderGroups.find((g) => g.id === id))
+      .filter(Boolean) as typeof folderGroups;
+    // Grupos sem id em localFolderOrder (recém-criados antes do sync) ficam no final
+    const rest = folderGroups.filter((g) => !localFolderOrder.includes(g.id));
+    return [...ordered, ...rest, ...(unfiled ? [unfiled] : [])];
+  }, [navigation.groups, localFolderOrder]);
 
   const toggleGroup = (id: string) =>
     setOpenGroups((prev) => {
@@ -165,6 +310,26 @@ export function FunilSidebar(props: Props) {
     });
 
   const isOpen = (id: string) => openGroups[id] ?? true;
+
+  const dndSensor = useSensor(PointerSensor, { activationConstraint: { distance: 6 } });
+  const dndSensors = useSensors(dndSensor);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalFolderOrder((prev) => {
+      const oldIdx = prev.indexOf(String(active.id));
+      const newIdx = prev.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return prev;
+      const next = arrayMove(prev, oldIdx, newIdx);
+      props.onReorderFolders(next);
+      return next;
+    });
+  };
+
+  const sortableIds = sortedGroups
+    .filter((g) => g.id !== "unfiled")
+    .map((g) => g.id);
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-hidden border-r bg-card">
@@ -212,97 +377,92 @@ export function FunilSidebar(props: Props) {
               </section>
             )}
 
-            {/* Grupos / pastas */}
-            {navigation.groups.map((group) => {
-              const folder = props.folders.find((f) => f.id === group.id);
-              const isEditing = editingFolderId === group.id;
-              return (
-              <section key={group.id}>
-                {isEditing && folder ? (
-                  <form
-                    className="flex items-center gap-1 px-1 py-1"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const name = editingFolderName.trim();
-                      if (name) props.onRenameFolder(folder, name);
-                      setEditingFolderId(null);
-                    }}
-                  >
-                    <Input
-                      autoFocus
-                      value={editingFolderName}
-                      onChange={(e) => setEditingFolderName(e.target.value)}
-                      className="h-7 flex-1 text-xs"
-                      onBlur={() => setEditingFolderId(null)}
-                      onKeyDown={(e) => { if (e.key === "Escape") setEditingFolderId(null); }}
-                    />
-                    <Button type="submit" size="icon" className="h-7 w-7 shrink-0">
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </form>
-                ) : (
-                <div className="group/folder flex items-center gap-1 rounded-md pr-1 hover:bg-muted">
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.id)}
-                    className="flex flex-1 cursor-pointer items-center gap-2 px-2 py-1.5 text-xs font-semibold"
-                  >
-                    {isOpen(group.id) ? (
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                    <Folder className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="flex-1 truncate text-left">{group.name}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {group.funnels.length}
-                    </span>
-                  </button>
-                  {folder && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover/folder:opacity-100"
-                          aria-label={`Ações da pasta ${group.name}`}
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditingFolderName(group.name);
-                            setEditingFolderId(group.id);
-                          }}
-                        >
-                          Renomear pasta
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+            {/* Grupos / pastas com DnD */}
+            <DndContext
+              sensors={dndSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <div className="space-y-4">
+                  {sortedGroups.map((group) => {
+                    const folder = props.folders.find((f) => f.id === group.id);
+                    const isUnfiled = group.id === "unfiled";
+
+                    if (isUnfiled) {
+                      // "Sem pasta" — não é arrastável
+                      return (
+                        <section key={group.id}>
+                          <div className="group/folder flex items-center gap-1 rounded-md pr-1 hover:bg-muted">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(group.id)}
+                              className="flex flex-1 cursor-pointer items-center gap-2 px-2 py-1.5 text-xs font-semibold"
+                            >
+                              {isOpen(group.id) ? (
+                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              )}
+                              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate text-left">{group.name}</span>
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                                {group.funnels.length}
+                              </span>
+                            </button>
+                          </div>
+                          {isOpen(group.id) && (
+                            <div className="mt-0.5 ml-3 border-l pl-1.5 space-y-0.5">
+                              {group.funnels.map((funnel) => (
+                                <FunnelRow
+                                  key={funnel.id}
+                                  funnel={funnel}
+                                  selected={props.selectedId === funnel.id}
+                                  folders={props.folders}
+                                  {...props}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    }
+
+                    return (
+                      <SortableFolderGroup
+                        key={group.id}
+                        group={group}
+                        folder={folder}
+                        isEditing={editingFolderId === group.id}
+                        editingFolderName={editingFolderName}
+                        isOpen={isOpen(group.id)}
+                        onToggle={() => toggleGroup(group.id)}
+                        onStartEdit={() => {
+                          setEditingFolderName(group.name);
+                          setEditingFolderId(group.id);
+                        }}
+                        onFinishEdit={() => setEditingFolderId(null)}
+                        onCancelEdit={() => setEditingFolderId(null)}
+                        onEditNameChange={setEditingFolderName}
+                        props={{ onRenameFolder: props.onRenameFolder }}
+                      >
+                        {group.funnels.map((funnel) => (
+                          <FunnelRow
+                            key={funnel.id}
+                            funnel={funnel}
+                            selected={props.selectedId === funnel.id}
+                            folders={props.folders}
+                            {...props}
+                          />
+                        ))}
+                      </SortableFolderGroup>
+                    );
+                  })}
                 </div>
-                )}
+              </SortableContext>
+            </DndContext>
 
-                {isOpen(group.id) && (
-                  <div className="mt-0.5 ml-3 border-l pl-1.5 space-y-0.5">
-                    {group.funnels.map((funnel) => (
-                      <FunnelRow
-                        key={funnel.id}
-                        funnel={funnel}
-                        selected={props.selectedId === funnel.id}
-                        folders={props.folders}
-                        {...props}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            );})}
-
-
-            {navigation.groups.length === 0 && (
+            {sortedGroups.length === 0 && (
               <p className="p-6 text-center text-sm text-muted-foreground">
                 Nenhum funil encontrado.
               </p>
@@ -311,9 +471,8 @@ export function FunilSidebar(props: Props) {
         )}
       </div>
 
-      {/* Barra de criação — compacta por padrão, expande ao clicar */}
+      {/* Barra de criação */}
       <div className="border-t bg-card">
-        {/* Botões compactos */}
         {createMode === null && (
           <div className="flex gap-2 p-3">
             <Button
@@ -336,7 +495,6 @@ export function FunilSidebar(props: Props) {
           </div>
         )}
 
-        {/* Formulário: criar pasta */}
         {createMode === "folder" && (
           <form
             onSubmit={(e) => {
@@ -372,7 +530,6 @@ export function FunilSidebar(props: Props) {
           </form>
         )}
 
-        {/* Formulário: criar funil */}
         {createMode === "funnel" && (
           <form
             onSubmit={(e) => {
