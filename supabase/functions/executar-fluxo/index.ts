@@ -274,6 +274,24 @@ Deno.serve(async (req) => {
     let isNew = false;
     let sessaoNovaId: string | null = null;
 
+    // Evita race condition: dois webhooks processando o mesmo waiting_input simultaneamente.
+    // O UPDATE só sucede se status ainda for waiting_input — o primeiro executor vence.
+    if (sessao?.status === "waiting_input") {
+      const { data: claimed } = await supabase
+        .from("fluxo_sessoes")
+        .update({ status: "active", updated_at: new Date().toISOString() })
+        .eq("id", sessao.id)
+        .eq("status", "waiting_input")
+        .select("id")
+        .maybeSingle();
+
+      if (!claimed) {
+        return new Response(JSON.stringify({ ok: true, msg: "sessão já em processamento" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (!sessao) {
       const { data: leadStatus } = await supabase
         .from("leads")
