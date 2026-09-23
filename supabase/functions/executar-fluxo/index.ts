@@ -412,14 +412,25 @@ Deno.serve(async (req) => {
             // Aguardar resposta: pausa indefinidamente até qualquer mensagem chegar
             finalStatus = "waiting_input";
             waitUntil = null;
+            run = false;
           } else {
             const value: number = node.data.value ?? 30;
             const unit: string = node.data.unit ?? "s";
             const ms = unit === "h" ? value * 3600 * 1000 : unit === "min" ? value * 60 * 1000 : value * 1000;
-            waitUntil = new Date(Date.now() + ms).toISOString();
-            finalStatus = "waiting";
+            if (ms <= 30_000) {
+              // Timer curto: aguarda inline para não depender do cron de 10min
+              await new Promise((r) => setTimeout(r, ms));
+              // Continua o loop para executar o próximo nó
+              const next = getNext(fj, node.id);
+              if (!next) { run = false; break; }
+              currentNodeId = next.id;
+            } else {
+              // Timer longo: delega ao cron processar-fluxos-expirados
+              waitUntil = new Date(Date.now() + ms).toISOString();
+              finalStatus = "waiting";
+              run = false;
+            }
           }
-          run = false;
           break;
         }
 
