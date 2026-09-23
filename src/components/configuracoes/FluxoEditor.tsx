@@ -41,8 +41,18 @@ import { cn } from "@/lib/utils";
 type StartData    = { label: string; trigger: "message_received" | "keyword" | "outside_hours"; keywords: string };
 type MessageData  = { label: string; text: string };
 type OpcaoCondicao = { id: string; label: string; palavras: string };
-type ConditionData = { label: string; pergunta?: string; field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between"; value?: string; no_value?: string; opcoes?: OpcaoCondicao[] };
-type AIData       = { label: string; model: string; prompt: string };
+type ConditionData = {
+  label: string; pergunta?: string;
+  field: "message" | "time" | "weekday"; operator: "contains" | "not_contains" | "equals" | "between";
+  value?: string; no_value?: string; opcoes?: OpcaoCondicao[];
+  sourceType?: "message" | "node_output" | "variable";
+  sourceNodeId?: string; sourceField?: string; variableName?: string;
+};
+type StructuredFieldFE = { id: string; name: string; type: "text" | "enum"; required: boolean; options?: string[] };
+type AIData = {
+  label: string; model: string; prompt: string;
+  structuredOutput?: { enabled: boolean; fields: StructuredFieldFE[] };
+};
 type AssignData   = { label: string; action: "queue" | "agent" };
 type WaitData     = { label: string; value: number; unit: "s" | "min"; mode?: "timer" | "input"; save_to?: string };
 type EndData      = { label: string };
@@ -259,6 +269,7 @@ function defaultData(type: string): Record<string, unknown> {
 function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string, patch: Record<string, unknown>) => void }) {
   const d = node.data as any;
   const up = (patch: Record<string, unknown>) => onUpdate(node.id, patch);
+  const { getNodes } = useReactFlow();
 
   const LabelField = (
     <div className="space-y-1">
@@ -304,192 +315,292 @@ function NodeConfigPanel({ node, onUpdate }: { node: Node; onUpdate: (id: string
   );
 
   if (node.type === "condition") {
+    const sourceType = (d.sourceType as string) ?? "message";
     const hasOpcoes = Array.isArray(d.opcoes) && d.opcoes.length > 0;
     const opcoes: OpcaoCondicao[] = d.opcoes ?? [];
+
+    // Nós AI com structured output ativo — para o seletor de fonte
+    const aiNodes = getNodes().filter(n => n.type === "ai" && (n.data as any).structuredOutput?.enabled);
+    const sourceAiNode = aiNodes.find(n => n.id === d.sourceNodeId);
+    const sourceAiFields: StructuredFieldFE[] = (sourceAiNode?.data as any)?.structuredOutput?.fields ?? [];
 
     const addOpcao = () => {
       const nova: OpcaoCondicao = { id: `opt_${Date.now()}`, label: `Opção ${opcoes.length + 1}`, palavras: "" };
       up({ opcoes: [...opcoes, nova] });
     };
-
-    const removeOpcao = (id: string) => {
-      up({ opcoes: opcoes.filter((o) => o.id !== id) });
-    };
-
-    const updateOpcao = (id: string, patch: Partial<OpcaoCondicao>) => {
+    const removeOpcao = (id: string) => up({ opcoes: opcoes.filter((o) => o.id !== id) });
+    const updateOpcao = (id: string, patch: Partial<OpcaoCondicao>) =>
       up({ opcoes: opcoes.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
-    };
+    const switchToOpcoes = () => up({
+      opcoes: [
+        { id: "opt_yes", label: "Sim", palavras: d.value ?? "" },
+        { id: "opt_no",  label: "Não", palavras: d.no_value ?? "" },
+      ],
+      value: undefined, no_value: undefined,
+    });
 
-    const switchToOpcoes = () => {
-      up({
-        opcoes: [
-          { id: "opt_yes", label: "Sim", palavras: d.value ?? "" },
-          { id: "opt_no",  label: "Não", palavras: d.no_value ?? "" },
-        ],
-        value: undefined,
-        no_value: undefined,
-      });
-    };
+    // Bloco de opções reutilizado por todos os sourceTypes
+    const OpoesBlock = (
+      <div className="space-y-2">
+        <Label className="text-xs text-muted-foreground">
+          {sourceType === "message" ? "Opções de resposta" : "Rotas (valor → rota)"}
+        </Label>
+        <p className="text-[11px] text-muted-foreground">
+          {sourceType === "message"
+            ? "Avaliadas em ordem. A última sem palavras = padrão."
+            : "Coloque o valor exato nos campos. A última sem valor = padrão."}
+        </p>
+        {opcoes.map((op, i) => {
+          const cor = OPCAO_CORES[i % OPCAO_CORES.length];
+          return (
+            <div key={op.id} className="rounded-md border p-2 space-y-1.5" style={{ borderColor: cor + "60" }}>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor }} />
+                <Input value={op.label} onChange={(e) => updateOpcao(op.id, { label: e.target.value })} className="h-7 text-xs flex-1" placeholder="Nome da rota" />
+                {opcoes.length > 2 && (
+                  <button type="button" onClick={() => removeOpcao(op.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <Input
+                value={op.palavras}
+                onChange={(e) => updateOpcao(op.id, { palavras: e.target.value })}
+                className="h-7 text-xs"
+                placeholder={i === opcoes.length - 1
+                  ? "Deixar vazio = padrão (qualquer valor)"
+                  : sourceType === "message" ? "sim, 1, quero (vírgula)" : "VALOR_EXATO"}
+              />
+            </div>
+          );
+        })}
+        <button type="button" onClick={addOpcao} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors">
+          <Plus className="h-3 w-3" /> Adicionar rota
+        </button>
+      </div>
+    );
 
     return (
       <div className="space-y-3">
         {LabelField}
 
+        {/* Tipo de fonte */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Pergunta do bot (opcional)</Label>
-          <Textarea
-            value={d.pergunta ?? ""}
-            onChange={(e) => up({ pergunta: e.target.value })}
-            rows={3}
-            className="text-sm resize-none"
-            placeholder="Ex: Como posso ajudar? Responda 1, 2 ou 3."
-          />
-          <p className="text-[11px] text-muted-foreground">Se preenchido, o bot envia esta mensagem e aguarda resposta antes de avaliar.</p>
+          <Label className="text-xs text-muted-foreground">O que avaliar</Label>
+          <Select value={sourceType} onValueChange={(v) => up({ sourceType: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent position="popper" className="z-[9999]">
+              <SelectItem value="message">Mensagem do usuário</SelectItem>
+              <SelectItem value="node_output">Saída de um nó IA</SelectItem>
+              <SelectItem value="variable">Variável do fluxo</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <hr className="border-border" />
 
-        {!hasOpcoes ? (
+        {sourceType === "message" && (
           <>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Campo avaliado</Label>
-              <Select value={d.field ?? "message"} onValueChange={(v) => up({ field: v })}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent position="popper" className="z-[9999]">
-                  <SelectItem value="message">Conteúdo da mensagem</SelectItem>
-                  <SelectItem value="time">Horário atual</SelectItem>
-                  <SelectItem value="weekday">Dia da semana</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs text-muted-foreground">Pergunta do bot (opcional)</Label>
+              <Textarea value={d.pergunta ?? ""} onChange={(e) => up({ pergunta: e.target.value })} rows={3} className="text-sm resize-none" placeholder="Ex: Como posso ajudar? Responda 1, 2 ou 3." />
+              <p className="text-[11px] text-muted-foreground">Se preenchido, o bot envia e aguarda resposta antes de avaliar.</p>
             </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Operador</Label>
-              <Select value={d.operator ?? "contains"} onValueChange={(v) => up({ operator: v })}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent position="popper" className="z-[9999]">
-                  <SelectItem value="contains">Contém</SelectItem>
-                  <SelectItem value="not_contains">Não contém</SelectItem>
-                  <SelectItem value="equals">Igual a</SelectItem>
-                  <SelectItem value="between">Entre (ex: 08:00-18:00)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <hr className="border-border" />
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                Palavras para <span className="text-emerald-600">Sim</span>
-              </Label>
-              <Input
-                value={d.value ?? ""}
-                onChange={(e) => up({ value: e.target.value })}
-                className="h-8 text-sm"
-                placeholder={d.field === "time" ? "08:00-18:00" : "sim, 1, quero, aceito"}
-              />
-              <p className="text-[11px] text-muted-foreground">Separe com vírgula. Basta uma coincidir.</p>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
-                Palavras para <span className="text-rose-500">Não</span>
-                <span className="text-muted-foreground font-normal">(opcional)</span>
-              </Label>
-              <Input
-                value={d.no_value ?? ""}
-                onChange={(e) => up({ no_value: e.target.value })}
-                className="h-8 text-sm"
-                placeholder="não, 2, nope, cancelar"
-              />
-              <p className="text-[11px] text-muted-foreground">Se vazio, qualquer resposta que não for Sim vai para Não.</p>
-            </div>
-
-            <button
-              type="button"
-              onClick={switchToOpcoes}
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors"
-            >
-              <Plus className="h-3 w-3" /> Adicionar mais opções
-            </button>
+            {!hasOpcoes ? (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Campo avaliado</Label>
+                  <Select value={d.field ?? "message"} onValueChange={(v) => up({ field: v })}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" className="z-[9999]">
+                      <SelectItem value="message">Conteúdo da mensagem</SelectItem>
+                      <SelectItem value="time">Horário atual</SelectItem>
+                      <SelectItem value="weekday">Dia da semana</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Operador</Label>
+                  <Select value={d.operator ?? "contains"} onValueChange={(v) => up({ operator: v })}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" className="z-[9999]">
+                      <SelectItem value="contains">Contém</SelectItem>
+                      <SelectItem value="not_contains">Não contém</SelectItem>
+                      <SelectItem value="equals">Igual a</SelectItem>
+                      <SelectItem value="between">Entre (ex: 08:00-18:00)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <hr className="border-border" />
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                    Palavras para <span className="text-emerald-600">Sim</span>
+                  </Label>
+                  <Input value={d.value ?? ""} onChange={(e) => up({ value: e.target.value })} className="h-8 text-sm" placeholder={d.field === "time" ? "08:00-18:00" : "sim, 1, quero, aceito"} />
+                  <p className="text-[11px] text-muted-foreground">Separe com vírgula. Basta uma coincidir.</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                    Palavras para <span className="text-rose-500">Não</span>
+                    <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
+                  <Input value={d.no_value ?? ""} onChange={(e) => up({ no_value: e.target.value })} className="h-8 text-sm" placeholder="não, 2, nope, cancelar" />
+                </div>
+                <button type="button" onClick={switchToOpcoes} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors">
+                  <Plus className="h-3 w-3" /> Adicionar mais opções
+                </button>
+              </>
+            ) : OpoesBlock}
           </>
-        ) : (
+        )}
+
+        {sourceType === "node_output" && (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Opções de resposta</Label>
-              <p className="text-[11px] text-muted-foreground">Avaliadas em ordem. A última sem palavras = padrão (qualquer outra resposta).</p>
-
-              {opcoes.map((op, i) => {
-                const cor = OPCAO_CORES[i % OPCAO_CORES.length];
-                return (
-                  <div key={op.id} className="rounded-md border p-2 space-y-1.5" style={{ borderColor: cor + "60" }}>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor }} />
-                      <Input
-                        value={op.label}
-                        onChange={(e) => updateOpcao(op.id, { label: e.target.value })}
-                        className="h-7 text-xs flex-1"
-                        placeholder="Nome da opção"
-                      />
-                      {opcoes.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => removeOpcao(op.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <Input
-                      value={op.palavras}
-                      onChange={(e) => updateOpcao(op.id, { palavras: e.target.value })}
-                      className="h-7 text-xs"
-                      placeholder={
-                        i === opcoes.length - 1
-                          ? "Deixar vazio = padrão (qualquer resposta)"
-                          : "sim, 1, quero (separe com vírgula)"
-                      }
-                    />
-                  </div>
-                );
-              })}
-
-              <button
-                type="button"
-                onClick={addOpcao}
-                className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-amber-400 hover:text-amber-600 transition-colors"
-              >
-                <Plus className="h-3 w-3" /> Adicionar opção
-              </button>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Nó IA de origem</Label>
+              {aiNodes.length === 0 ? (
+                <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded p-2">Nenhum nó IA com saída estruturada ativa encontrado.</p>
+              ) : (
+                <Select value={d.sourceNodeId ?? ""} onValueChange={(v) => up({ sourceNodeId: v, sourceField: undefined })}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar nó" /></SelectTrigger>
+                  <SelectContent position="popper" className="z-[9999]">
+                    {aiNodes.map(n => (
+                      <SelectItem key={n.id} value={n.id}>{(n.data as any).label ?? n.id}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+            {d.sourceNodeId && (
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Campo da saída</Label>
+                {sourceAiFields.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">Nenhum campo configurado nesse nó.</p>
+                ) : (
+                  <Select value={d.sourceField ?? ""} onValueChange={(v) => up({ sourceField: v })}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar campo" /></SelectTrigger>
+                    <SelectContent position="popper" className="z-[9999]">
+                      {sourceAiFields.map(f => (
+                        <SelectItem key={f.id} value={f.name}>{f.name} ({f.type})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+            <hr className="border-border" />
+            {OpoesBlock}
+          </>
+        )}
+
+        {sourceType === "variable" && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Nome da variável</Label>
+              <Input value={d.variableName ?? ""} onChange={(e) => up({ variableName: e.target.value })} className="h-8 text-sm" placeholder="Ex: forma_pagamento" />
+              <p className="text-[11px] text-muted-foreground">Nome da variável salva por um nó Aguardar (save_to).</p>
+            </div>
+            <hr className="border-border" />
+            {OpoesBlock}
           </>
         )}
       </div>
     );
   }
 
-  if (node.type === "ai") return (
-    <div className="space-y-3">
-      {LabelField}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Modelo</Label>
-        <Select value={d.model} onValueChange={(v) => up({ model: v })}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999]">
-            <SelectItem value="claude-haiku-4-5-20251001">Haiku 4.5 (rápido e econômico)</SelectItem>
-            <SelectItem value="claude-sonnet-4-6">Sonnet 4.6 (mais inteligente)</SelectItem>
-          </SelectContent>
-        </Select>
+  if (node.type === "ai") {
+    const soCfg = d.structuredOutput as { enabled?: boolean; fields?: StructuredFieldFE[] } | undefined;
+    const soEnabled = soCfg?.enabled ?? false;
+    const soFields: StructuredFieldFE[] = soCfg?.fields ?? [];
+
+    const upSO = (patch: Partial<{ enabled: boolean; fields: StructuredFieldFE[] }>) =>
+      up({ structuredOutput: { ...(soCfg ?? {}), ...patch } });
+
+    const addField = () => upSO({ fields: [...soFields, { id: `f_${Date.now()}`, name: "", type: "text", required: true }] });
+    const removeField = (id: string) => upSO({ fields: soFields.filter(f => f.id !== id) });
+    const updateField = (id: string, patch: Partial<StructuredFieldFE>) =>
+      upSO({ fields: soFields.map(f => f.id === id ? { ...f, ...patch } : f) });
+
+    return (
+      <div className="space-y-3">
+        {LabelField}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Modelo</Label>
+          <Select value={d.model} onValueChange={(v) => up({ model: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent position="popper" className="z-[9999]">
+              <SelectItem value="claude-haiku-4-5-20251001">Haiku 4.5 (rápido e econômico)</SelectItem>
+              <SelectItem value="claude-sonnet-4-6">Sonnet 4.6 (mais inteligente)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Prompt do sistema</Label>
+          <Textarea value={d.prompt ?? ""} onChange={(e) => up({ prompt: e.target.value })} rows={5} className="text-sm resize-none" placeholder="Você é um assistente virtual da empresa..." />
+          <p className="text-[11px] text-muted-foreground">Variáveis: <code className="bg-muted px-1 rounded">{"{nome}"}</code> <code className="bg-muted px-1 rounded">{"{telefone}"}</code></p>
+        </div>
+
+        <hr className="border-border" />
+
+        {/* Saída estruturada */}
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-xs font-semibold">Saída estruturada</Label>
+            <p className="text-[11px] text-muted-foreground">IA retorna JSON; só "message" vai ao WhatsApp</p>
+          </div>
+          <Switch checked={soEnabled} onCheckedChange={(v) => upSO({ enabled: v, fields: soFields })} />
+        </div>
+
+        {soEnabled && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground bg-blue-50 dark:bg-blue-950/30 rounded p-2">
+              Configure os campos que a IA deve retornar além da mensagem. Os valores ficam disponíveis para nós Condição.
+            </p>
+            {soFields.map(f => (
+              <div key={f.id} className="rounded-md border p-2 space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={f.name}
+                    onChange={(e) => updateField(f.id, { name: e.target.value })}
+                    className="h-7 text-xs flex-1"
+                    placeholder="nome_campo (ex: status)"
+                  />
+                  <Select value={f.type} onValueChange={(v) => updateField(f.id, { type: v as "text" | "enum" })}>
+                    <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" className="z-[9999]">
+                      <SelectItem value="text">Texto</SelectItem>
+                      <SelectItem value="enum">Enum</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button type="button" onClick={() => removeField(f.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {f.type === "enum" && (
+                  <Input
+                    value={(f.options ?? []).join(", ")}
+                    onChange={(e) => updateField(f.id, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                    className="h-7 text-xs"
+                    placeholder="VALOR1, VALOR2, VALOR3"
+                  />
+                )}
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" checked={f.required} onChange={(e) => updateField(f.id, { required: e.target.checked })} className="h-3 w-3 rounded" />
+                  Campo obrigatório (falha → ATENDIMENTO_HUMANO)
+                </label>
+              </div>
+            ))}
+            <button type="button" onClick={addField} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground border border-dashed rounded-md py-1.5 hover:border-primary hover:text-primary transition-colors">
+              <Plus className="h-3 w-3" /> Adicionar campo
+            </button>
+          </div>
+        )}
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Prompt do sistema</Label>
-        <Textarea value={d.prompt ?? ""} onChange={(e) => up({ prompt: e.target.value })} rows={6} className="text-sm resize-none" placeholder="Você é um assistente virtual da empresa..." />
-      </div>
-    </div>
-  );
+    );
+  }
 
   if (node.type === "assign") return (
     <div className="space-y-3">

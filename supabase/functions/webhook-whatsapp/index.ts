@@ -8,6 +8,9 @@ const supabase = createClient(
 const ETAPA_WHATSAPP_ID = "aaaaaaaa-0002-0002-0002-000000000002";
 const EVOLUTION_URL = "http://2.25.125.70:8080";
 
+// MIME types de imagem aceitos como visão pelo Claude
+const VISION_MIME_TYPES_WEBHOOK = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -405,12 +408,34 @@ Deno.serve(async (req) => {
           }),
         }).catch(e => console.error("[webhook] erro enviar-push:", e));
 
-        // 7. Fluxo e bot (somente texto)
-        if (tipo === "texto") {
+        // 7. Fluxo e bot (texto + imagem para visão no nó AI)
+        const tiposFluxo = ["texto", "imagem"];
+        if (tiposFluxo.includes(tipo)) {
+          // Para imagens, repassar base64 para o fluxo poder enviar à IA com visão
+          const fluxoBody: Record<string, any> = {
+            leadId,
+            canalId: canal.id,
+            empresaId,
+            ultimaMensagem: texto,
+            telefone,
+          };
+          if (tipo === "imagem" && mediaUrl && mediaMime && VISION_MIME_TYPES_WEBHOOK.includes(mediaMime.toLowerCase())) {
+            // Re-baixar mídia como base64 para o fluxo (já foi baixada acima)
+            try {
+              const midia2 = await baixarMidia(instance, msg, globalKey);
+              if (midia2?.base64) {
+                fluxoBody.mediaBase64 = midia2.base64;
+                fluxoBody.mediaMimeType = midia2.mimetype;
+                fluxoBody.mediaCaption = (message as any)?.imageMessage?.caption ?? null;
+              }
+            } catch (e) {
+              console.error("[webhook] erro re-baixar midia para fluxo:", e);
+            }
+          }
           fetch(`${supabaseUrl}/functions/v1/executar-fluxo`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
-            body: JSON.stringify({ leadId, canalId: canal.id, empresaId, ultimaMensagem: texto, telefone }),
+            body: JSON.stringify(fluxoBody),
           }).catch(e => console.error("[webhook] erro executar-fluxo:", e));
 
           if (existingLead?.bot_ativo) {
