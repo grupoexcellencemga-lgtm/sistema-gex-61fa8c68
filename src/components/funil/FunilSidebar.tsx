@@ -141,7 +141,14 @@ export function FunilSidebar(props: Props) {
   const [funnelName, setFunnelName] = useState("");
   const [targetFolder, setTargetFolder] = useState<string>("");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("funil-sidebar-open-groups");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
 
@@ -151,7 +158,11 @@ export function FunilSidebar(props: Props) {
   );
 
   const toggleGroup = (id: string) =>
-    setOpenGroups((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
+    setOpenGroups((prev) => {
+      const next = { ...prev, [id]: !(prev[id] ?? true) };
+      try { localStorage.setItem("funil-sidebar-open-groups", JSON.stringify(next)); } catch {}
+      return next;
+    });
 
   const isOpen = (id: string) => openGroups[id] ?? true;
 
