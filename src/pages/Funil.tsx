@@ -698,7 +698,7 @@ const Funil = () => {
             ))}
           </nav>
         </header>
-      <div className="flex overflow-hidden bg-card" style={crmView === "conversas" ? undefined : { height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
+      <div className="flex overflow-hidden bg-card" style={crmView === "conversas" ? undefined : { height: 'calc(100dvh - 9rem)', minHeight: '500px' }}>
         {/* Sidebar — lista de quadros */}
         {crmView === "oportunidades" && (
         <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[320px]" : "w-0")}>
