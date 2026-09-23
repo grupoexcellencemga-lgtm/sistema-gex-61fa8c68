@@ -8,11 +8,18 @@ import {
   parseStructuredAiObject,
   parseStructuredAiOutput,
   resolveConditionRoute,
+  shouldEnsureFunnelOpportunity,
   type ConversationRow,
   type StructuredField,
 } from "../../supabase/functions/_shared/whatsapp-flow-runtime";
 
 describe("WhatsApp flow runtime", () => {
+  it("roteia oportunidade apenas quando uma sessão nova está ligada a uma pasta", () => {
+    expect(shouldEnsureFunnelOpportunity(true, "pasta-opex")).toBe(true);
+    expect(shouldEnsureFunnelOpportunity(false, "pasta-opex")).toBe(false);
+    expect(shouldEnsureFunnelOpportunity(true, null)).toBe(false);
+  });
+
   it("builds Claude history from the newest protocol messages and keeps the current message last", () => {
     const rows: ConversationRow[] = [
       { id: "current", direcao: "entrada", conteudo: "O link não deu certo", created_at: "2026-09-23T15:09:57Z" },

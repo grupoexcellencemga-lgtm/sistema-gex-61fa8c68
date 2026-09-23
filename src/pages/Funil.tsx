@@ -22,17 +22,12 @@ import { FunilEtapaDialog } from "@/components/funil/FunilEtapaDialog";
 import { LeadFormDialog } from "@/components/funil/LeadFormDialog";
 import { LeadDetailSheet } from "@/components/funil/LeadDetailSheet";
 import { CrmInbox } from "@/components/funil/CrmInbox";
+import { FunilSidebar } from "@/components/funil/FunilSidebar";
+import { pickAvailableBoard, type FunilPasta, type FunilQuadroOrganizado } from "@/components/funil/funilFolders";
 import { AgentesBotSection } from "@/components/configuracoes/AgentesBotSection";
 import { usePermissions } from "@/hooks/usePermissions";
 
-type FunilQuadro = {
-  id: string;
-  nome: string;
-  ordem: number;
-  fixo?: boolean;
-  canal?: string | null;
-  created_at?: string | null;
-};
+type FunilQuadro = FunilQuadroOrganizado;
 
 const ETAPAS_PADRAO: Array<{ nome: string; cor: string; tipo: FunilEtapa["tipo"] }> = [
   { nome: "Novo Lead", cor: "slate", tipo: "em_andamento" },
@@ -72,9 +67,6 @@ const Funil = () => {
   // Quadros
   const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
   const [crmView, setCrmView] = useState<"conversas" | "oportunidades" | "agentes">("conversas");
-  const [newQuadroName, setNewQuadroName] = useState("");
-  const [editingQuadroId, setEditingQuadroId] = useState<string | null>(null);
-  const [editingQuadroName, setEditingQuadroName] = useState("");
   const [quadrosVisible, setQuadrosVisible] = useState(true);
 
   // Import contacts state
@@ -109,10 +101,22 @@ const Funil = () => {
     enabled: !!empresaId,
   });
 
+  const { data: pastas = [], isLoading: pastasLoading } = useQuery<FunilPasta[]>({
+    queryKey: ["funil-pastas", empresaId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("funil_pastas").select("id, nome, ordem").eq("empresa_id", empresaId!).is("deleted_at", null).order("ordem");
+      if (error) throw error;
+      return (data || []) as FunilPasta[];
+    },
+    enabled: !!empresaId,
+  });
+
   useEffect(() => {
     if (crmView !== "agentes" && quadros.length > 0) {
       const eligible = quadros.filter(q => crmView === "conversas" ? q.fixo || q.canal : !q.fixo && !q.canal);
-      if (!eligible.some(q => q.id === selectedQuadroId)) setSelectedQuadroId(eligible[0]?.id ?? null);
+      if (!eligible.some(q => q.id === selectedQuadroId)) {
+        setSelectedQuadroId(crmView === "oportunidades" ? pickAvailableBoard(selectedQuadroId, eligible) : eligible[0]?.id ?? null);
+      }
     }
   }, [quadros, selectedQuadroId, crmView]);
 
@@ -281,11 +285,12 @@ const Funil = () => {
 
   // ── Mutations: quadros ──
   const createQuadroMutation = useMutation({
-    mutationFn: async (nome: string) => {
+    mutationFn: async ({ nome, pastaId }: { nome: string; pastaId: string | null }) => {
       const ordem = quadros.length;
+      const ordemNaPasta = quadros.filter((q) => q.pasta_id === pastaId).length;
       const { data: quadro, error } = await (supabase as any)
         .from("funil_quadros")
-        .insert({ nome: nome.trim(), ordem, empresa_id: empresaId })
+        .insert({ nome: nome.trim(), ordem, empresa_id: empresaId, pasta_id: pastaId, ordem_na_pasta: ordemNaPasta, status_ciclo: "preparacao" })
         .select("id")
         .single();
       if (error) throw error;
@@ -370,7 +375,6 @@ const Funil = () => {
       queryClient.invalidateQueries({ queryKey: ["funil-quadros"] });
       queryClient.invalidateQueries({ queryKey: ["funil-etapas", id] });
       queryClient.invalidateQueries({ queryKey: ["funil-cards", id] });
-      setNewQuadroName("");
       setImportOpen(false);
       setImportEventoId("");
       setImportTurmaId("");
@@ -383,6 +387,33 @@ const Funil = () => {
       }
     },
     onError: (err: any) => toast.error("Erro ao criar quadro: " + err.message),
+  });
+
+  const createPastaMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      const { error } = await (supabase as any).from("funil_pastas").insert({ nome, ordem: pastas.length, empresa_id: empresaId });
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-pastas"] }); toast.success("Pasta criada"); },
+    onError: (err: any) => toast.error("Erro ao criar pasta: " + err.message),
+  });
+
+  const updateQuadroOrganizationMutation = useMutation({
+    mutationFn: async ({ id, changes }: { id: string; changes: Record<string, unknown> }) => {
+      const { error } = await (supabase as any).from("funil_quadros").update(changes).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funil-quadros"] }),
+    onError: (err: any) => toast.error("Erro ao organizar funil: " + err.message),
+  });
+
+  const activateQuadroMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("ativar_funil_recebedor", { p_quadro_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["funil-quadros"] }); toast.success("Esta turma agora recebe os novos leads"); },
+    onError: (err: any) => toast.error("Não foi possível ativar a turma: " + err.message),
   });
 
   const renameQuadroMutation = useMutation({
@@ -670,7 +701,7 @@ const Funil = () => {
       <div className="flex overflow-hidden bg-card" style={crmView === "conversas" ? undefined : { height: 'calc(100dvh - 16rem)', minHeight: '440px' }}>
         {/* Sidebar — lista de quadros */}
         {crmView === "oportunidades" && (
-        <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[240px]" : "w-0")}>
+        <div className={cn("shrink-0 flex relative transition-all duration-200", quadrosVisible ? "w-[280px]" : "w-0")}>
           {/* Toggle handle — always visible on the right edge */}
           <button
             onClick={() => setQuadrosVisible((v) => !v)}
@@ -687,174 +718,33 @@ const Funil = () => {
           </button>
 
           {quadrosVisible && (
-          <aside className="w-[240px] shrink-0 border-r bg-card flex flex-col overflow-hidden">
-            <div className="p-4 border-b flex items-center gap-2">
-              <LayoutDashboard className="h-5 w-5 text-primary" />
-              <div>
-                <h2 className="text-sm font-semibold leading-tight">Funis de vendas</h2>
-                <p className="text-xs text-muted-foreground">Escolha a oferta ou o quadro</p>
+          <FunilSidebar
+            folders={pastas}
+            funnels={quadros}
+            selectedId={selectedQuadroId}
+            loading={quadrosLoading || pastasLoading}
+            onSelect={setSelectedQuadroId}
+            onCreateFolder={(name) => createPastaMutation.mutate(name)}
+            onCreateFunnel={(name, folderId) => createQuadroMutation.mutate({ nome: name, pastaId: folderId })}
+            onToggleFavorite={(funnel) => updateQuadroOrganizationMutation.mutate({ id: funnel.id, changes: { favorito: !funnel.favorito } })}
+            onActivate={(funnel) => activateQuadroMutation.mutate(funnel.id)}
+            onMove={(funnel, folderId) => updateQuadroOrganizationMutation.mutate({ id: funnel.id, changes: { pasta_id: folderId, recebe_novos_leads: false, status_ciclo: funnel.recebe_novos_leads ? "encerrando" : funnel.status_ciclo } })}
+            onRename={(funnel, name) => renameQuadroMutation.mutate({ id: funnel.id, nome: name })}
+            onDelete={(funnel) => deleteQuadroMutation.mutate(funnel)}
+            createOptions={(
+              <div className="space-y-2">
+                <button type="button" onClick={() => setImportOpen((v) => !v)} className="flex w-full items-center gap-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground">
+                  {importOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  <Users className="h-3.5 w-3.5" /> Importar contatos do evento/turma
+                </button>
+                {importOpen && <div className="space-y-2">
+                  <div className="flex gap-1">{(["evento", "turma"] as const).map((tipo) => <button key={tipo} type="button" onClick={() => { setImportTipo(tipo); setImportEventoId(""); setImportTurmaId(""); }} className={cn("flex-1 rounded border py-1 text-xs", importTipo === tipo ? "border-primary bg-primary text-primary-foreground" : "border-input")}>{tipo === "evento" ? "Evento" : "Turma"}</button>)}</div>
+                  {importTipo === "evento" ? <select value={importEventoId} onChange={(e) => setImportEventoId(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-xs"><option value="">Selecione o evento...</option>{(eventosImport as { id: string; nome: string }[]).map((ev) => <option key={ev.id} value={ev.id}>{ev.nome}</option>)}</select> : <select value={importTurmaId} onChange={(e) => setImportTurmaId(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-xs"><option value="">Selecione a turma...</option>{turmas.map((t) => <option key={t.id} value={t.id}>{t.produtos?.nome ? `${t.produtos.nome} · ${t.nome}` : t.nome}</option>)}</select>}
+                  {((importTipo === "evento" && importEventoId) || (importTipo === "turma" && importTurmaId)) && <p className="text-[11px] text-muted-foreground">{previewFetching ? "Contando..." : previewCount != null ? `${previewCount} contato${previewCount !== 1 ? "s" : ""} encontrado${previewCount !== 1 ? "s" : ""}` : ""}</p>}
+                </div>}
               </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-2 space-y-1">
-              {quadrosLoading ? (
-                <p className="text-xs text-muted-foreground text-center p-4">Carregando...</p>
-              ) : (
-                <>
-                  {/* Normal boards */}
-                  {quadros.filter((q) => !q.fixo && !q.canal).length === 0 && (
-                    <div className="text-center p-6 space-y-2">
-                      <LayoutDashboard className="h-8 w-8 mx-auto text-muted-foreground/30" />
-                      <p className="text-xs text-muted-foreground">Crie o primeiro quadro de funil.</p>
-                    </div>
-                  )}
-                  {quadros.filter((q) => !q.fixo && !q.canal).map((quadro) => (
-                    <div
-                      key={quadro.id}
-                      className={cn(
-                        "flex items-center gap-1 px-2 py-2 rounded-md text-sm cursor-pointer group transition-colors",
-                        selectedQuadroId === quadro.id
-                          ? "bg-primary/15 text-primary font-medium"
-                          : "hover:bg-muted text-foreground"
-                      )}
-                    >
-                      {editingQuadroId === quadro.id ? (
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            if (editingQuadroName.trim()) renameQuadroMutation.mutate({ id: quadro.id, nome: editingQuadroName });
-                          }}
-                          className="flex items-center gap-1 flex-1"
-                        >
-                          <Input
-                            value={editingQuadroName}
-                            onChange={(e) => setEditingQuadroName(e.target.value)}
-                            className="h-7 text-xs"
-                            autoFocus
-                          />
-                          <Button type="submit" size="icon" variant="ghost" className="h-7 w-7">
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingQuadroId(null)}>
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </form>
-                      ) : (
-                        <>
-                          <span className="flex-1 truncate" onClick={() => setSelectedQuadroId(quadro.id)}>
-                            {quadro.nome}
-                          </span>
-                          <Button
-                            size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                            onClick={() => { setEditingQuadroId(quadro.id); setEditingQuadroName(quadro.nome); }}
-                            title="Renomear"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                            onClick={() => deleteQuadroMutation.mutate(quadro)}
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-
-            {/* Criar quadro + Importar contatos */}
-            <div className="p-3 border-t space-y-2 shrink-0">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newQuadroName.trim()) return;
-                  createQuadroMutation.mutate(newQuadroName);
-                }}
-                className="flex gap-2"
-              >
-                <Input
-                  value={newQuadroName}
-                  onChange={(e) => setNewQuadroName(e.target.value)}
-                  placeholder="Nome do quadro..."
-                  className="h-9 text-sm"
-                />
-                <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={createQuadroMutation.isPending}>
-                  {createQuadroMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </Button>
-              </form>
-
-              {/* Import contacts toggle */}
-              <button
-                type="button"
-                onClick={() => setImportOpen((v) => !v)}
-                className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-0.5"
-              >
-                {importOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                <Users className="h-3.5 w-3.5" />
-                Importar contatos do evento/turma
-              </button>
-
-              {importOpen && (
-                <div className="space-y-2 pt-1">
-                  <div className="flex gap-1">
-                    {(["evento", "turma"] as const).map((tipo) => (
-                      <button
-                        key={tipo}
-                        type="button"
-                        onClick={() => { setImportTipo(tipo); setImportEventoId(""); setImportTurmaId(""); }}
-                        className={cn(
-                          "flex-1 py-1 text-xs rounded border transition-colors",
-                          importTipo === tipo ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-muted/50"
-                        )}
-                      >
-                        {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-
-                  {importTipo === "evento" ? (
-                    <select
-                      value={importEventoId}
-                      onChange={(e) => setImportEventoId(e.target.value)}
-                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione o evento...</option>
-                      {(eventosImport as { id: string; nome: string }[]).map((ev) => (
-                        <option key={ev.id} value={ev.id}>{ev.nome}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      value={importTurmaId}
-                      onChange={(e) => setImportTurmaId(e.target.value)}
-                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione a turma...</option>
-                      {turmas.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.produtos?.nome ? `${t.produtos.nome} · ${t.nome}` : t.nome}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {((importTipo === "evento" && importEventoId) || (importTipo === "turma" && importTurmaId)) && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {previewFetching
-                        ? "Contando..."
-                        : previewCount != null
-                          ? `${previewCount} contato${previewCount !== 1 ? "s" : ""} encontrado${previewCount !== 1 ? "s" : ""}`
-                          : ""}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </aside>
+            )}
+          />
           )}
         </div>
         )}

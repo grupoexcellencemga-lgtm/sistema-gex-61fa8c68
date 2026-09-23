@@ -10,6 +10,10 @@ export type ClaudeMessage = {
   content: any;
 };
 
+export function shouldEnsureFunnelOpportunity(isNewSession: boolean, folderId?: string | null) {
+  return isNewSession && Boolean(folderId);
+}
+
 export type StructuredField = {
   name: string;
   type: "text" | "enum";

@@ -2093,6 +2093,7 @@ export type Database = {
           id: string
           nome: string
           palavra_chave: string | null
+          pasta_funil_id: string | null
           texto_inicio: string | null
           updated_at: string
         }
@@ -2105,6 +2106,7 @@ export type Database = {
           id?: string
           nome: string
           palavra_chave?: string | null
+          pasta_funil_id?: string | null
           texto_inicio?: string | null
           updated_at?: string
         }
@@ -2117,6 +2119,7 @@ export type Database = {
           id?: string
           nome?: string
           palavra_chave?: string | null
+          pasta_funil_id?: string | null
           texto_inicio?: string | null
           updated_at?: string
         }
@@ -2126,6 +2129,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fluxos_bot_pasta_funil_id_fkey"
+            columns: ["pasta_funil_id"]
+            isOneToOne: false
+            referencedRelation: "funil_pastas"
             referencedColumns: ["id"]
           },
         ]
@@ -2295,36 +2305,89 @@ export type Database = {
           },
         ]
       }
+      funil_pastas: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          empresa_id: string
+          id: string
+          nome: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          empresa_id: string
+          id?: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          empresa_id?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funil_pastas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funil_quadros: {
         Row: {
           canal: string | null
           created_at: string | null
           deleted_at: string | null
           empresa_id: string
+          favorito: boolean
           fixo: boolean
           id: string
           nome: string
           ordem: number | null
+          ordem_na_pasta: number
+          pasta_id: string | null
+          recebe_novos_leads: boolean
+          status_ciclo: string
         }
         Insert: {
           canal?: string | null
           created_at?: string | null
           deleted_at?: string | null
           empresa_id: string
+          favorito?: boolean
           fixo?: boolean
           id?: string
           nome: string
           ordem?: number | null
+          ordem_na_pasta?: number
+          pasta_id?: string | null
+          recebe_novos_leads?: boolean
+          status_ciclo?: string
         }
         Update: {
           canal?: string | null
           created_at?: string | null
           deleted_at?: string | null
           empresa_id?: string
+          favorito?: boolean
           fixo?: boolean
           id?: string
           nome?: string
           ordem?: number | null
+          ordem_na_pasta?: number
+          pasta_id?: string | null
+          recebe_novos_leads?: boolean
+          status_ciclo?: string
         }
         Relationships: [
           {
@@ -2332,6 +2395,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funil_quadros_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "funil_pastas"
             referencedColumns: ["id"]
           },
         ]
@@ -2836,6 +2906,7 @@ export type Database = {
       }
       mensagens_crm: {
         Row: {
+          agente_bot_id: string | null
           bot_respondido: boolean
           canal: string
           conteudo: string
@@ -2856,6 +2927,7 @@ export type Database = {
           tipo: string
         }
         Insert: {
+          agente_bot_id?: string | null
           bot_respondido?: boolean
           canal: string
           conteudo: string
@@ -2876,6 +2948,7 @@ export type Database = {
           tipo?: string
         }
         Update: {
+          agente_bot_id?: string | null
           bot_respondido?: boolean
           canal?: string
           conteudo?: string
@@ -2896,6 +2969,13 @@ export type Database = {
           tipo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "mensagens_crm_agente_bot_id_fkey"
+            columns: ["agente_bot_id"]
+            isOneToOne: false
+            referencedRelation: "agentes_bot"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "mensagens_crm_empresa_id_fkey"
             columns: ["empresa_id"]
@@ -5102,6 +5182,30 @@ export type Database = {
       }
     }
     Functions: {
+      ativar_funil_recebedor: {
+        Args: { p_quadro_id: string }
+        Returns: {
+          canal: string | null
+          created_at: string | null
+          deleted_at: string | null
+          empresa_id: string
+          favorito: boolean
+          fixo: boolean
+          id: string
+          nome: string
+          ordem: number | null
+          ordem_na_pasta: number
+          pasta_id: string | null
+          recebe_novos_leads: boolean
+          status_ciclo: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "funil_quadros"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       atualizar_metas_ativas: { Args: never; Returns: Json }
       auto_close_conversas_ia: { Args: never; Returns: undefined }
       buscar_conhecimento: {
@@ -5154,6 +5258,14 @@ export type Database = {
       }
       dashboard_metrics: { Args: { _ano: number; _mes: number }; Returns: Json }
       finalizar_protocolo: { Args: { p_lead_id: string }; Returns: undefined }
+      garantir_oportunidade_funil_ativo: {
+        Args: { p_empresa_id: string; p_lead_id: string; p_pasta_id: string }
+        Returns: {
+          card_id: string
+          etapa_id: string
+          quadro_id: string
+        }[]
+      }
       gerar_numero_protocolo: { Args: never; Returns: string }
       get_user_comercial_id: { Args: { _user_id: string }; Returns: string }
       get_user_id_by_email: { Args: { p_email: string }; Returns: string }

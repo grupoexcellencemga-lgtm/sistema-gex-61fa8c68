@@ -749,12 +749,14 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const [nome, setNome] = useState("Novo Fluxo");
   const [ativo, setAtivo] = useState(true);
   const [canalIds, setCanalIds] = useState<string[]>([]);
+  const [pastaFunilId, setPastaFunilId] = useState("");
   const [saving, setSaving] = useState(false);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const nodeCounter = useRef(1);
   const [canais, setCanais] = useState<{ id: string; nome: string }[]>([]);
+  const [pastasFunil, setPastasFunil] = useState<{ id: string; nome: string }[]>([]);
 
   // RLS filtra pela empresa do usuário; mostra só canais WhatsApp ativos (suporte Evolution API)
   useEffect(() => {
@@ -770,12 +772,18 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   }, []);
 
   useEffect(() => {
+    (supabase as any).from("funil_pastas").select("id, nome").eq("empresa_id", empresaId).is("deleted_at", null).order("ordem")
+      .then(({ data, error }: any) => { if (!error && data) setPastasFunil(data); });
+  }, [empresaId]);
+
+  useEffect(() => {
     if (!fluxoId) return;
     supabase.from("fluxos_bot").select("*").eq("id", fluxoId).single().then(({ data }) => {
       if (!data) return;
       setNome(data.nome);
       setAtivo(data.ativo);
       setCanalIds(data.canal_ids ?? []);
+      setPastaFunilId((data as any).pasta_funil_id ?? "");
       const fluxo = data.fluxo_json as any;
       if (fluxo?.nodes?.length) setNodes(fluxo.nodes);
       if (fluxo?.edges?.length) setEdges(fluxo.edges);
@@ -831,6 +839,7 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
         nome,
         ativo,
         canal_ids: canalIds,
+        pasta_funil_id: pastaFunilId || null,
         fluxo_json: { nodes, edges },
         updated_at: new Date().toISOString(),
       };
@@ -872,6 +881,14 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
           <Switch checked={ativo} onCheckedChange={setAtivo} />
           <span className="text-sm text-muted-foreground">{ativo ? "Ativo" : "Inativo"}</span>
         </div>
+        <div className="w-px h-6 bg-border shrink-0" />
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+          Produto do CRM:
+          <select value={pastaFunilId} onChange={(e) => setPastaFunilId(e.target.value)} className="h-8 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground">
+            <option value="">Sem automação comercial</option>
+            {pastasFunil.map((pasta) => <option key={pasta.id} value={pasta.id}>{pasta.nome}</option>)}
+          </select>
+        </label>
         <div className="w-px h-6 bg-border shrink-0" />
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-muted-foreground shrink-0">Canais:</span>

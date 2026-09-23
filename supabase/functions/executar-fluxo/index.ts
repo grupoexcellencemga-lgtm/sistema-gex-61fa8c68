@@ -8,6 +8,7 @@ import {
   parseStructuredAiObject,
   parseStructuredAiOutput,
   resolveConditionRoute,
+  shouldEnsureFunnelOpportunity,
   type StructuredField,
 } from "../_shared/whatsapp-flow-runtime.ts";
 
@@ -217,11 +218,11 @@ Deno.serve(async (req) => {
     });
 
     // 2. Selecionar fluxo
-    let fluxo: { id: string; fluxo_json: any } | null = null;
+    let fluxo: { id: string; fluxo_json: any; pasta_funil_id?: string | null } | null = null;
 
     const { data: fluxosAtivos } = await supabase
       .from("fluxos_bot")
-      .select("id, fluxo_json, palavra_chave")
+      .select("id, fluxo_json, palavra_chave, pasta_funil_id")
       .eq("ativo", true)
       .eq("empresa_id", empresaId)
       .contains("canal_ids", [canalId]);
@@ -237,7 +238,7 @@ Deno.serve(async (req) => {
     } else if (sessao) {
       const { data } = await supabase
         .from("fluxos_bot")
-        .select("id, fluxo_json")
+        .select("id, fluxo_json, pasta_funil_id")
         .eq("id", sessao.fluxo_id)
         .eq("ativo", true)
         .eq("empresa_id", empresaId)
@@ -319,6 +320,17 @@ Deno.serve(async (req) => {
         });
       }
       sessaoNovaId = sessaoNova.id;
+
+      if (shouldEnsureFunnelOpportunity(isNew, fluxo.pasta_funil_id)) {
+        const { error: routeError } = await supabase.rpc("garantir_oportunidade_funil_ativo", {
+          p_lead_id: leadId,
+          p_pasta_id: fluxo.pasta_funil_id,
+          p_empresa_id: empresaId,
+        });
+        if (routeError) {
+          console.error(`[executar-fluxo] oportunidade não roteada lead=${leadId} pasta=${fluxo.pasta_funil_id}:`, routeError.message);
+        }
+      }
     } else {
       currentNodeId = sessao.current_node_id;
 
