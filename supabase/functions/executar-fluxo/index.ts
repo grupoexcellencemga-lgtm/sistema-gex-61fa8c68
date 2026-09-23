@@ -663,6 +663,43 @@ Deno.serve(async (req) => {
           await supabase.from("leads")
             .update({ status_atendimento: "fila", atendente_id: null, bot_ativo: false })
             .eq("id", leadId);
+
+          // Se o nó tiver etapa_nome configurado, avança o card no funil
+          const etapaNome: string | undefined = node.data.etapa_nome;
+          if (etapaNome && fluxo.pasta_funil_id) {
+            try {
+              // Busca o quadro ativo da pasta que recebe novos leads
+              const { data: quadroAtivo } = await supabase
+                .from("funil_quadros")
+                .select("id")
+                .eq("pasta_id", fluxo.pasta_funil_id)
+                .eq("recebe_novos_leads", true)
+                .is("deleted_at", null)
+                .maybeSingle();
+
+              if (quadroAtivo) {
+                // Acha a etapa pelo nome dentro desse quadro
+                const { data: etapa } = await supabase
+                  .from("funil_etapas")
+                  .select("id")
+                  .eq("quadro_id", quadroAtivo.id)
+                  .ilike("nome", etapaNome)
+                  .maybeSingle();
+
+                if (etapa) {
+                  await supabase
+                    .from("funil_cards")
+                    .update({ etapa_id: etapa.id })
+                    .eq("quadro_id", quadroAtivo.id)
+                    .eq("lead_id", leadId)
+                    .eq("status", "ativo");
+                }
+              }
+            } catch (etapaErr) {
+              console.error("[executar-fluxo] erro ao avançar etapa:", String(etapaErr));
+            }
+          }
+
           finalStatus = "completed";
           run = false;
           break;
