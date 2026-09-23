@@ -3,6 +3,9 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.36.3";
 import {
   attachMediaToLatestUserMessage,
   buildClaudeMessages,
+  buildFlowOperationalContext,
+  buildStructuredResponseTool,
+  parseStructuredAiObject,
   parseStructuredAiOutput,
   resolveConditionRoute,
   type StructuredField,
@@ -526,36 +529,45 @@ Deno.serve(async (req) => {
 
             // Montar system prompt — incluir instrução JSON se structured output ativo
             const userPrompt = interpolate(node.data.prompt ?? "", { ...msgVars, ...variables });
+            const operationalContext = buildFlowOperationalContext(fj.nodes);
             let systemPrompt: string;
 
             if (useStructured) {
               const fields = structuredCfg!.fields!;
-              const fieldsDesc = fields.map(f => {
-                if (f.type === "enum" && f.options?.length) {
-                  return `  "${f.name}": um dos valores: ${f.options.map(o => `"${o}"`).join(" | ")}`;
-                }
-                return `  "${f.name}": string`;
-              }).join(",\n");
-
-              // Instrução JSON ANTES do prompt do usuário — modelo lê do início
-              const jsonInstruction = `[FORMATO DE RESPOSTA OBRIGATÓRIO]\nSua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido, sem nenhum texto antes ou depois, sem blocos de código markdown.\nFormato exato:\n{\n  "message": "texto para enviar ao cliente",\n${fieldsDesc}\n}\nNão escreva nada fora do JSON. Não use \`\`\`json. Apenas o objeto JSON puro.`;
-              systemPrompt = jsonInstruction + (userPrompt ? `\n\n---\n\n${userPrompt}` : "");
+              const structuredInstruction = `[SAÍDA ESTRUTURADA OBRIGATÓRIA]\nUse exclusivamente a ferramenta structured_response. O campo message será enviado ao cliente; os demais campos são internos e nunca devem aparecer dentro de message.`;
+              systemPrompt = [structuredInstruction, operationalContext, userPrompt]
+                .filter(Boolean)
+                .join("\n\n---\n\n");
             } else {
-              systemPrompt = userPrompt;
+              systemPrompt = [operationalContext, userPrompt].filter(Boolean).join("\n\n---\n\n");
             }
 
-            const aiResp = await anthropic.messages.create({
+            const request: Record<string, any> = {
               model: node.data.model ?? "claude-haiku-4-5-20251001",
               max_tokens: useStructured ? 1024 : 512,
               system: systemPrompt,
               messages,
-            });
+            };
+            if (useStructured) {
+              request.tools = [buildStructuredResponseTool(structuredCfg!.fields!)];
+              request.tool_choice = { type: "tool", name: "structured_response" };
+            }
 
-            const rawText = aiResp.content[0]?.type === "text" ? aiResp.content[0].text : null;
+            const aiResp = await anthropic.messages.create(request as any);
 
-            if (useStructured && rawText) {
+            const rawTextBlock = aiResp.content.find((block) => block.type === "text");
+            const rawText = rawTextBlock?.type === "text" ? rawTextBlock.text : null;
+
+            if (useStructured) {
               const fields = structuredCfg!.fields!;
-              const parseResult = parseStructuredAiOutput(rawText, fields);
+              const toolBlock = aiResp.content.find((block) =>
+                block.type === "tool_use" && block.name === "structured_response"
+              );
+              const parseResult = toolBlock?.type === "tool_use"
+                ? parseStructuredAiObject(toolBlock.input, fields)
+                : rawText
+                  ? parseStructuredAiOutput(rawText, fields)
+                  : { ok: false as const, error: "Claude não retornou a ferramenta estruturada" };
 
               if (!parseResult.ok) {
                 // FALLBACK SEGURO — nunca liberar automaticamente, nunca COMPROVANTE_RECEBIDO
@@ -563,7 +575,7 @@ Deno.serve(async (req) => {
                   "[executar-fluxo] ai - saída estruturada inválida → ATENDIMENTO_HUMANO:",
                   parseResult.error,
                   "raw:",
-                  rawText.substring(0, 300),
+                  rawText?.substring(0, 300) ?? "[sem texto]",
                 );
                 const fallbackMsg = "Preciso verificar mais alguns detalhes. Nossa equipe dará continuidade ao seu atendimento em breve.";
                 await enviar(canal, telefone, fallbackMsg);

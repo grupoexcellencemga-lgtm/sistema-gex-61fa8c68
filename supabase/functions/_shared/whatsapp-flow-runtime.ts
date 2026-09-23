@@ -17,6 +17,50 @@ export type StructuredField = {
   options?: string[];
 };
 
+type FlowReferenceNode = {
+  type?: string;
+  data?: { text?: string };
+};
+
+export function buildStructuredResponseTool(fields: StructuredField[]) {
+  const properties: Record<string, Record<string, unknown>> = {
+    message: { type: "string", description: "Texto que será enviado ao cliente." },
+  };
+  const required = ["message"];
+  for (const field of fields) {
+    properties[field.name] = field.type === "enum" && field.options?.length
+      ? { type: "string", enum: field.options }
+      : { type: "string" };
+    if (field.required) required.push(field.name);
+  }
+  return {
+    name: "structured_response",
+    description: "Retorna a mensagem ao cliente e os campos internos do fluxo.",
+    input_schema: {
+      type: "object" as const,
+      additionalProperties: false,
+      properties,
+      required,
+    },
+  };
+}
+
+export function buildFlowOperationalContext(nodes: FlowReferenceNode[]): string {
+  const links = new Set<string>();
+  for (const node of nodes) {
+    if (node.type !== "message" || typeof node.data?.text !== "string") continue;
+    for (const match of node.data.text.matchAll(/https?:\/\/[^\s<>\])}]+/gi)) {
+      links.add(match[0].replace(/[.,;:!?]+$/, ""));
+    }
+  }
+  if (links.size === 0) return "";
+  return [
+    "[DADOS OPERACIONAIS ATUAIS DO FLUXO]",
+    `Links configurados: ${[...links].join(" | ")}`,
+    "Estes dados são atuais e têm prioridade sobre valores antigos do histórico. Reutilize-os quando o cliente pedir o reenvio.",
+  ].join("\n");
+}
+
 const CLAUDE_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 export function attachMediaToLatestUserMessage(
@@ -132,13 +176,24 @@ export function parseStructuredAiOutput(
     return { ok: false, error: "Resposta contém JSON inválido" };
   }
 
-  if (typeof parsed.message !== "string" || !parsed.message.trim()) {
+  return parseStructuredAiObject(parsed, fields);
+}
+
+export function parseStructuredAiObject(
+  parsed: unknown,
+  fields: StructuredField[],
+): { ok: true; output: Record<string, string> } | { ok: false; error: string } {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ok: false, error: "Saída estruturada não é um objeto" };
+  }
+  const values = parsed as Record<string, unknown>;
+  if (typeof values.message !== "string" || !values.message.trim()) {
     return { ok: false, error: 'Campo "message" é obrigatório e deve ser texto' };
   }
 
-  const output: Record<string, string> = { message: parsed.message.trim() };
+  const output: Record<string, string> = { message: values.message.trim() };
   for (const field of fields) {
-    const value = parsed[field.name];
+    const value = values[field.name];
     if (field.required && (typeof value !== "string" || !value.trim())) {
       return { ok: false, error: `Campo "${field.name}" é obrigatório e deve ser texto` };
     }

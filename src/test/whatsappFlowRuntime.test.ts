@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   attachMediaToLatestUserMessage,
+  buildFlowOperationalContext,
   buildClaudeMessages,
+  buildStructuredResponseTool,
+  parseStructuredAiObject,
   parseStructuredAiOutput,
   resolveConditionRoute,
   type ConversationRow,
@@ -103,6 +106,61 @@ describe("WhatsApp flow runtime", () => {
       ok: true,
       output: { message: "Vamos resolver.", status: "PROBLEMA_PAGAMENTO" },
     });
+  });
+
+  it("builds a forced Claude tool with the configured enum values", () => {
+    const fields: StructuredField[] = [{
+      name: "status",
+      type: "enum",
+      required: true,
+      options: ["PROBLEMA_PAGAMENTO", "ATENDIMENTO_HUMANO"],
+    }];
+
+    expect(buildStructuredResponseTool(fields)).toEqual({
+      name: "structured_response",
+      description: "Retorna a mensagem ao cliente e os campos internos do fluxo.",
+      input_schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          message: { type: "string", description: "Texto que será enviado ao cliente." },
+          status: { type: "string", enum: ["PROBLEMA_PAGAMENTO", "ATENDIMENTO_HUMANO"] },
+        },
+        required: ["message", "status"],
+      },
+    });
+  });
+
+  it("validates the object returned by the forced Claude tool", () => {
+    const fields: StructuredField[] = [{
+      name: "status",
+      type: "enum",
+      required: true,
+      options: ["PROBLEMA_PAGAMENTO"],
+    }];
+
+    expect(parseStructuredAiObject({
+      message: "Segue o link novamente: https://pagamento.test",
+      status: "PROBLEMA_PAGAMENTO",
+    }, fields)).toEqual({
+      ok: true,
+      output: {
+        message: "Segue o link novamente: https://pagamento.test",
+        status: "PROBLEMA_PAGAMENTO",
+      },
+    });
+  });
+
+  it("adds current flow links to the AI context and ignores placeholders", () => {
+    expect(buildFlowOperationalContext([
+      { type: "message", data: { text: "Pague em https://www.asaas.com/c/link-atual" } },
+      { type: "message", data: { text: "[LINK DE PAGAMENTO]" } },
+      { type: "condition", data: { pergunta: "https://nao-deve-entrar.test" } },
+    ])).toBe(
+      "[DADOS OPERACIONAIS ATUAIS DO FLUXO]\n" +
+      "Links configurados: https://www.asaas.com/c/link-atual\n" +
+      "Estes dados são atuais e têm prioridade sobre valores antigos do histórico. Reutilize-os quando o cliente pedir o reenvio.",
+    );
   });
 
   it("rejects an unknown enum value instead of forwarding it to a condition", () => {
