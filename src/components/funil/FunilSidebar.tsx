@@ -47,6 +47,7 @@ type Props = {
   onActivate: (funnel: FunilQuadroOrganizado) => void;
   onMove: (funnel: FunilQuadroOrganizado, folderId: string | null) => void;
   onRename: (funnel: FunilQuadroOrganizado, name: string) => void;
+  onRenameFolder: (folder: FunilPasta, name: string) => void;
   onDelete: (funnel: FunilQuadroOrganizado) => void;
   createOptions?: ReactNode;
 };
@@ -141,6 +142,8 @@ export function FunilSidebar(props: Props) {
   const [targetFolder, setTargetFolder] = useState<string>("");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
 
   const navigation = useMemo(
     () => buildFunnelNavigation(props.folders, props.funnels, search),
@@ -199,24 +202,77 @@ export function FunilSidebar(props: Props) {
             )}
 
             {/* Grupos / pastas */}
-            {navigation.groups.map((group) => (
+            {navigation.groups.map((group) => {
+              const folder = props.folders.find((f) => f.id === group.id);
+              const isEditing = editingFolderId === group.id;
+              return (
               <section key={group.id}>
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.id)}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold hover:bg-muted"
-                >
-                  {isOpen(group.id) ? (
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                {isEditing && folder ? (
+                  <form
+                    className="flex items-center gap-1 px-1 py-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const name = editingFolderName.trim();
+                      if (name) props.onRenameFolder(folder, name);
+                      setEditingFolderId(null);
+                    }}
+                  >
+                    <Input
+                      autoFocus
+                      value={editingFolderName}
+                      onChange={(e) => setEditingFolderName(e.target.value)}
+                      className="h-7 flex-1 text-xs"
+                      onBlur={() => setEditingFolderId(null)}
+                      onKeyDown={(e) => { if (e.key === "Escape") setEditingFolderId(null); }}
+                    />
+                    <Button type="submit" size="icon" className="h-7 w-7 shrink-0">
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </form>
+                ) : (
+                <div className="group/folder flex items-center gap-1 rounded-md pr-1 hover:bg-muted">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex flex-1 cursor-pointer items-center gap-2 px-2 py-1.5 text-xs font-semibold"
+                  >
+                    {isOpen(group.id) ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <Folder className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="flex-1 truncate text-left">{group.name}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                      {group.funnels.length}
+                    </span>
+                  </button>
+                  {folder && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover/folder:opacity-100"
+                          aria-label={`Ações da pasta ${group.name}`}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingFolderName(group.name);
+                            setEditingFolderId(group.id);
+                          }}
+                        >
+                          Renomear pasta
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
-                  <Folder className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="flex-1 truncate text-left">{group.name}</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {group.funnels.length}
-                  </span>
-                </button>
+                </div>
+                )}
 
                 {isOpen(group.id) && (
                   <div className="mt-0.5 ml-3 border-l pl-1.5 space-y-0.5">
@@ -232,7 +288,8 @@ export function FunilSidebar(props: Props) {
                   </div>
                 )}
               </section>
-            ))}
+            );})}
+
 
             {navigation.groups.length === 0 && (
               <p className="p-6 text-center text-sm text-muted-foreground">
