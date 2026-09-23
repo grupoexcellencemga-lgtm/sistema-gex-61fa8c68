@@ -554,7 +554,8 @@ Deno.serve(async (req) => {
             }
 
             // Montar system prompt — incluir instrução JSON se structured output ativo
-            let systemPrompt = interpolate(node.data.prompt ?? "", { ...msgVars, ...variables });
+            const userPrompt = interpolate(node.data.prompt ?? "", { ...msgVars, ...variables });
+            let systemPrompt: string;
 
             if (useStructured) {
               const fields = structuredCfg!.fields!;
@@ -565,7 +566,11 @@ Deno.serve(async (req) => {
                 return `  "${f.name}": string`;
               }).join(",\n");
 
-              systemPrompt += `\n\n[FORMATO DE RESPOSTA OBRIGATÓRIO]\nResponda EXCLUSIVAMENTE com JSON válido, sem texto fora do JSON e sem markdown.\nFormato:\n{\n  "message": "texto para enviar ao cliente",\n${fieldsDesc}\n}`;
+              // Instrução JSON ANTES do prompt do usuário — modelo lê do início
+              const jsonInstruction = `[FORMATO DE RESPOSTA OBRIGATÓRIO]\nSua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido, sem nenhum texto antes ou depois, sem blocos de código markdown.\nFormato exato:\n{\n  "message": "texto para enviar ao cliente",\n${fieldsDesc}\n}\nNão escreva nada fora do JSON. Não use \`\`\`json. Apenas o objeto JSON puro.`;
+              systemPrompt = jsonInstruction + (userPrompt ? `\n\n---\n\n${userPrompt}` : "");
+            } else {
+              systemPrompt = userPrompt;
             }
 
             const aiResp = await anthropic.messages.create({
@@ -583,13 +588,21 @@ Deno.serve(async (req) => {
               let parseOk = false;
 
               try {
-                const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                // Remover blocos de código markdown antes de extrair JSON
+                const cleaned = rawText
+                  .replace(/```json\s*/gi, "")
+                  .replace(/```\s*/g, "")
+                  .trim();
+                // Extração não-greedy: pega o primeiro objeto JSON completo
+                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                   parsed = JSON.parse(jsonMatch[0]);
                   parseOk = true;
+                } else {
+                  console.error("[executar-fluxo] ai - sem JSON na resposta. raw:", rawText.substring(0, 300));
                 }
               } catch (e) {
-                console.error("[executar-fluxo] ai - falha parse JSON:", String(e), "raw:", rawText.substring(0, 200));
+                console.error("[executar-fluxo] ai - falha parse JSON:", String(e), "raw:", rawText.substring(0, 300));
               }
 
               const messageText = parsed.message as string | undefined;
