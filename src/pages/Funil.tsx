@@ -409,7 +409,9 @@ const Funil = () => {
 
   const reorderPastasMutation = useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      const updates = orderedIds.map((id, index) =>
+      // "unfiled" não é um registro real — salva apenas os IDs reais
+      const realIds = orderedIds.filter((id) => id !== "unfiled");
+      const updates = realIds.map((id, index) =>
         (supabase as any).from("funil_pastas").update({ ordem: index }).eq("id", id)
       );
       const results = await Promise.all(updates);
