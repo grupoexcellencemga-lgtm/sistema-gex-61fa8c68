@@ -797,13 +797,12 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
           </div>
         </CardHeader>
 
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1028,7 +1027,6 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
                 )}
               </TableBody>
             </Table>
-            </div>
           )}
         </CardContent>
       </Card>

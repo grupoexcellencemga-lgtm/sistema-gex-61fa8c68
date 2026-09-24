@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft, Save, MessageSquare, GitBranch, Bot,
-  UserCheck, Clock, CircleDot, Play, Loader2, Plus, Trash2,
+  UserCheck, Clock, CircleDot, Play, Loader2, Plus, Trash2, PanelLeftOpen, PanelLeftClose,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -757,6 +757,7 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   const nodeCounter = useRef(1);
   const [canais, setCanais] = useState<{ id: string; nome: string }[]>([]);
   const [pastasFunil, setPastasFunil] = useState<{ id: string; nome: string }[]>([]);
+  const [toolboxOpen, setToolboxOpen] = useState(() => typeof window !== "undefined" ? window.innerWidth >= 768 : true);
 
   // RLS filtra pela empresa do usuário; mostra só canais WhatsApp ativos (suporte Evolution API)
   useEffect(() => {
@@ -865,32 +866,50 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
 
   return createPortal(
     <div className="fixed inset-0 bg-background flex flex-col" style={{ zIndex: 9999 }}>
-      {/* Top bar */}
-      <div className="h-14 border-b flex items-center gap-3 px-4 shrink-0 bg-card">
-        <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />Voltar
-        </Button>
-        <div className="w-px h-6 bg-border shrink-0" />
-        <Input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          className="w-44 h-8 text-sm font-medium"
-          placeholder="Nome do fluxo"
-        />
-        <div className="flex items-center gap-1.5">
-          <Switch checked={ativo} onCheckedChange={setAtivo} />
-          <span className="text-sm text-muted-foreground">{ativo ? "Ativo" : "Inativo"}</span>
+      {/* Top bar — mobile: 2 rows; desktop: 1 row */}
+      <div className="border-b shrink-0 bg-card">
+        {/* Linha principal */}
+        <div className="h-12 flex items-center gap-2 px-3">
+          <Button variant="ghost" size="sm" className="gap-1.5 shrink-0 px-2" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Voltar</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            title={toolboxOpen ? "Ocultar painel de nós" : "Mostrar painel de nós"}
+            onClick={() => setToolboxOpen((v) => !v)}
+          >
+            {toolboxOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          </Button>
+          <div className="w-px h-6 bg-border shrink-0" />
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="flex-1 min-w-0 max-w-44 h-8 text-sm font-medium"
+            placeholder="Nome do fluxo"
+          />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Switch checked={ativo} onCheckedChange={setAtivo} />
+            <span className="text-xs text-muted-foreground hidden sm:inline">{ativo ? "Ativo" : "Inativo"}</span>
+          </div>
+          <Button size="sm" onClick={salvar} disabled={saving} className="gap-1.5 ml-auto shrink-0">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <span className="hidden sm:inline">Salvar fluxo</span>
+            <span className="sm:hidden">Salvar</span>
+          </Button>
         </div>
-        <div className="w-px h-6 bg-border shrink-0" />
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-          Produto do CRM:
-          <select value={pastaFunilId} onChange={(e) => setPastaFunilId(e.target.value)} className="h-8 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground">
-            <option value="">Sem automação comercial</option>
-            {pastasFunil.map((pasta) => <option key={pasta.id} value={pasta.id}>{pasta.nome}</option>)}
-          </select>
-        </label>
-        <div className="w-px h-6 bg-border shrink-0" />
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Linha secundária: canais + CRM (recolhida no mobile) */}
+        <div className="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pb-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+            CRM:
+            <select value={pastaFunilId} onChange={(e) => setPastaFunilId(e.target.value)} className="h-7 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground">
+              <option value="">Sem automação</option>
+              {pastasFunil.map((pasta) => <option key={pasta.id} value={pasta.id}>{pasta.nome}</option>)}
+            </select>
+          </label>
+          <div className="w-px h-4 bg-border shrink-0" />
           <span className="text-xs text-muted-foreground shrink-0">Canais:</span>
           {canais.map((c) => (
             <button
@@ -904,41 +923,39 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
               )}
             >{c.nome}</button>
           ))}
-          {canais.length === 0 && <span className="text-xs text-muted-foreground italic">Nenhum canal encontrado</span>}
+          {canais.length === 0 && <span className="text-xs text-muted-foreground italic">Nenhum canal</span>}
         </div>
-        <Button size="sm" onClick={salvar} disabled={saving} className="gap-1.5 ml-auto shrink-0">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Salvar fluxo
-        </Button>
       </div>
 
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Toolbox */}
-        <div className="w-44 shrink-0 border-r bg-card p-3 space-y-1.5 overflow-y-auto">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Arraste os nós</p>
-          {TOOLBOX.map(({ type, label, Icon, cls }) => (
-            <div
-              key={type}
-              draggable
-              onDragStart={(e) => onDragStart(e, type)}
-              className={cn(
-                "flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-semibold",
-                "cursor-grab active:cursor-grabbing hover:shadow-sm transition-all select-none",
-                cls
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              {label}
+        {toolboxOpen && (
+          <div className="w-40 shrink-0 border-r bg-card p-3 space-y-1.5 overflow-y-auto">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Nós</p>
+            {TOOLBOX.map(({ type, label, Icon, cls }) => (
+              <div
+                key={type}
+                draggable
+                onDragStart={(e) => onDragStart(e, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-semibold",
+                  "cursor-grab active:cursor-grabbing hover:shadow-sm transition-all select-none",
+                  cls
+                )}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {label}
+              </div>
+            ))}
+            <div className="pt-3 border-t text-[10px] text-muted-foreground space-y-1">
+              <p>• Arraste nós para o canvas</p>
+              <p>• Conecte puxando as bolinhas</p>
+              <p>• Clique num nó para configurar</p>
+              <p>• Delete para remover selecionado</p>
             </div>
-          ))}
-          <div className="pt-3 border-t text-[10px] text-muted-foreground space-y-1">
-            <p>• Arraste nós para o canvas</p>
-            <p>• Conecte puxando as bolinhas</p>
-            <p>• Clique num nó para configurar</p>
-            <p>• Delete para remover selecionado</p>
           </div>
-        </div>
+        )}
 
         {/* Canvas */}
         <div

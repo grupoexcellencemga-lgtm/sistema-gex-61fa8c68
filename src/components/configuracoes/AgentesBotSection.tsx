@@ -409,28 +409,33 @@ export function AgentesBotSection() {
   return (
     <>
       <Tabs defaultValue="agentes-ia" className="space-y-4">
-        <TabsList className="h-10">
-          <TabsTrigger value="agentes-ia" className="gap-1.5">
-            <Bot className="h-4 w-4" />
-            Agentes IA
-          </TabsTrigger>
-          <TabsTrigger value="bots-fluxo" className="gap-1.5">
-            <Workflow className="h-4 w-4" />
-            Bots com Fluxo
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-1.5">
-            <BarChart2 className="h-4 w-4" />
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger value="leads" className="gap-1.5">
-            <Users className="h-4 w-4" />
-            Leads atendidos
-          </TabsTrigger>
-          <TabsTrigger value="revisao" className="gap-1.5">
-            <Eye className="h-4 w-4" />
-            Revisão
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <TabsList className="h-10 w-max min-w-full">
+            <TabsTrigger value="agentes-ia" className="gap-1.5">
+              <Bot className="h-4 w-4" />
+              <span className="hidden sm:inline">Agentes IA</span>
+              <span className="sm:hidden">IA</span>
+            </TabsTrigger>
+            <TabsTrigger value="bots-fluxo" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              <span className="hidden sm:inline">Bots com Fluxo</span>
+              <span className="sm:hidden">Fluxo</span>
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1.5">
+              <BarChart2 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger value="leads" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Leads atendidos</span>
+              <span className="sm:hidden">Leads</span>
+            </TabsTrigger>
+            <TabsTrigger value="revisao" className="gap-1.5">
+              <Eye className="h-4 w-4" />
+              Revisão
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Aba: Agentes IA ── */}
         <TabsContent value="agentes-ia" className="space-y-4">
@@ -470,95 +475,106 @@ export function AgentesBotSection() {
               ) : (
                 <div className="space-y-3">
                   {agentes.map((a) => (
-                    <div key={a.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
-                      <div className={cn(
-                        "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                        a.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                      )}>
-                        <Bot className="h-4 w-4" />
+                    <div key={a.id} className="p-4 rounded-lg border bg-card space-y-3">
+                      {/* Linha superior: ícone + nome + badges + toggle */}
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+                          a.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                        )}>
+                          <Bot className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{a.nome}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
+                              {a.ativo ? "Ligado" : "Desligado"}
+                            </Badge>
+                            <Badge variant="outline" className={cn("text-[10px]", COR_MODO[a.modo])}>
+                              {MODOS.find((m) => m.value === a.modo)?.label ?? a.modo}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">
+                              {MODELOS.find((m) => m.value === a.modelo)?.label.split(" ").slice(1, 3).join(" ") ?? a.modelo}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={a.ativo}
+                          onCheckedChange={(v) => toggleAtivo.mutate({ id: a.id, ativo: v })}
+                        />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{a.nome}</p>
-                          <Badge variant={a.ativo ? "default" : "secondary"} className="text-[10px]">
-                            {a.ativo ? "Ligado" : "Desligado"}
-                          </Badge>
-                          <Badge variant="outline" className={cn("text-[10px]", COR_MODO[a.modo])}>
-                            {MODOS.find((m) => m.value === a.modo)?.label ?? a.modo}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px]">
-                            {MODELOS.find((m) => m.value === a.modelo)?.label.split(" ").slice(1, 3).join(" ") ?? a.modelo}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.instrucao}</p>
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <Label htmlFor={`modo-${a.id}`} className="text-xs text-muted-foreground">
-                            Modo
-                          </Label>
-                          <Select
-                            value={a.modo}
-                            onValueChange={(v) => pedirTrocaDeModo(a, v)}
-                            disabled={alterarModo.isPending}
-                          >
-                            <SelectTrigger id={`modo-${a.id}`} className="h-7 w-44 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MODOS.map((m) => (
-                                <SelectItem
-                                  key={m.value}
-                                  value={m.value}
-                                  disabled={!m.disponivel}
-                                  className="text-xs"
-                                >
-                                  {m.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <span className="text-xs text-muted-foreground">
-                            {MODOS.find((m) => m.value === a.modo)?.descricao}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+
+                      {/* Instrução */}
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{a.instrucao}</p>
+
+                      {/* Seletor de modo */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Label htmlFor={`modo-${a.id}`} className="text-xs text-muted-foreground shrink-0">
+                          Modo
+                        </Label>
+                        <Select
+                          value={a.modo}
+                          onValueChange={(v) => pedirTrocaDeModo(a, v)}
+                          disabled={alterarModo.isPending}
+                        >
+                          <SelectTrigger id={`modo-${a.id}`} className="h-8 w-40 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MODOS.map((m) => (
+                              <SelectItem
+                                key={m.value}
+                                value={m.value}
+                                disabled={!m.disponivel}
+                                className="text-xs"
+                              >
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-xs text-muted-foreground hidden sm:inline">
+                          {MODOS.find((m) => m.value === a.modo)?.descricao}
+                        </span>
+                      </div>
+
+                      {/* Rodapé: info de horário/canal + botões de ação */}
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {a.ativo_24h ? "24h" : `${a.horario_inicio}–${a.horario_fim}`}
                           </span>
                           <span className="flex items-center gap-1">
                             <Zap className="h-3 w-3" />
-                            Assume em {a.tempo_espera_minutos}min
+                            {a.tempo_espera_minutos}min
                           </span>
                           {canais.filter(c => a.canais_ids.includes(c.id)).map(c => (
                             <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
                           ))}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Switch
-                          checked={a.ativo}
-                          onCheckedChange={(v) => toggleAtivo.mutate({ id: a.id, ativo: v })}
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          title="Base de Conhecimento"
-                          onClick={() => setBaseConhecimentoAgente(a)}
-                        >
-                          <BookOpen className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(a.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(a)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            title="Base de Conhecimento"
+                            onClick={() => setBaseConhecimentoAgente(a)}
+                          >
+                            <BookOpen className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(a.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -606,61 +622,67 @@ export function AgentesBotSection() {
               ) : (
                 <div className="space-y-3">
                   {fluxos.map((f) => (
-                    <div key={f.id} className="flex items-start gap-4 p-4 rounded-lg border bg-card">
-                      <div className={cn(
-                        "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                        f.ativo ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400" : "bg-muted text-muted-foreground"
-                      )}>
-                        <Workflow className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{f.nome}</p>
-                          <Badge variant={f.ativo ? "default" : "secondary"} className="text-[10px]">
-                            {f.ativo ? "Ativo" : "Inativo"}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] border-violet-400 text-violet-600 dark:text-violet-400">
-                            Bot com Fluxo
-                          </Badge>
+                    <div key={f.id} className="p-4 rounded-lg border bg-card space-y-3">
+                      {/* Linha superior: ícone + nome + badges + toggle */}
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+                          f.ativo ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400" : "bg-muted text-muted-foreground"
+                        )}>
+                          <Workflow className="h-4 w-4" />
                         </div>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          {canais.filter(c => (f.canal_ids ?? []).includes(c.id)).map(c => (
-                            <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
-                          ))}
-                          {(f.canal_ids ?? []).length === 0 && (
-                            <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
-                          )}
-                        </div>
-                        {f.palavra_chave && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <Link2 className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground font-mono">
-                              wa.me/…?text={f.palavra_chave}
-                            </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{f.nome}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <Badge variant={f.ativo ? "default" : "secondary"} className="text-[10px]">
+                              {f.ativo ? "Ativo" : "Inativo"}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] border-violet-400 text-violet-600 dark:text-violet-400">
+                              Bot com Fluxo
+                            </Badge>
                           </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                        </div>
                         <Switch
                           checked={f.ativo}
                           onCheckedChange={(v) => toggleFluxoAtivo.mutate({ id: f.id, ativo: v })}
                         />
+                      </div>
+
+                      {/* Canais e link */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {canais.filter(c => (f.canal_ids ?? []).includes(c.id)).map(c => (
+                          <Badge key={c.id} variant="outline" className="text-[10px] py-0">{c.nome}</Badge>
+                        ))}
+                        {(f.canal_ids ?? []).length === 0 && (
+                          <span className="text-xs text-muted-foreground italic">Nenhum canal vinculado</span>
+                        )}
+                        {f.palavra_chave && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                            <Link2 className="h-3 w-3" />
+                            wa.me/…?text={f.palavra_chave}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Botões de ação */}
+                      <div className="flex items-center justify-end gap-1 pt-1 border-t border-border/60">
                         <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          title="Configurar link do site"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 text-xs"
                           onClick={() => { setLinkFluxo(f); setLinkPalavra(f.palavra_chave ?? ""); setLinkTexto(f.texto_inicio ?? ""); setCopiado(false); }}
                         >
                           <Link2 className="h-3.5 w-3.5" />
+                          Link
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingFluxo(f.id)}>
+                        <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEditingFluxo(f.id)}>
                           <Pencil className="h-3.5 w-3.5" />
+                          Editar
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => setDeleteFluxoId(f.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
