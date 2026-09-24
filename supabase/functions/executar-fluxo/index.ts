@@ -295,12 +295,18 @@ Deno.serve(async (req) => {
     if (!sessao) {
       const { data: leadStatus } = await supabase
         .from("leads")
-        .select("status_atendimento, atendente_id")
+        .select("status_atendimento, atendente_id, bot_ativo")
         .eq("id", leadId)
         .maybeSingle();
 
       if (leadStatus?.atendente_id != null) {
         return new Response(JSON.stringify({ ok: true, msg: "lead com atendente humano — fluxo bloqueado" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (leadStatus?.bot_ativo === false) {
+        return new Response(JSON.stringify({ ok: true, msg: "bot inativo para este lead — fluxo bloqueado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

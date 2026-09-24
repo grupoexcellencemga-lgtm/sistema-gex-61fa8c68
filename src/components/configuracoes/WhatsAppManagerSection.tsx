@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2, LogOut, Loader2, Wifi, WifiOff, QrCode, CheckCircle2, MessageSquare } from "lucide-react";
+import { Plus, RefreshCw, Trash2, LogOut, Loader2, Wifi, WifiOff, QrCode, CheckCircle2, MessageSquare, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,7 @@ export function WhatsAppManagerSection() {
   const [qrMap, setQrMap] = useState<Record<string, string | null>>({});
   const [saveDialog, setSaveDialog] = useState<SaveDialog | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reconectando, setReconectando] = useState(false);
 
   const fetchInstances = useCallback(async () => {
     try {
@@ -146,6 +147,25 @@ export function WhatsAppManagerSection() {
     }
   }
 
+  async function handleReconectarWebhooks() {
+    setReconectando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("verificar-webhooks", { body: {} });
+      if (error) throw error;
+      const resultados = data?.resultados ?? [];
+      const falhas = resultados.filter((r: any) => !r.ok);
+      if (falhas.length === 0) {
+        toast.success("Webhooks reconectados com sucesso!");
+      } else {
+        toast.error(`Falha em ${falhas.length} instância(s): ${falhas.map((r: any) => r.instancia).join(", ")}`);
+      }
+    } catch (err: any) {
+      toast.error("Erro ao reconectar webhooks: " + err.message);
+    } finally {
+      setReconectando(false);
+    }
+  }
+
   async function handleSaveToCrm() {
     if (!saveDialog || !empresaId) return;
     if (!saveDialog.nome.trim() || !saveDialog.identificador.trim()) {
@@ -204,6 +224,19 @@ export function WhatsAppManagerSection() {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={fetchInstances} title="Atualizar">
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReconectarWebhooks}
+            disabled={reconectando}
+            title="Reconectar webhooks — use quando o fluxo parar de responder"
+          >
+            {reconectando
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Webhook className="h-4 w-4" />
+            }
+            <span className="ml-1 hidden sm:inline">Reconectar webhook</span>
           </Button>
           <Button size="sm" onClick={() => setShowNewForm(v => !v)}>
             <Plus className="h-4 w-4 mr-1" /> Nova instância
