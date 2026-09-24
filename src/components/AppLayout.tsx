@@ -75,32 +75,35 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
           {/* TOPBAR */}
           <header
-            className="h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 pt-safe bg-background/95 border-b border-border backdrop-blur"
+            className="shrink-0 bg-background/95 border-b border-border backdrop-blur"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
-            {/* Left: tablet trigger (md-lg) + breadcrumb */}
-            <div className="flex items-center gap-3">
-              {/* Tablet only: sidebar trigger (768-1024px) */}
-              <div className="hidden md:block lg:hidden">
-                <SidebarTrigger className="text-muted-foreground hover:text-primary transition-colors" />
+            <div className="h-14 flex items-center justify-between px-4 sm:px-6">
+              {/* Left: tablet trigger (md-lg) + breadcrumb */}
+              <div className="flex items-center gap-3">
+                {/* Tablet only: sidebar trigger (768-1024px) */}
+                <div className="hidden md:block lg:hidden">
+                  <SidebarTrigger className="text-muted-foreground hover:text-primary transition-colors" />
+                </div>
+
+                {/* Desktop breadcrumb */}
+                <div className="hidden lg:flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">GEx</span>
+                  <span className="text-xs text-muted-foreground">/</span>
+                  <span className="text-sm font-medium text-foreground">{pageTitle}</span>
+                </div>
+
+                {/* Mobile: page title */}
+                <div className="md:hidden">
+                  <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
+                </div>
               </div>
 
-              {/* Desktop breadcrumb */}
-              <div className="hidden lg:flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">GEx</span>
-                <span className="text-xs text-muted-foreground">/</span>
-                <span className="text-sm font-medium text-foreground">{pageTitle}</span>
+              {/* Right: search + notifications */}
+              <div className="flex items-center gap-2">
+                <GlobalSearch />
+                <NotificationBell />
               </div>
-
-              {/* Mobile: page title */}
-              <div className="md:hidden">
-                <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
-              </div>
-            </div>
-
-            {/* Right: search + notifications */}
-            <div className="flex items-center gap-2">
-              <GlobalSearch />
-              <NotificationBell />
             </div>
           </header>
 

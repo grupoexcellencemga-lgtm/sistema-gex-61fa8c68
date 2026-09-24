@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Home, Filter, Users, DollarSign, MoreHorizontal, X,
-  Crown, LogOut, Sun, Moon, Monitor,
+  Crown, LogOut, Sun, Moon, Monitor, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -25,7 +25,8 @@ export function MobileBottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { canAccess } = usePermissions();
-  const { empresa, isAdminMaster, hasEmpresa } = useEmpresa();
+  const { empresa, empresas, isAdminMaster, hasEmpresa, setSelectedEmpresaId } = useEmpresa();
+  const canSwitch = isAdminMaster && empresas.length > 1;
   const { plural: alunoPlural } = useAlunoLabel();
   const { theme, setTheme } = useTheme();
 
@@ -67,19 +68,62 @@ export function MobileBottomNav() {
         )}
         style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 h-14 border-b border-border shrink-0">
-          <span className="text-sm font-semibold">Menu completo</span>
-          <button
-            onClick={() => setMenuOpen(false)}
-            className="p-2 -mr-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+        {/* Header — safe-area-inset-top keeps content below the iOS notch */}
+        <div
+          className="shrink-0 border-b border-border"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="flex items-center justify-between px-4 h-14">
+            <span className="text-sm font-semibold">Menu completo</span>
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="p-2 -mr-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable nav list */}
         <div className="flex-1 overflow-auto py-1">
+          {/* Company switcher — visible only for admin_master with multiple companies */}
+          {canSwitch && (
+            <div className="border-b border-border pb-1 mb-1">
+              <p className="px-4 pt-4 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                Empresa ativa
+              </p>
+              {empresas.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => {
+                    setSelectedEmpresaId(e.id);
+                    const allPageKeys = navGroups.flatMap((g) => g.items.map((i) => ({ url: i.url, pageKey: i.pageKey })));
+                    const currentItem = allPageKeys.find((i) => location.pathname.startsWith(i.url) && i.url !== "/");
+                    if (currentItem && !e.modulos.includes(currentItem.pageKey)) {
+                      navigate("/");
+                    }
+                    setMenuOpen(false);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-3.5 px-4 py-3 text-sm transition-colors text-left",
+                    e.id === empresa?.id
+                      ? "text-primary bg-primary/10 font-medium"
+                      : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shrink-0"
+                    style={{ background: e.cor_primaria ?? "#888" }}
+                  />
+                  <span className="flex-1 truncate">{e.nome}</span>
+                  {e.id === empresa?.id && (
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {navGroups.map((group) => {
             const visible = group.items.filter(i => isVisible(i.pageKey));
             if (!visible.length) return null;
