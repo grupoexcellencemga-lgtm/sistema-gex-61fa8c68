@@ -93,6 +93,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedProtocolo, setSelectedProtocolo] = useState<Protocolo | null>(null);
+  const [selectedCanalId, setSelectedCanalId] = useState<string | null>(null);
   useEffect(() => { setSelectedProtocolo(null); setSelectedLeadId(null); }, [empresaId, userId]);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -1113,7 +1114,7 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                 {finalizedFiltered.map(({ latest: proto, history }) => (
                   <button
                     key={proto.id}
-                    onClick={() => setSelectedProtocolo(proto)}
+                    onClick={() => { setSelectedProtocolo(proto); setSelectedCanalId(proto.leads?.canal_id ?? null); }}
                     className={cn(
                       "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors flex items-center gap-3",
                       history.some(p => p.id === selectedProtocolo?.id) && "bg-primary/10"
@@ -1197,43 +1198,80 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             </div>
 
             {aba === "finalizadas" && selectedProtocolo && (() => {
-              const idx = selectedHistory.findIndex(p => p.id === selectedProtocolo.id);
-              const total = selectedHistory.length;
-              const goOlder = () => { if (idx < total - 1) setSelectedProtocolo(selectedHistory[idx + 1]); };
-              const goNewer = () => { if (idx > 0) setSelectedProtocolo(selectedHistory[idx - 1]); };
+              // Nível 1: canal ativo (padrão = canal do protocolo aberto)
+              const activeCanalId = selectedCanalId ?? selectedProtocolo.leads?.canal_id ?? commercialHistories[0]?.id ?? null;
+              // Protocolos só do canal selecionado
+              const canalProtocols = commercialHistories.find(g => g.id === activeCanalId)?.protocols ?? selectedHistory;
+              const idx = canalProtocols.findIndex(p => p.id === selectedProtocolo.id);
+              const total = canalProtocols.length;
+
+              const selectProtocol = (p: Protocolo) => { setSelectedProtocolo(p); setSelectedCanalId(p.leads?.canal_id ?? null); };
+              const goOlder = () => { if (idx < total - 1) selectProtocol(canalProtocols[idx + 1]); };
+              const goNewer = () => { if (idx > 0) selectProtocol(canalProtocols[idx - 1]); };
+
               return (
-                <div className="w-full border-t pt-2.5 space-y-1">
+                <div className="w-full border-t pt-2.5 space-y-2">
+                  {/* Nível 1: botões de canal */}
+                  {commercialHistories.length > 1 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {commercialHistories.map(group => {
+                        const isActive = group.id === activeCanalId;
+                        return (
+                          <button
+                            key={group.id}
+                            onClick={() => {
+                              const first = group.protocols[0];
+                              if (first) selectProtocol(first);
+                              setSelectedCanalId(group.id);
+                            }}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors",
+                              isActive
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background text-muted-foreground border-border hover:bg-muted"
+                            )}
+                          >
+                            {commercialLabel(group.protocols[0])}
+                            <span className={cn("text-[10px] font-medium", isActive ? "opacity-80" : "opacity-60")}>
+                              {group.protocols.length}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Nível 2: navegador de protocolos do canal selecionado */}
                   <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goOlder} disabled={idx >= total - 1} title="Conversa anterior">
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goOlder} disabled={idx < 0 || idx >= total - 1} title="Protocolo anterior">
                       <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
-                    <Select value={selectedProtocolo.id} onValueChange={id => { const p = selectedHistory.find(p => p.id === id); if (p) setSelectedProtocolo(p); }}>
+                    <Select
+                      value={idx >= 0 ? selectedProtocolo.id : canalProtocols[0]?.id}
+                      onValueChange={id => { const p = canalProtocols.find(p => p.id === id); if (p) selectProtocol(p); }}
+                    >
                       <SelectTrigger className="h-7 flex-1 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {commercialHistories.map(group => (
-                          <SelectGroup key={group.id}>
-                            <SelectLabel className="text-xs">{commercialLabel(group.protocols[0])}</SelectLabel>
-                            {group.protocols.map(p => (
-                              <SelectItem key={p.id} value={p.id} className="text-xs">
-                                <span className="font-mono text-[11px]">#{p.numero_protocolo}</span>
-                                {" · "}{formatDate(p.finalizado_em || p.iniciado_em)}
-                                {p.id === selectedHistory[0]?.id ? " · Mais recente" : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
+                        {canalProtocols.map(p => (
+                          <SelectItem key={p.id} value={p.id} className="text-xs">
+                            <span className="font-mono text-[11px]">#{p.numero_protocolo}</span>
+                            {" · "}{formatDate(p.finalizado_em || p.iniciado_em)}
+                            {p.id === canalProtocols[0]?.id ? " · Mais recente" : ""}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goNewer} disabled={idx <= 0} title="Conversa mais recente">
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goNewer} disabled={idx <= 0} title="Protocolo mais recente">
                       <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{idx + 1} / {total}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                      {idx >= 0 ? idx + 1 : 1} / {total}
+                    </span>
                   </div>
+                  {/* Info do protocolo atual */}
                   <p className="text-xs text-muted-foreground leading-tight">
-                    {commercialLabel(selectedProtocolo)}
-                    {selectedProtocolo.finalizado_em && <> · Encerrado {formatDate(selectedProtocolo.finalizado_em)}</>}
+                    {selectedProtocolo.finalizado_em && <>Encerrado {formatDate(selectedProtocolo.finalizado_em)}</>}
                     {selectedProtocolo.atendente_id && usuariosMap[selectedProtocolo.atendente_id] && <> · {usuariosMap[selectedProtocolo.atendente_id]}</>}
                   </p>
                 </div>
