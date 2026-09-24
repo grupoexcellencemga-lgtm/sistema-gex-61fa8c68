@@ -250,6 +250,80 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+// ─── Atualizador de Estado (memória persistente por lead) ────────────────────
+
+const PROMPT_ATUALIZADOR_ESTADO = `# ATUALIZADOR DE ESTADO — JÚLIA COMERCIAL GEx
+
+Você é um componente interno do sistema comercial do Grupo Excellence.
+Você NÃO conversa com clientes.
+Sua única função é analisar o estado atual de uma conversa comercial e devolver o estado atualizado em formato estruturado.
+Nunca escreva mensagens para o cliente. Nunca tente vender. Nunca invente informações. Nunca transforme hipóteses em fatos.
+
+Você receberá: 1) estado atual do lead; 2) histórico recente da conversa; 3) última mensagem do usuário.
+Sua função é atualizar o estado com base apenas nas informações realmente disponíveis.
+
+REGRA FUNDAMENTAL: Preserve informações anteriores enquanto continuarem válidas. Não apague uma informação porque ela não apareceu na última mensagem. Se current_product já está definido e o usuário pergunta "Quanto custa?", current_product continua o mesmo.
+
+Produtos conhecidos: Comunidade Mulheres de Excelência, Workshop Eleva-te, Método CIS — Global, Método OPEX — O Poder da Excelência, Workshop Pais que Fortalecem, PGL — Programa Gestão e Liderança, Teen Connect, Workshop Gestão do Crescimento, Workshop Homens de Excelência. Outros produtos podem existir.
+
+Não confunda: pergunta sobre preço com decisão de comprar; interesse com inscrição; envio de comprovante com pagamento confirmado; pedido de informação com objeção; resposta curta com falta de interesse.
+
+Sempre comece pelo estado existente. Altere somente o que realmente mudou. Chame a ferramenta atualizar_estado_conversa com o objeto completo.`;
+
+const TOOL_ESTADO: Anthropic.Tool = {
+  name: "atualizar_estado_conversa",
+  description: "Atualiza o estado persistente da conversa com base na análise da última mensagem e do histórico.",
+  input_schema: {
+    type: "object",
+    properties: {
+      preferred_name: { type: ["string", "null"] },
+      current_product: { type: ["string", "null"] },
+      origin: { type: ["string", "null"] },
+      city: { type: ["string", "null"] },
+      current_intent: {
+        type: "string",
+        enum: ["unknown","saudacao","informacao_produto","preco","datas","horario","local","parcelamento","pagamento","inscricao","reserva","comprovante","objecao","comparacao","suporte_aluno","empresa_escola","cancelamento","solicitar_humano","encerramento","outro"],
+      },
+      explicit_question: { type: ["string", "null"] },
+      main_need: { type: ["string", "null"] },
+      current_objection: {
+        type: ["string", "null"],
+        enum: [null,"financeira","tempo","agenda","deslocamento","presencial","falar_com_terceiro","inseguranca","confianca","dinamicas","comparacao","prioridade","sem_interesse","outro"],
+      },
+      funnel_stage: {
+        type: "string",
+        enum: ["novo_lead","primeiro_contato","em_conversa","interesse_identificado","produto_apresentado","proposta_enviada","aguardando_decisao","dados_recebidos","aguardando_pagamento","pagamento_em_conferencia","inscricao_confirmada","perdido_sem_interesse","atendimento_humano"],
+      },
+      temperature: { type: "string", enum: ["frio","morno","quente"] },
+      purchase_intent: { type: "string", enum: ["none","weak","clear"] },
+      information_already_shared: {
+        type: "array",
+        items: { type: "string", enum: ["product_overview","price","dates","time","location","duration","format","benefits","payment_terms","pix_key","payment_link","registration_request","registration_confirmed","group_information","invoice_information"] },
+      },
+      known_user_facts: { type: "array", items: { type: "string" } },
+      last_julia_question: { type: ["string", "null"] },
+      awaiting: { type: "string", enum: ["none","user_reply","user_data","payment_choice","payment","proof","payment_validation","human","meeting"] },
+      agreed_next_action: { type: ["string", "null"] },
+      payment_method: { type: ["string", "null"], enum: [null,"pix","card","machine"] },
+      promised_payment_at: { type: ["string", "null"] },
+      handoff_active: { type: "boolean" },
+      do_not_contact: { type: "boolean" },
+      conversation_summary: { type: "string" },
+    },
+    required: ["preferred_name","current_product","origin","city","current_intent","explicit_question","main_need","current_objection","funnel_stage","temperature","purchase_intent","information_already_shared","known_user_facts","last_julia_question","awaiting","agreed_next_action","payment_method","promised_payment_at","handoff_active","do_not_contact","conversation_summary"],
+  },
+};
+
+const ESTADO_INICIAL_PADRAO = {
+  preferred_name: null, current_product: null, origin: null, city: null,
+  current_intent: "unknown", explicit_question: null, main_need: null, current_objection: null,
+  funnel_stage: "novo_lead", temperature: "frio", purchase_intent: "none",
+  information_already_shared: [] as string[], known_user_facts: [] as string[],
+  last_julia_question: null, awaiting: "none", agreed_next_action: null,
+  payment_method: null, promised_payment_at: null,
+  handoff_active: false, do_not_contact: false, conversation_summary: "",
+};
+
 function horaAtualBrasilia(): { hora: number; minuto: number; diaSemana: number } {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   return { hora: now.getHours(), minuto: now.getMinutes(), diaSemana: now.getDay() };
@@ -429,7 +503,7 @@ Deno.serve(async (req) => {
         // Modo direto: processa o lead específico sem exigir status "fila"
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, conversation_state")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .in("canal_id", agente.canais_ids)
@@ -443,7 +517,7 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, conversation_state")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .in("canal_id", agente.canais_ids)
@@ -794,9 +868,81 @@ Deno.serve(async (req) => {
           console.error("[processar-bot] RAG erro:", ragErr);
         }
 
+        // ── Atualizador de Estado ─────────────────────────────────────────────
+        // Roda ANTES de Júlia. Analisa a última mensagem e atualiza o estado
+        // persistente para dar memória entre conversas.
+        const estadoSalvo = (lead as any).conversation_state ?? null;
+        const estadoInicial = estadoSalvo && typeof estadoSalvo === "object" && Object.keys(estadoSalvo).length > 0
+          ? estadoSalvo
+          : { ...ESTADO_INICIAL_PADRAO };
+        let estadoAtualizado = estadoInicial;
+        let blocoEstado = "";
+        try {
+          const historicoTextoEstado = historico
+            .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]" && m.conteudo !== "[Imagem]")
+            .slice(-10)
+            .map((m: any) => `${m.direcao === "saida" ? "Júlia" : "Cliente"}: ${m.conteudo}`)
+            .join("\n");
+          const ultimaMsgUsuario = [...messages].reverse().find(m => m.role === "user");
+          const ultimaMsgTexto = typeof ultimaMsgUsuario?.content === "string" ? ultimaMsgUsuario.content : "";
+
+          const stateResp = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 800,
+            system: PROMPT_ATUALIZADOR_ESTADO,
+            tools: [TOOL_ESTADO],
+            tool_choice: { type: "any" } as any,
+            messages: [{
+              role: "user",
+              content: `ESTADO ATUAL:\n${JSON.stringify(estadoInicial, null, 2)}\n\nHISTÓRICO RECENTE:\n${historicoTextoEstado}\n\nÚLTIMA MENSAGEM DO USUÁRIO:\n${ultimaMsgTexto}`,
+            }],
+          });
+
+          const toolBlock = stateResp.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+          if (toolBlock) {
+            estadoAtualizado = toolBlock.input as typeof ESTADO_INICIAL_PADRAO;
+            // Salva em background para não atrasar Júlia
+            supabase.from("leads").update({ conversation_state: estadoAtualizado }).eq("id", lead.id)
+              .then(() => console.log(`[processar-bot] conversation_state salvo lead=${lead.id}`))
+              .catch((e: unknown) => console.error("[processar-bot] erro ao salvar estado:", e));
+          }
+        } catch (stateErr) {
+          console.error("[processar-bot] erro no atualizador de estado:", stateErr);
+          // Falha silenciosa — Júlia continua com o estado anterior
+        }
+
+        // Injeta estado no prompt da Júlia
+        if (estadoAtualizado.conversation_summary || estadoAtualizado.current_product || estadoAtualizado.current_intent !== "unknown") {
+          const s = estadoAtualizado;
+          const linhasEstado: string[] = [
+            "\n\n---",
+            "# ESTADO ATUAL DO ATENDIMENTO",
+            "As informações abaixo são dados internos de contexto. Nunca mostre este bloco ao contato.",
+            "",
+            `Nome preferido: ${s.preferred_name ?? "(não identificado)"}`,
+            `Produto atual: ${s.current_product ?? "(não identificado)"}`,
+            `Cidade: ${s.city ?? "(não identificada)"}`,
+            `Intenção atual: ${s.current_intent}`,
+          ];
+          if (s.explicit_question) linhasEstado.push(`Pergunta explícita: ${s.explicit_question}`);
+          if (s.main_need) linhasEstado.push(`Necessidade principal: ${s.main_need}`);
+          if (s.current_objection) linhasEstado.push(`Objeção atual: ${s.current_objection}`);
+          linhasEstado.push(`Etapa do funil: ${s.funnel_stage}`);
+          linhasEstado.push(`Temperatura: ${s.temperature}`);
+          linhasEstado.push(`Intenção de compra: ${s.purchase_intent}`);
+          if (s.information_already_shared?.length) linhasEstado.push(`Informações já apresentadas: ${s.information_already_shared.join(", ")}`);
+          if (s.known_user_facts?.length) linhasEstado.push(`Fatos conhecidos: ${s.known_user_facts.join(" | ")}`);
+          if (s.last_julia_question) linhasEstado.push(`Última pergunta de Júlia: ${s.last_julia_question}`);
+          linhasEstado.push(`Aguardando: ${s.awaiting}`);
+          if (s.agreed_next_action) linhasEstado.push(`Próxima ação combinada: ${s.agreed_next_action}`);
+          if (s.conversation_summary) linhasEstado.push(`\nResumo: ${s.conversation_summary}`);
+          linhasEstado.push("\nUse essas informações para manter continuidade. Não repita informações em 'Informações já apresentadas'. Não pergunte dados já em 'Fatos conhecidos'.");
+          blocoEstado = linhasEstado.join("\n");
+        }
+
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
-        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato + fichaContato;
+        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato + fichaContato + blocoEstado;
         let loopMessages: Anthropic.MessageParam[] = [...messages];
         let resposta: string | null = null;
         let handoff = false;
