@@ -67,7 +67,9 @@ const Funil = () => {
   // Quadros
   const [selectedQuadroId, setSelectedQuadroId] = useState<string | null>(null);
   const [crmView, setCrmView] = useState<"conversas" | "oportunidades" | "agentes">("conversas");
-  const [quadrosVisible, setQuadrosVisible] = useState(true);
+  const [quadrosVisible, setQuadrosVisible] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
 
   // Import contacts state
   const [importOpen, setImportOpen] = useState(false);

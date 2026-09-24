@@ -557,6 +557,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
       {/* Tabela */}
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -684,6 +685,7 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
               )}
             </TableBody>
           </Table>
+          </div>
           <PaginationControls
             currentPage={page}
             totalItems={filtered.length}

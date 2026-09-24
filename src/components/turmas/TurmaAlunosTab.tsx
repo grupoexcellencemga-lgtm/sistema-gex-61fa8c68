@@ -754,6 +754,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -814,6 +815,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -861,6 +863,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -950,6 +953,7 @@ export function TurmaAlunosTab({ turma }: { turma: any }) {
                   )}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

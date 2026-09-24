@@ -310,17 +310,17 @@ const Relatorios = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 sm:gap-4 mb-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-destructive">{formatCurrency(Number(inad.total || 0))}</p>
+                <p className="text-lg sm:text-2xl font-bold text-destructive">{formatCurrency(Number(inad.total || 0))}</p>
                 <p className="text-xs text-muted-foreground">Total devido</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-foreground">{Number(inad.quantidade || 0)}</p>
+                <p className="text-lg sm:text-2xl font-bold text-foreground">{Number(inad.quantidade || 0)}</p>
                 <p className="text-xs text-muted-foreground">Parcelas vencidas</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-foreground">{Math.round(Number(inad.dias_atraso_medio || 0))}</p>
+                <p className="text-lg sm:text-2xl font-bold text-foreground">{Math.round(Number(inad.dias_atraso_medio || 0))}</p>
                 <p className="text-xs text-muted-foreground">Dias atraso (média)</p>
               </div>
             </div>

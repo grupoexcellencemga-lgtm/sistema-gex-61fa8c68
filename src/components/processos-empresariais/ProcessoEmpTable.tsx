@@ -26,6 +26,7 @@ export function ProcessoEmpTable({
   return (
     <Card>
       <CardContent className="p-0">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -105,6 +106,7 @@ export function ProcessoEmpTable({
             )}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );

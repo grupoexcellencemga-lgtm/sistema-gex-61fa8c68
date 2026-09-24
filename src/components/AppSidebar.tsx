@@ -1,9 +1,5 @@
 import {
-  LayoutDashboard, Users, Package, GraduationCap, Calendar,
-  DollarSign, BarChart3, Shield, Settings, ChevronLeft, ChevronRight,
-  Route, LogOut, UserCheck, Award, Building2, Cake, Brain, Target,
-  ClipboardList, CheckSquare, Sun, Moon, Monitor, Megaphone, Filter,
-  CalendarDays, Home, Kanban, LayoutList, Crown, ChevronDown, Check,
+  ChevronLeft, ChevronRight, LogOut, Sun, Moon, Monitor, Crown, ChevronDown, Check,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -22,61 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const menuGroups = [
-  {
-    label: "Principal",
-    items: [
-      { title: "Início", url: "/", icon: Home, pageKey: "inicio" as PageKey },
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, pageKey: "dashboard" as PageKey },
-      { title: "Alunos", url: "/alunos", icon: Users, pageKey: "alunos" as PageKey },
-      { title: "Jornada", url: "/jornada", icon: Route, pageKey: "jornada" as PageKey },
-      { title: "Produtos", url: "/produtos", icon: Package, pageKey: "produtos" as PageKey },
-      { title: "Turmas", url: "/turmas", icon: GraduationCap, pageKey: "turmas" as PageKey },
-      { title: "Eventos", url: "/eventos", icon: Calendar, pageKey: "eventos" as PageKey },
-    ],
-  },
-  {
-    label: "Pessoas",
-    items: [
-      { title: "Processo Individual", url: "/processo-individual", icon: UserCheck, pageKey: "processo-individual" as PageKey },
-      { title: "Processo Empresarial", url: "/processo-empresarial", icon: Building2, pageKey: "processo-empresarial" as PageKey },
-      { title: "Profissionais", url: "/profissionais", icon: Users, pageKey: "profissionais" as PageKey },
-      { title: "Vendedores", url: "/vendedores", icon: Award, pageKey: "vendedores" as PageKey },
-      { title: "Aniversários", url: "/aniversarios", icon: Cake, pageKey: "aniversarios" as PageKey },
-    ],
-  },
-  {
-    label: "Operações",
-    items: [
-      { title: "Agenda", url: "/agenda", icon: CalendarDays, pageKey: "agenda" as PageKey },
-      { title: "Metas", url: "/metas", icon: Target, pageKey: "metas" as PageKey },
-      { title: "CRM comercial", url: "/funil", icon: Filter, pageKey: "funil" as PageKey },
-      { title: "Dashboard CRM", url: "/crm/dashboard", icon: LayoutDashboard, pageKey: "crm-dashboard" as PageKey },
-      { title: "Tarefas", url: "/tarefas", icon: CheckSquare, pageKey: "tarefas" as PageKey },
-      { title: "Quadros de Divulgação", url: "/divulgacao", icon: Megaphone, pageKey: "divulgacao" as PageKey },
-      { title: "Mind Map", url: "/mindmap", icon: Brain, pageKey: "mindmap" as PageKey },
-    ],
-  },
-  {
-    label: "Consórcio",
-    items: [
-      { title: "Dashboard", url: "/consorcios/dashboard", icon: LayoutDashboard, pageKey: "consorcios-dashboard" as PageKey },
-      { title: "Pipeline", url: "/consorcios/pipeline", icon: Kanban, pageKey: "consorcios-pipeline" as PageKey },
-      { title: "Leads", url: "/consorcios/leads", icon: LayoutList, pageKey: "consorcios-leads" as PageKey },
-    ],
-  },
-  {
-    label: "Gestão",
-    items: [
-      { title: "Financeiro", url: "/financeiro", icon: DollarSign, pageKey: "financeiro" as PageKey },
-      { title: "Relatórios", url: "/relatorios", icon: BarChart3, pageKey: "relatorios" as PageKey },
-      { title: "Usuários ADM", url: "/usuarios", icon: Shield, pageKey: "usuarios" as PageKey },
-      { title: "Auditoria", url: "/auditoria", icon: ClipboardList, pageKey: "auditoria" as PageKey },
-      { title: "Configurações", url: "/configuracoes", icon: Settings, pageKey: "configuracoes" as PageKey },
-    ],
-  },
-];
+import { navGroups } from "@/lib/navItems";
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
@@ -143,7 +85,7 @@ export function AppSidebar() {
                 onClick={() => {
                   setSelectedEmpresaId(e.id);
                   // Se a rota atual não pertence aos módulos da nova empresa, volta para o início
-                  const allPageKeys = menuGroups.flatMap((g) => g.items.map((i) => ({ url: i.url, pageKey: i.pageKey })));
+                  const allPageKeys = navGroups.flatMap((g) => g.items.map((i) => ({ url: i.url, pageKey: i.pageKey })));
                   const currentItem = allPageKeys.find((i) => location.pathname.startsWith(i.url) && i.url !== "/");
                   if (currentItem && !e.modulos.includes(currentItem.pageKey)) {
                     navigate("/");
@@ -164,7 +106,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {menuGroups.map((group) => {
+        {navGroups.map((group) => {
           const visibleItems = group.items.filter((item) => isVisible(item.pageKey));
           if (!visibleItems.length) return null;
           return (

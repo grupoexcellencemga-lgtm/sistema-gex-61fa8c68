@@ -1595,7 +1595,7 @@ const Alunos = () => {
           onChange={handleImportFile}
         />
 
-        <Button variant="outline" size="sm" onClick={() => document.getElementById("import-alunos-input")?.click()}>
+        <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={() => document.getElementById("import-alunos-input")?.click()}>
           <Upload className="h-4 w-4 mr-2" />
           Importar
         </Button>
@@ -1603,6 +1603,7 @@ const Alunos = () => {
         <Button
           variant="outline"
           size="sm"
+          className="hidden sm:inline-flex"
           onClick={() =>
             exportToCSV(
               filtered.map((a) => ({
@@ -1690,61 +1691,76 @@ const Alunos = () => {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>CPF</TableHead>
-                  <TableHead className="w-[160px] text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
+            <>
+              {/* Desktop: tabela */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>CPF</TableHead>
+                      <TableHead className="w-[160px] text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginate(filtered, page, PAGE_SIZE).map((aluno) => (
+                      <TableRow key={aluno.id} className="transition-snappy hover:bg-secondary/50">
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{aluno.nome}</p>
+                            <p className="text-xs text-muted-foreground">{aluno.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{formatPhone(aluno.telefone)}</TableCell>
+                        <TableCell className="text-sm">{formatCPF((aluno as any).cpf)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="outline" size="sm" onClick={() => { setInitialTab("dados"); setSelectedAluno(aluno); setSheetOpen(true); }}>
+                              <Eye className="h-4 w-4 mr-1.5" />Ficha
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(aluno)}>
+                              <Pencil className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filtered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                          Nenhum {lower} encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
 
-              <TableBody>
+              {/* Mobile: cards */}
+              <div className="sm:hidden divide-y divide-border">
                 {paginate(filtered, page, PAGE_SIZE).map((aluno) => (
-                  <TableRow key={aluno.id} className="transition-snappy hover:bg-secondary/50">
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-sm">{aluno.nome}</p>
-                        <p className="text-xs text-muted-foreground">{aluno.email}</p>
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="text-sm">{formatPhone(aluno.telefone)}</TableCell>
-                    <TableCell className="text-sm">{formatCPF((aluno as any).cpf)}</TableCell>
-
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setInitialTab("dados");
-                            setSelectedAluno(aluno);
-                            setSheetOpen(true);
-                          }}
-                        >
-                          <Eye className="h-4 w-4 mr-1.5" />
-                          Ficha
-                        </Button>
-
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(aluno)}>
-                          <Pencil className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <div key={aluno.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{aluno.nome}</p>
+                      {aluno.email && <p className="text-xs text-muted-foreground truncate">{aluno.email}</p>}
+                      {aluno.telefone && <p className="text-xs text-muted-foreground">{formatPhone(aluno.telefone)}</p>}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="outline" size="sm" onClick={() => { setInitialTab("dados"); setSelectedAluno(aluno); setSheetOpen(true); }}>
+                        <Eye className="h-4 w-4 mr-1" />Ficha
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(aluno)}>
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
-
-                {filtered.length === 0 && !isLoading && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Nenhum {lower} encontrado
-                    </TableCell>
-                  </TableRow>
+                {filtered.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhum {lower} encontrado</p>
                 )}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
 
           <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />

@@ -127,6 +127,7 @@ export function ChavesPixSection() {
               Nenhuma chave PIX cadastrada. Clique em "Nova chave" para adicionar.
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -166,6 +167,7 @@ export function ChavesPixSection() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

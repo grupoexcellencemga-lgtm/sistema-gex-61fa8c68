@@ -265,6 +265,7 @@ const Metas = () => {
             <CardTitle className="text-base font-semibold">Metas Encerradas</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -305,6 +306,7 @@ const Metas = () => {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

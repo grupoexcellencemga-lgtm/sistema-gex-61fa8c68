@@ -332,7 +332,7 @@ export default function Auditoria() {
         <p className="text-center text-muted-foreground py-12">Nenhum registro de auditoria encontrado.</p>
       ) : (
         <>
-          <div className="rounded-lg border bg-card">
+          <div className="rounded-lg border bg-card overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

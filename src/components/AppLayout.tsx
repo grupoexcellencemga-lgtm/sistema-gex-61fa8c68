@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
@@ -66,33 +67,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className="h-full flex w-full relative z-10 bg-background text-foreground"
         style={{ minHeight: "-webkit-fill-available" }}
       >
-        <AppSidebar />
+        {/* Sidebar — hidden on mobile, replaced by MobileBottomNav */}
+        <div className="hidden md:block">
+          <AppSidebar />
+        </div>
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
           {/* TOPBAR */}
           <header
             className="h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 pt-safe bg-background/95 border-b border-border backdrop-blur"
           >
-            {/* Left: mobile trigger + breadcrumb */}
+            {/* Left: tablet trigger (md-lg) + breadcrumb */}
             <div className="flex items-center gap-3">
-              <div className="lg:hidden">
+              {/* Tablet only: sidebar trigger (768-1024px) */}
+              <div className="hidden md:block lg:hidden">
                 <SidebarTrigger className="text-muted-foreground hover:text-primary transition-colors" />
               </div>
 
+              {/* Desktop breadcrumb */}
               <div className="hidden lg:flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  GEx
-                </span>
+                <span className="text-xs font-medium text-muted-foreground">GEx</span>
                 <span className="text-xs text-muted-foreground">/</span>
-                <span className="text-sm font-medium text-foreground">
-                  {pageTitle}
-                </span>
+                <span className="text-sm font-medium text-foreground">{pageTitle}</span>
               </div>
 
-              <div className="lg:hidden">
-                <span className="text-sm font-semibold text-foreground">
-                  Sistema GEx
-                </span>
+              {/* Mobile: page title */}
+              <div className="md:hidden">
+                <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
               </div>
             </div>
 
@@ -103,20 +104,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          {/* MAIN CONTENT */}
+          {/* MAIN CONTENT — extra bottom padding on mobile for the bottom nav */}
           <main
-            className="flex-1 overflow-auto pb-safe bg-background"
+            className="flex-1 overflow-auto bg-background"
             style={{
               WebkitOverflowScrolling: "touch",
               scrollbarWidth: "thin",
               scrollbarColor: "#CBD5E1 transparent",
+              paddingBottom: "env(safe-area-inset-bottom)",
             }}
           >
-            <div className="p-4 md:p-6 lg:p-8 animate-gex-fadein">
+            <div className="p-4 md:p-6 lg:p-8 pb-24 md:pb-6 lg:pb-8 animate-gex-fadein">
               {children}
             </div>
           </main>
         </div>
+
+        {/* Mobile bottom navigation */}
+        <MobileBottomNav />
       </div>
 
       <style>{`
