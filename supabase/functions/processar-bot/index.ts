@@ -1,5 +1,23 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.36.3";
+import {
+  AWAITING_VALUES,
+  CURRENT_INTENTS,
+  DEFAULT_CONVERSATION_STATE,
+  FUNNEL_STAGES,
+  OBJECTIONS,
+  PAYMENT_METHODS,
+  PURCHASE_INTENTS,
+  SHARED_INFORMATION,
+  TEMPERATURES,
+  applyOperationalConversationState,
+  buildConversationStateContext,
+  mergeConversationState,
+  persistConversationState,
+  prepareStateUpdaterConversation,
+  type ConversationState,
+  type ConversationStateRepository,
+} from "./conversation-state.ts";
 
 declare const Supabase: {
   ai: {
@@ -18,6 +36,8 @@ const anthropic = new Anthropic({
   apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
 });
 
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -25,6 +45,67 @@ const corsHeaders = {
 
 // Marcador que o prompt manda o agente devolver quando não há o que responder.
 const SEM_RESPOSTA = "[SEM_RESPOSTA]";
+
+async function isAuthorizedInternalRequest(req: Request): Promise<boolean> {
+  const authorization = req.headers.get("authorization") ?? "";
+  if (Boolean(serviceRoleKey) && authorization === `Bearer ${serviceRoleKey}`) return true;
+
+  const internalSecret = req.headers.get("x-processar-bot-secret");
+  if (!internalSecret) return false;
+  const result = await supabase.rpc("verify_processar_bot_secret", { p_secret: internalSecret });
+  if (result.error) {
+    console.error("[processar-bot] falha ao validar credencial interna:", result.error.message);
+    return false;
+  }
+  return result.data === true;
+}
+
+function throwOnDatabaseError(
+  operation: string,
+  result: { error?: { message?: string; code?: string } | null },
+): void {
+  if (!result.error) return;
+  const code = result.error.code ? ` code=${result.error.code}` : "";
+  throw new Error(`${operation} falhou.${code} ${result.error.message ?? "Erro de banco sem mensagem."}`);
+}
+
+const conversationStateRepository: ConversationStateRepository = {
+  async compareAndSwap(leadId, expectedVersion, state) {
+    const result = await supabase
+      .from("leads")
+      .update({
+        conversation_state: state,
+        conversation_state_version: expectedVersion + 1,
+      })
+      .eq("id", leadId)
+      .eq("conversation_state_version", expectedVersion)
+      .select("conversation_state, conversation_state_version")
+      .maybeSingle();
+
+    if (result.error) return { kind: "error", error: result.error.message };
+    if (!result.data) return { kind: "conflict" };
+    return {
+      kind: "updated",
+      state: mergeConversationState(DEFAULT_CONVERSATION_STATE, result.data.conversation_state, {
+        preserveProtectedFlags: false,
+        allowProtectedChanges: true,
+      }).state,
+      version: Number(result.data.conversation_state_version),
+    };
+  },
+  async load(leadId) {
+    const result = await supabase
+      .from("leads")
+      .select("conversation_state, conversation_state_version")
+      .eq("id", leadId)
+      .single();
+    throwOnDatabaseError("recarregar conversation_state", result);
+    return {
+      state: result.data?.conversation_state,
+      version: Number(result.data?.conversation_state_version ?? 1),
+    };
+  },
+};
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -143,7 +224,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "reservar_vaga",
-    description: "Registra a reserva de vaga do contato em uma turma com prazo de pagamento.",
+    description: "Cria uma solicitação para a equipe reservar a vaga. Não confirma que a vaga já foi reservada.",
     input_schema: {
       type: "object",
       properties: {
@@ -156,7 +237,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "cadastrar_aluno",
-    description: "Cria tarefa para o time cadastrar o aluno no sistema com os dados coletados.",
+    description: "Cria uma solicitação para o time cadastrar o aluno. Não confirma que o cadastro já foi realizado.",
     input_schema: {
       type: "object",
       properties: {
@@ -172,7 +253,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "agendar_reuniao",
-    description: "Agenda uma reunião presencial ou online e cria tarefa para notificar Laura (B2B).",
+    description: "Cria uma solicitação de reunião para Laura confirmar. Não confirma que a reunião já foi agendada.",
     input_schema: {
       type: "object",
       properties: {
@@ -187,7 +268,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "adicionar_grupo_turma",
-    description: "Cria tarefa para adicionar o aluno ao grupo da turma no WhatsApp.",
+    description: "Cria uma solicitação para adicionar o aluno ao grupo. Não confirma que ele já foi adicionado.",
     input_schema: {
       type: "object",
       properties: {
@@ -199,7 +280,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "enviar_material",
-    description: "Cria tarefa para o time enviar um material ao contato (imagem, PDF, link, localização).",
+    description: "Cria uma solicitação para o time enviar material. Não confirma que o material já foi enviado.",
     input_schema: {
       type: "object",
       properties: {
@@ -267,6 +348,7 @@ REGRA FUNDAMENTAL: Preserve informações anteriores enquanto continuarem válid
 Produtos conhecidos: Comunidade Mulheres de Excelência, Workshop Eleva-te, Método CIS — Global, Método OPEX — O Poder da Excelência, Workshop Pais que Fortalecem, PGL — Programa Gestão e Liderança, Teen Connect, Workshop Gestão do Crescimento, Workshop Homens de Excelência. Outros produtos podem existir.
 
 Não confunda: pergunta sobre preço com decisão de comprar; interesse com inscrição; envio de comprovante com pagamento confirmado; pedido de informação com objeção; resposta curta com falta de interesse.
+Mantenha no máximo 20 fatos conhecidos realmente úteis. Não inclua dados sensíveis desnecessários.
 
 Sempre comece pelo estado existente. Altere somente o que realmente mudou. Chame a ferramenta atualizar_estado_conversa com o objeto completo.`;
 
@@ -282,29 +364,29 @@ const TOOL_ESTADO: Anthropic.Tool = {
       city: { type: ["string", "null"] },
       current_intent: {
         type: "string",
-        enum: ["unknown","saudacao","informacao_produto","preco","datas","horario","local","parcelamento","pagamento","inscricao","reserva","comprovante","objecao","comparacao","suporte_aluno","empresa_escola","cancelamento","solicitar_humano","encerramento","outro"],
+        enum: [...CURRENT_INTENTS],
       },
       explicit_question: { type: ["string", "null"] },
       main_need: { type: ["string", "null"] },
       current_objection: {
         type: ["string", "null"],
-        enum: [null,"financeira","tempo","agenda","deslocamento","presencial","falar_com_terceiro","inseguranca","confianca","dinamicas","comparacao","prioridade","sem_interesse","outro"],
+        enum: [null, ...OBJECTIONS],
       },
       funnel_stage: {
         type: "string",
-        enum: ["novo_lead","primeiro_contato","em_conversa","interesse_identificado","produto_apresentado","proposta_enviada","aguardando_decisao","dados_recebidos","aguardando_pagamento","pagamento_em_conferencia","inscricao_confirmada","perdido_sem_interesse","atendimento_humano"],
+        enum: [...FUNNEL_STAGES],
       },
-      temperature: { type: "string", enum: ["frio","morno","quente"] },
-      purchase_intent: { type: "string", enum: ["none","weak","clear"] },
+      temperature: { type: "string", enum: [...TEMPERATURES] },
+      purchase_intent: { type: "string", enum: [...PURCHASE_INTENTS] },
       information_already_shared: {
         type: "array",
-        items: { type: "string", enum: ["product_overview","price","dates","time","location","duration","format","benefits","payment_terms","pix_key","payment_link","registration_request","registration_confirmed","group_information","invoice_information"] },
+        items: { type: "string", enum: [...SHARED_INFORMATION] },
       },
       known_user_facts: { type: "array", items: { type: "string" } },
       last_julia_question: { type: ["string", "null"] },
-      awaiting: { type: "string", enum: ["none","user_reply","user_data","payment_choice","payment","proof","payment_validation","human","meeting"] },
+      awaiting: { type: "string", enum: [...AWAITING_VALUES] },
       agreed_next_action: { type: ["string", "null"] },
-      payment_method: { type: ["string", "null"], enum: [null,"pix","card","machine"] },
+      payment_method: { type: ["string", "null"], enum: [null, ...PAYMENT_METHODS] },
       promised_payment_at: { type: ["string", "null"] },
       handoff_active: { type: "boolean" },
       do_not_contact: { type: "boolean" },
@@ -312,16 +394,6 @@ const TOOL_ESTADO: Anthropic.Tool = {
     },
     required: ["preferred_name","current_product","origin","city","current_intent","explicit_question","main_need","current_objection","funnel_stage","temperature","purchase_intent","information_already_shared","known_user_facts","last_julia_question","awaiting","agreed_next_action","payment_method","promised_payment_at","handoff_active","do_not_contact","conversation_summary"],
   },
-};
-
-const ESTADO_INICIAL_PADRAO = {
-  preferred_name: null, current_product: null, origin: null, city: null,
-  current_intent: "unknown", explicit_question: null, main_need: null, current_objection: null,
-  funnel_stage: "novo_lead", temperature: "frio", purchase_intent: "none",
-  information_already_shared: [] as string[], known_user_facts: [] as string[],
-  last_julia_question: null, awaiting: "none", agreed_next_action: null,
-  payment_method: null, promised_payment_at: null,
-  handoff_active: false, do_not_contact: false, conversation_summary: "",
 };
 
 function horaAtualBrasilia(): { hora: number; minuto: number; diaSemana: number } {
@@ -354,7 +426,7 @@ function splitMensagem(resposta: string): string[] {
 
   const matchAss = resposta.match(/^(\*[^\n*]+\*)\n\n/);
   const assinatura = matchAss ? matchAss[1] : null;
-  const corpo = assinatura ? resposta.slice(matchAss[0].length) : resposta;
+  const corpo = assinatura ? resposta.slice(matchAss?.[0].length ?? 0) : resposta;
 
   const paragrafos = corpo.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
 
@@ -375,6 +447,14 @@ function splitMensagem(resposta: string): string[] {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  if (!(await isAuthorizedInternalRequest(req))) {
+    console.warn("[processar-bot] requisição interna não autorizada bloqueada");
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     // Modo direto: webhook passou um leadId específico para resposta imediata
@@ -503,7 +583,7 @@ Deno.serve(async (req) => {
         // Modo direto: processa o lead específico sem exigir status "fila"
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, conversation_state")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .in("canal_id", agente.canais_ids)
@@ -517,7 +597,7 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, conversation_state")
+          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .in("canal_id", agente.canais_ids)
@@ -871,20 +951,24 @@ Deno.serve(async (req) => {
         // ── Atualizador de Estado ─────────────────────────────────────────────
         // Roda ANTES de Júlia. Analisa a última mensagem e atualiza o estado
         // persistente para dar memória entre conversas.
-        const estadoSalvo = (lead as any).conversation_state ?? null;
-        const estadoInicial = estadoSalvo && typeof estadoSalvo === "object" && Object.keys(estadoSalvo).length > 0
-          ? estadoSalvo
-          : { ...ESTADO_INICIAL_PADRAO };
-        let estadoAtualizado = estadoInicial;
-        let blocoEstado = "";
+        const estadoBase = mergeConversationState(
+          DEFAULT_CONVERSATION_STATE,
+          (lead as any).conversation_state,
+          { preserveProtectedFlags: false, allowProtectedChanges: true },
+        ).state;
+        const estadoInicial = applyOperationalConversationState(estadoBase, {
+          handoffActive: (lead as any).bot_ativo === false && (
+            Boolean((lead as any).atendente_id) || (lead as any).status_atendimento === "em_atendimento"
+          ),
+        });
+        let estadoAtualizado: ConversationState = estadoInicial;
+        let estadoVersionAtual = Number((lead as any).conversation_state_version ?? 1);
         try {
-          const historicoTextoEstado = historico
-            .filter((m: any) => m.conteudo && m.conteudo !== "[Mídia]" && m.conteudo !== "[Imagem]")
-            .slice(-10)
-            .map((m: any) => `${m.direcao === "saida" ? "Júlia" : "Cliente"}: ${m.conteudo}`)
-            .join("\n");
-          const ultimaMsgUsuario = [...messages].reverse().find(m => m.role === "user");
-          const ultimaMsgTexto = typeof ultimaMsgUsuario?.content === "string" ? ultimaMsgUsuario.content : "";
+          const preparedStateInput = prepareStateUpdaterConversation(historico.map((m: any) => ({
+            direction: m.direcao,
+            content: m.conteudo,
+            mediaType: m.tipo,
+          })));
 
           const stateResp = await anthropic.messages.create({
             model: "claude-haiku-4-5-20251001",
@@ -894,51 +978,40 @@ Deno.serve(async (req) => {
             tool_choice: { type: "any" } as any,
             messages: [{
               role: "user",
-              content: `ESTADO ATUAL:\n${JSON.stringify(estadoInicial, null, 2)}\n\nHISTÓRICO RECENTE:\n${historicoTextoEstado}\n\nÚLTIMA MENSAGEM DO USUÁRIO:\n${ultimaMsgTexto}`,
+              content: `ESTADO ATUAL:\n${JSON.stringify(estadoInicial, null, 2)}\n\nHISTÓRICO RECENTE (sem duplicar a última mensagem):\n${preparedStateInput.history || "(sem histórico anterior)"}\n\nÚLTIMA MENSAGEM DO USUÁRIO:\n${preparedStateInput.latestUserMessage}`,
             }],
           });
 
           const toolBlock = stateResp.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
           if (toolBlock) {
-            estadoAtualizado = toolBlock.input as typeof ESTADO_INICIAL_PADRAO;
-            // Salva em background para não atrasar Júlia
-            supabase.from("leads").update({ conversation_state: estadoAtualizado }).eq("id", lead.id)
-              .then(() => console.log(`[processar-bot] conversation_state salvo lead=${lead.id}`))
-              .catch((e: unknown) => console.error("[processar-bot] erro ao salvar estado:", e));
+            const persisted = await persistConversationState({
+              leadId: lead.id,
+              mode: modoAgente,
+              previousState: estadoInicial,
+              expectedVersion: estadoVersionAtual,
+              updaterOutput: toolBlock.input,
+              repository: conversationStateRepository,
+            });
+            estadoAtualizado = persisted.state;
+            estadoVersionAtual = persisted.version;
+            if (persisted.issues.length) {
+              console.warn(`[processar-bot] state updater normalizado lead=${lead.id} issues=${persisted.issues.join(" | ")}`);
+            }
+            if (persisted.kind === "persisted") {
+              console.log(`[processar-bot] conversation_state confirmado lead=${lead.id} version=${persisted.version} retry=${persisted.conflictRetried === true}`);
+            } else if (persisted.kind === "memory_only") {
+              console.log(`[processar-bot] conversation_state somente em memória lead=${lead.id} modo=${modoAgente}`);
+            } else {
+              console.error(`[processar-bot] falha ao persistir conversation_state lead=${lead.id} version=${estadoVersionAtual} retry=${persisted.conflictRetried === true}: ${persisted.error}`);
+            }
+          } else {
+            console.warn(`[processar-bot] state updater sem tool_use lead=${lead.id}; estado anterior preservado`);
           }
         } catch (stateErr) {
-          console.error("[processar-bot] erro no atualizador de estado:", stateErr);
-          // Falha silenciosa — Júlia continua com o estado anterior
+          console.error(`[processar-bot] erro no atualizador de estado lead=${lead.id}; estado anterior preservado:`, stateErr);
         }
 
-        // Injeta estado no prompt da Júlia
-        if (estadoAtualizado.conversation_summary || estadoAtualizado.current_product || estadoAtualizado.current_intent !== "unknown") {
-          const s = estadoAtualizado;
-          const linhasEstado: string[] = [
-            "\n\n---",
-            "# ESTADO ATUAL DO ATENDIMENTO",
-            "As informações abaixo são dados internos de contexto. Nunca mostre este bloco ao contato.",
-            "",
-            `Nome preferido: ${s.preferred_name ?? "(não identificado)"}`,
-            `Produto atual: ${s.current_product ?? "(não identificado)"}`,
-            `Cidade: ${s.city ?? "(não identificada)"}`,
-            `Intenção atual: ${s.current_intent}`,
-          ];
-          if (s.explicit_question) linhasEstado.push(`Pergunta explícita: ${s.explicit_question}`);
-          if (s.main_need) linhasEstado.push(`Necessidade principal: ${s.main_need}`);
-          if (s.current_objection) linhasEstado.push(`Objeção atual: ${s.current_objection}`);
-          linhasEstado.push(`Etapa do funil: ${s.funnel_stage}`);
-          linhasEstado.push(`Temperatura: ${s.temperature}`);
-          linhasEstado.push(`Intenção de compra: ${s.purchase_intent}`);
-          if (s.information_already_shared?.length) linhasEstado.push(`Informações já apresentadas: ${s.information_already_shared.join(", ")}`);
-          if (s.known_user_facts?.length) linhasEstado.push(`Fatos conhecidos: ${s.known_user_facts.join(" | ")}`);
-          if (s.last_julia_question) linhasEstado.push(`Última pergunta de Júlia: ${s.last_julia_question}`);
-          linhasEstado.push(`Aguardando: ${s.awaiting}`);
-          if (s.agreed_next_action) linhasEstado.push(`Próxima ação combinada: ${s.agreed_next_action}`);
-          if (s.conversation_summary) linhasEstado.push(`\nResumo: ${s.conversation_summary}`);
-          linhasEstado.push("\nUse essas informações para manter continuidade. Não repita informações em 'Informações já apresentadas'. Não pergunte dados já em 'Fatos conhecidos'.");
-          blocoEstado = linhasEstado.join("\n");
-        }
+        const blocoEstado = buildConversationStateContext(estadoAtualizado);
 
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
@@ -967,6 +1040,26 @@ Deno.serve(async (req) => {
             .map((b) => b.text)
             .join("\n\n")
             .trim();
+        const persistirEstadoOperacional = async (
+          patch: Partial<ConversationState>,
+          operacao: string,
+        ) => {
+          const persisted = await persistConversationState({
+            leadId: lead.id,
+            mode: "ativo",
+            previousState: estadoAtualizado,
+            expectedVersion: estadoVersionAtual,
+            updaterOutput: patch,
+            repository: conversationStateRepository,
+            allowProtectedChanges: true,
+          });
+          estadoAtualizado = persisted.state;
+          estadoVersionAtual = persisted.version;
+          if (!persisted.persisted) {
+            throw new Error(`${operacao}: não foi possível confirmar conversation_state: ${persisted.error ?? "erro desconhecido"}`);
+          }
+          console.log(`[processar-bot] ${operacao} sincronizado lead=${lead.id} state_version=${estadoVersionAtual}`);
+        };
 
         for (let iter = 0; iter < MAX_ITER; iter++) {
           const response = await anthropic.messages.create({
@@ -988,7 +1081,13 @@ Deno.serve(async (req) => {
               resposta = resposta.replace(/\[HANDOFF\]/g, "").trim();
               handoff = true;
               if (modoAgente === "ativo") {
-                await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                const legacyHandoff = await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                throwOnDatabaseError("handoff por marcador de texto", legacyHandoff);
+                await persistirEstadoOperacional({
+                  handoff_active: true,
+                  funnel_stage: "atendimento_humano",
+                  awaiting: "human",
+                }, "handoff legado");
               }
               console.log(`[processar-bot] handoff (texto) para lead ${lead.id}`);
             }
@@ -1028,20 +1127,23 @@ Deno.serve(async (req) => {
                   const permitidos = ["nome", "email", "cidade", "produto_interesse", "empresa_nome", "cargo", "perfil_lead"];
                   for (const k of permitidos) if (input[k] !== undefined) campos[k] = input[k];
                   if (Object.keys(campos).length > 0) {
-                    await supabase.from("leads").update(campos).eq("id", lead.id);
+                    const updateLead = await supabase.from("leads").update(campos).eq("id", lead.id);
+                    throwOnDatabaseError("atualizar_lead", updateLead);
                     resultado = `Lead atualizado: ${JSON.stringify(campos)}`;
                     console.log(`[processar-bot] atualizar_lead lead=${lead.id}`, campos);
                   }
 
                 } else if (block.name === "pontuar_lead") {
                   const score = Math.max(0, Math.min(100, Math.round(Number(input.score))));
-                  await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
-                  await supabase.from("atividades").insert({
+                  const scoreUpdate = await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
+                  throwOnDatabaseError("pontuar_lead", scoreUpdate);
+                  const scoreActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
                     descricao: `[IA] Score definido: ${score}/100 — ${input.motivo}`,
                   });
+                  throwOnDatabaseError("registrar atividade de pontuação", scoreActivity);
                   resultado = `Score ${score} registrado`;
                   console.log(`[processar-bot] pontuar_lead lead=${lead.id} score=${score}`);
 
@@ -1119,12 +1221,13 @@ Deno.serve(async (req) => {
                   console.log(`[processar-bot] consultar_produtos lead=${lead.id}`);
 
                 } else if (block.name === "registrar_nota") {
-                  await supabase.from("atividades").insert({
+                  const notaInsert = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
                     descricao: `[IA] ${input.nota}`,
                   });
+                  throwOnDatabaseError("registrar_nota", notaInsert);
                   resultado = "Nota registrada";
                   console.log(`[processar-bot] registrar_nota lead=${lead.id}`);
 
@@ -1143,26 +1246,29 @@ Deno.serve(async (req) => {
                   const { data: etapaEncontrada } = await etapaQuery.maybeSingle();
 
                   if (etapaEncontrada?.id) {
-                    await supabase.from("leads").update({ etapa_id: etapaEncontrada.id }).eq("id", lead.id);
+                    const etapaLeadUpdate = await supabase.from("leads").update({ etapa_id: etapaEncontrada.id }).eq("id", lead.id);
+                    throwOnDatabaseError("mover etapa do lead", etapaLeadUpdate);
                     if (card?.id) {
-                      await supabase.from("funil_cards").update({ etapa_id: etapaEncontrada.id }).eq("id", card.id);
+                      const etapaCardUpdate = await supabase.from("funil_cards").update({ etapa_id: etapaEncontrada.id }).eq("id", card.id);
+                      throwOnDatabaseError("mover card do funil", etapaCardUpdate);
                     }
                     resultado = `Etapa movida para "${input.etapa}"`;
                   } else {
                     resultado = `Etapa "${input.etapa}" não encontrada no funil — registre via nota`;
                   }
                   if (input.motivo) {
-                    await supabase.from("atividades").insert({
+                    const etapaActivity = await supabase.from("atividades").insert({
                       lead_id: lead.id,
                       empresa_id: agente.empresa_id,
                       tipo: "nota",
                       descricao: `[IA] Etapa movida para "${input.etapa}": ${input.motivo}`,
                     });
+                    throwOnDatabaseError("registrar atividade de mudança de etapa", etapaActivity);
                   }
                   console.log(`[processar-bot] mover_etapa lead=${lead.id} etapa=${input.etapa} etapa_id=${etapaEncontrada?.id ?? "não encontrada"}`);
 
                 } else if (block.name === "criar_tarefa") {
-                  await supabase.from("tarefas").insert({
+                  const tarefaInsert = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: input.titulo,
@@ -1172,19 +1278,27 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
+                  throwOnDatabaseError("criar_tarefa", tarefaInsert);
                   resultado = "Tarefa criada";
                   console.log(`[processar-bot] criar_tarefa lead=${lead.id} titulo=${input.titulo}`);
 
                 } else if (block.name === "solicitar_handoff") {
                   handoff = true;
                   resumoHandoff = input.resumo ?? null;
-                  await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
-                  await supabase.from("atividades").insert({
+                  const handoffLeadUpdate = await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                  throwOnDatabaseError("desativar bot para handoff", handoffLeadUpdate);
+                  const handoffActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "alerta",
                     descricao: `[IA] Handoff solicitado — ${input.resumo}`,
                   });
+                  throwOnDatabaseError("registrar atividade de handoff", handoffActivity);
+                  await persistirEstadoOperacional({
+                    handoff_active: true,
+                    funnel_stage: "atendimento_humano",
+                    awaiting: "human",
+                  }, "handoff");
 
                   // Notifica o comercial responsável via WhatsApp
                   try {
@@ -1219,7 +1333,7 @@ Deno.serve(async (req) => {
                             `Resumo da conversa:\n${input.resumo}\n\n` +
                             `Acesse o CRM para dar continuidade ao atendimento.`;
 
-                          await fetch(
+                          const notificationResponse = await fetch(
                             `${canalHandoff.evolution_url}/message/sendText/${canalHandoff.evolution_instancia}`,
                             {
                               method: "POST",
@@ -1227,7 +1341,10 @@ Deno.serve(async (req) => {
                               body: JSON.stringify({ number: telefone, text: msgComercial }),
                             }
                           );
-                          console.log(`[processar-bot] notificação handoff enviada para ${comercial.nome} (${telefone})`);
+                          if (!notificationResponse.ok) {
+                            throw new Error(`Evolution retornou HTTP ${notificationResponse.status}`);
+                          }
+                          console.log(`[processar-bot] notificação de handoff confirmada lead=${lead.id}`);
                         }
                       }
                     }
@@ -1296,18 +1413,20 @@ Deno.serve(async (req) => {
                 } else if (block.name === "classificar_lead") {
                   const tempMap: Record<string, number> = { frio: 20, morno: 50, quente: 80 };
                   const score = tempMap[input.temperatura] ?? 50;
-                  await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
-                  await supabase.from("atividades").insert({
+                  const classificarUpdate = await supabase.from("leads").update({ lead_score: score }).eq("id", lead.id);
+                  throwOnDatabaseError("classificar lead", classificarUpdate);
+                  const classificarActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
                     descricao: `[IA] Temperatura: ${input.temperatura}${input.motivo ? ` — ${input.motivo}` : ""}`,
                   });
+                  throwOnDatabaseError("registrar atividade de classificação", classificarActivity);
                   resultado = `Lead classificado como ${input.temperatura} (score ${score})`;
                   console.log(`[processar-bot] classificar_lead lead=${lead.id} temperatura=${input.temperatura}`);
 
                 } else if (block.name === "reservar_vaga") {
-                  await supabase.from("tarefas").insert({
+                  const reservaTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: `Reserva de vaga — ${input.turma_nome}`,
@@ -1316,13 +1435,15 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  await supabase.from("atividades").insert({
+                  throwOnDatabaseError("solicitar reserva de vaga", reservaTask);
+                  const reservaActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
-                    descricao: `[IA] Vaga reservada em ${input.turma_nome}. Pagamento previsto: ${input.prazo_pagamento ?? "a combinar"}.`,
+                    descricao: `[IA] Solicitação de reserva criada para ${input.turma_nome}. Pagamento previsto: ${input.prazo_pagamento ?? "a combinar"}.`,
                   });
-                  resultado = `Reserva de vaga registrada para ${input.turma_nome}`;
+                  throwOnDatabaseError("registrar solicitação de reserva", reservaActivity);
+                  resultado = `Solicitação de reserva criada para ${input.turma_nome}; a vaga ainda depende de confirmação humana`;
                   console.log(`[processar-bot] reservar_vaga lead=${lead.id}`);
 
                 } else if (block.name === "cadastrar_aluno") {
@@ -1334,7 +1455,7 @@ Deno.serve(async (req) => {
                     input.cpf && `CPF: (recebido)`,
                     input.turma_nome && `Turma: ${input.turma_nome}`,
                   ].filter(Boolean).join(" | ");
-                  await supabase.from("tarefas").insert({
+                  const cadastroTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: `Cadastrar aluno — ${input.nome_completo ?? lead.nome ?? lead.id}`,
@@ -1343,17 +1464,19 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  await supabase.from("atividades").insert({
+                  throwOnDatabaseError("solicitar cadastro de aluno", cadastroTask);
+                  const cadastroActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
                     descricao: `[IA] Dados coletados para cadastro: ${dadosAluno}`,
                   });
-                  resultado = `Tarefa de cadastro criada — use solicitar_handoff para acionar o time`;
+                  throwOnDatabaseError("registrar solicitação de cadastro", cadastroActivity);
+                  resultado = `Solicitação de cadastro criada para o time; o aluno ainda não foi cadastrado`;
                   console.log(`[processar-bot] cadastrar_aluno lead=${lead.id}`);
 
                 } else if (block.name === "agendar_reuniao") {
-                  await supabase.from("tarefas").insert({
+                  const reuniaoTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: `Reunião: ${input.assunto}`,
@@ -1367,17 +1490,19 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  await supabase.from("atividades").insert({
+                  throwOnDatabaseError("solicitar reunião", reuniaoTask);
+                  const reuniaoActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
-                    descricao: `[IA] Reunião agendada: ${input.assunto}${input.data_hora ? ` em ${input.data_hora}` : ""}. Tarefa criada para Laura.`,
+                    descricao: `[IA] Solicitação de reunião: ${input.assunto}${input.data_hora ? ` em ${input.data_hora}` : ""}. Tarefa criada para Laura.`,
                   });
-                  resultado = `Reunião agendada e tarefa criada para Laura`;
+                  throwOnDatabaseError("registrar solicitação de reunião", reuniaoActivity);
+                  resultado = `Solicitação de reunião criada para Laura; o agendamento ainda depende de confirmação`;
                   console.log(`[processar-bot] agendar_reuniao lead=${lead.id}`);
 
                 } else if (block.name === "adicionar_grupo_turma") {
-                  await supabase.from("tarefas").insert({
+                  const grupoTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: `Adicionar ao grupo — ${input.turma_nome}`,
@@ -1386,11 +1511,12 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  resultado = `Tarefa criada para adicionar ao grupo de ${input.turma_nome}`;
+                  throwOnDatabaseError("solicitar inclusão no grupo", grupoTask);
+                  resultado = `Solicitação criada para o time adicionar ao grupo de ${input.turma_nome}; a inclusão ainda não foi realizada`;
                   console.log(`[processar-bot] adicionar_grupo_turma lead=${lead.id}`);
 
                 } else if (block.name === "enviar_material") {
-                  await supabase.from("tarefas").insert({
+                  const materialTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: `Enviar ${input.tipo} — ${String(input.descricao ?? "").slice(0, 60)}`,
@@ -1399,11 +1525,12 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  resultado = `Tarefa criada para envio de ${input.tipo}`;
+                  throwOnDatabaseError("solicitar envio de material", materialTask);
+                  resultado = `Solicitação de envio de ${input.tipo} criada para o time; o material ainda não foi enviado`;
                   console.log(`[processar-bot] enviar_material lead=${lead.id}`);
 
                 } else if (block.name === "marcar_nao_contatar") {
-                  await supabase.from("tarefas").insert({
+                  const naoContatarTask = await supabase.from("tarefas").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     titulo: "Marcar como não contatar",
@@ -1412,18 +1539,26 @@ Deno.serve(async (req) => {
                     status: "pendente",
                     tipo: "contato",
                   });
-                  await supabase.from("atividades").insert({
+                  throwOnDatabaseError("criar tarefa não contatar", naoContatarTask);
+                  const naoContatarActivity = await supabase.from("atividades").insert({
                     lead_id: lead.id,
                     empresa_id: agente.empresa_id,
                     tipo: "nota",
                     descricao: `[IA] Não contatar — ${input.motivo ?? "solicitado pelo contato"}`,
                   });
-                  await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                  throwOnDatabaseError("registrar atividade não contatar", naoContatarActivity);
+                  const naoContatarLead = await supabase.from("leads").update({ bot_ativo: false }).eq("id", lead.id);
+                  throwOnDatabaseError("desativar bot para não contatar", naoContatarLead);
+                  await persistirEstadoOperacional({ do_not_contact: true }, "não contatar");
                   resultado = "Lead marcado como não contatar — bot desativado";
                   console.log(`[processar-bot] marcar_nao_contatar lead=${lead.id}`);
                 }
               } catch (toolErr) {
-                resultado = `Erro ao executar ferramenta: ${String(toolErr)}`;
+                resultado = JSON.stringify({
+                  ok: false,
+                  action: block.name,
+                  message: "A ação não foi confirmada pelo sistema. Não informe ao contato que ela foi concluída.",
+                });
                 console.error(`[processar-bot] erro em ${block.name}:`, toolErr);
               }
 

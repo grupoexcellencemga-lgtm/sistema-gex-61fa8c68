@@ -6,7 +6,9 @@ project_id = "nsxigkgfvbzhpxrpwvhw"
 # nada. O trigger trg_bot_ativo manda so 'apikey', mas ja estava morto de outra
 # forma: app.settings.edge_function_url nunca foi configurado.
 [functions.processar-bot]
-verify_jwt = true
+# O endpoint valida service role ou segredo rotativo do Vault no próprio código.
+# O cron do Postgres não possui um JWT privado disponível no gateway.
+verify_jwt = false
 
 [functions.chat]
 enabled = true
