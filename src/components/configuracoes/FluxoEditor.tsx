@@ -867,7 +867,7 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
   return createPortal(
     <div className="fixed inset-0 bg-background flex flex-col" style={{ zIndex: 9999 }}>
       {/* Top bar — mobile: 2 rows; desktop: 1 row */}
-      <div className="border-b shrink-0 bg-card">
+      <div className="border-b shrink-0 bg-card" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         {/* Linha principal */}
         <div className="h-12 flex items-center gap-2 px-3">
           <Button variant="ghost" size="sm" className="gap-1.5 shrink-0 px-2" onClick={onBack}>
