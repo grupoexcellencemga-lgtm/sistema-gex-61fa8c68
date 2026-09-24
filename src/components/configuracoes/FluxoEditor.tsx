@@ -900,8 +900,8 @@ function FluxoEditorInner({ fluxoId, onBack, empresaId }: Props) {
             <span className="sm:hidden">Salvar</span>
           </Button>
         </div>
-        {/* Linha secundária: canais + CRM (recolhida no mobile) */}
-        <div className="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pb-2">
+        {/* Linha secundária: canais + CRM */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pb-2">
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
             CRM:
             <select value={pastaFunilId} onChange={(e) => setPastaFunilId(e.target.value)} className="h-7 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground">
