@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   Send, Loader2, MessageSquare, Phone, User, ArrowRightFromLine,
   ChevronDown, RefreshCw, UserCheck, CheckCircle2, Clock, Users, Hash, Bot, Search, Bell, BellOff,
-  FolderKanban, Plus, ChevronRight, Paperclip, FileText, ImageIcon, Music,
+  FolderKanban, Plus, ChevronRight, ChevronLeft, Paperclip, FileText, ImageIcon, Music,
   Tag, Zap, Reply, X, ArrowRightLeft, SlidersHorizontal,
 } from "lucide-react";
 
@@ -1196,25 +1196,49 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
               </div>
             </div>
 
-            {aba === "finalizadas" && selectedProtocolo && (
-              <div className="w-full border-t pt-3 space-y-1.5">
-                <label className="text-xs font-medium" htmlFor="closed-protocol-history">Protocolos por telefone comercial</label>
-                <div className="flex flex-wrap gap-2">
-                  {commercialHistories.map(group => <Badge key={group.id} variant="outline">{commercialLabel(group.protocols[0])} · {group.protocols.length} protocolos</Badge>)}
+            {aba === "finalizadas" && selectedProtocolo && (() => {
+              const idx = selectedHistory.findIndex(p => p.id === selectedProtocolo.id);
+              const total = selectedHistory.length;
+              const goOlder = () => { if (idx < total - 1) setSelectedProtocolo(selectedHistory[idx + 1]); };
+              const goNewer = () => { if (idx > 0) setSelectedProtocolo(selectedHistory[idx - 1]); };
+              return (
+                <div className="w-full border-t pt-2.5 space-y-1">
+                  <div className="flex items-center gap-1">
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goOlder} disabled={idx >= total - 1} title="Conversa anterior">
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <Select value={selectedProtocolo.id} onValueChange={id => { const p = selectedHistory.find(p => p.id === id); if (p) setSelectedProtocolo(p); }}>
+                      <SelectTrigger className="h-7 flex-1 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {commercialHistories.map(group => (
+                          <SelectGroup key={group.id}>
+                            <SelectLabel className="text-xs">{commercialLabel(group.protocols[0])}</SelectLabel>
+                            {group.protocols.map(p => (
+                              <SelectItem key={p.id} value={p.id} className="text-xs">
+                                <span className="font-mono text-[11px]">#{p.numero_protocolo}</span>
+                                {" · "}{formatDate(p.finalizado_em || p.iniciado_em)}
+                                {p.id === selectedHistory[0]?.id ? " · Mais recente" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={goNewer} disabled={idx <= 0} title="Conversa mais recente">
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{idx + 1} / {total}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-tight">
+                    {commercialLabel(selectedProtocolo)}
+                    {selectedProtocolo.finalizado_em && <> · Encerrado {formatDate(selectedProtocolo.finalizado_em)}</>}
+                    {selectedProtocolo.atendente_id && usuariosMap[selectedProtocolo.atendente_id] && <> · {usuariosMap[selectedProtocolo.atendente_id]}</>}
+                  </p>
                 </div>
-                <Select value={selectedProtocolo.id} onValueChange={id => { const protocol = selectedHistory.find(p => p.id === id); if (protocol) setSelectedProtocolo(protocol); }}>
-                  <SelectTrigger id="closed-protocol-history" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {commercialHistories.map(group => <SelectGroup key={group.id}>
-                      <SelectLabel>{commercialLabel(group.protocols[0])}</SelectLabel>
-                      {group.protocols.map(protocol => <SelectItem key={protocol.id} value={protocol.id}>{protocol.numero_protocolo} · {formatDate(protocol.finalizado_em || protocol.iniciado_em)}{protocol.id === selectedHistory[0]?.id ? " · Mais recente" : ""}</SelectItem>)}
-                    </SelectGroup>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">O último encerrado abre primeiro. Selecione um protocolo anterior para consultar a conversa.</p>
-                <p className="text-xs font-medium">Este atendimento: {commercialLabel(selectedProtocolo)}</p>
-              </div>
-            )}
+              );
+            })()}
 
             {aba !== "finalizadas" && selectedLead && (
               <div className="flex items-center gap-2 flex-wrap" aria-label="Ações de atendimento">
