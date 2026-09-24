@@ -18,6 +18,13 @@ import {
   type ConversationState,
   type ConversationStateRepository,
 } from "./conversation-state.ts";
+import {
+  decideCommercialTurn,
+  formatCommercialDecisionContext,
+  toCommercialDecisionLog,
+  type BrainMessage,
+  type BrainOperationalContext,
+} from "./commercial-brain.ts";
 
 declare const Supabase: {
   ai: {
@@ -1013,9 +1020,34 @@ Deno.serve(async (req) => {
 
         const blocoEstado = buildConversationStateContext(estadoAtualizado);
 
+        // ─── Cérebro Comercial: decide a estratégia antes de Júlia responder ──
+        const brainMessages: BrainMessage[] = historico.map((m: any) => ({
+          direction: m.direcao as "entrada" | "saida",
+          content: m.conteudo as string | null,
+          mediaType: m.tipo as string | null,
+        }));
+        const brainOperational: BrainOperationalContext = {
+          agentMode: modoAgente,
+          crmStage: (lead as any).etapa_atual ?? null,
+          leadScore: (lead as any).pontuacao ?? null,
+          humanServiceActive: (lead as any).atendente_id != null,
+        };
+        let blocoDecisao = "";
+        try {
+          const brainResult = await decideCommercialTurn(anthropic as any, estadoAtualizado, brainMessages, brainOperational);
+          if (brainResult.issues.length) {
+            console.warn(`[processar-bot] cerebro-comercial issues lead=${lead.id}: ${brainResult.issues.join(" | ")}`);
+          }
+          console.log(`[processar-bot] cerebro-comercial lead=${lead.id} fallback=${brainResult.usedFallback}`, toCommercialDecisionLog(brainResult.decision));
+          blocoDecisao = formatCommercialDecisionContext(brainResult.decision);
+        } catch (brainErr) {
+          console.error(`[processar-bot] cerebro-comercial erro lead=${lead.id}:`, brainErr);
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         // Loop agentic com tool use (máx 5 iterações)
         console.log(`[processar-bot] respondendo lead ${lead.id} com agente ${agente.nome}`);
-        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato + fichaContato + blocoEstado;
+        const systemPrompt = agente.instrucao + baseConhecimento + conhecimentoRag + resumoAnterior + contextoContato + fichaContato + blocoEstado + blocoDecisao;
         let loopMessages: Anthropic.MessageParam[] = [...messages];
         let resposta: string | null = null;
         let handoff = false;
