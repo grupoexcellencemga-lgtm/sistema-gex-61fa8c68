@@ -1,4 +1,5 @@
 import type { AgentKey, ConversationState } from "./conversation-state.ts";
+import { getAgentFromRegistry } from "./agent-registry.ts";
 
 export type { AgentKey };
 
@@ -121,6 +122,19 @@ const AGENT_DISPLAY_NAMES: Record<NonNullable<AgentKey>, string> = {
 
 export function buildAgentConfig(decision: RoutingDecision): AgentConfig {
   const key = decision.agent_key;
+  if (key) {
+    const registered = getAgentFromRegistry(key);
+    if (registered) {
+      return {
+        key,
+        displayName: registered.displayName,
+        productSlug: decision.product_slug,
+        systemPromptExtra: registered.systemPrompt,
+        allowedTools: [...registered.allowedTools],
+        productContext: null,
+      };
+    }
+  }
   return {
     key,
     displayName: key ? AGENT_DISPLAY_NAMES[key] : "Bloqueado",
