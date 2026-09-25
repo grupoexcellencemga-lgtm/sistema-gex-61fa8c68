@@ -15,6 +15,7 @@ import {
   mergeConversationState,
   persistConversationState,
   prepareStateUpdaterConversation,
+  syncGlobalToProductContext,
   type ConversationState,
   type ConversationStateRepository,
 } from "./conversation-state.ts";
@@ -33,7 +34,7 @@ import {
   type JudgeContext,
   type JudgeToolResult,
 } from "./response-judge.ts";
-import { resolveActiveAgent, buildAgentConfig } from "./router.ts";
+import { resolveActiveAgent, buildAgentConfig, normalizeProductSlug } from "./router.ts";
 
 declare const Supabase: {
   ai: {
@@ -1007,6 +1008,10 @@ Deno.serve(async (req) => {
               expectedVersion: estadoVersionAtual,
               updaterOutput: toolBlock.input,
               repository: conversationStateRepository,
+              postMerge: (state) => {
+                const slug = normalizeProductSlug(state.current_product);
+                return slug ? syncGlobalToProductContext(state, slug) : state;
+              },
             });
             estadoAtualizado = persisted.state;
             estadoVersionAtual = persisted.version;
@@ -1039,7 +1044,7 @@ Deno.serve(async (req) => {
           current_agent: routingDecision.agent_key,
           routing_reason: routingDecision.routing_reason,
         };
-        console.log(`[processar-bot] router lead=${lead.id} agent=${routingDecision.agent_key} action=${routingDecision.routing_action} changed=${routingDecision.changed}`);
+        console.log(`[processar-bot] router lead=${lead.id} agent=${routingDecision.agent_key} action=${routingDecision.routing_action} changed=${routingDecision.changed} product_contexts=${Object.keys(estadoAtualizado.product_contexts).join(",") || "∅"}`);
         // ─────────────────────────────────────────────────────────────────────
 
         // ─── Cérebro Comercial: decide a estratégia antes de Júlia responder ──

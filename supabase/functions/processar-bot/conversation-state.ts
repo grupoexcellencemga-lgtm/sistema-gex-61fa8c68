@@ -30,6 +30,37 @@ export const AGENT_KEYS = [
   "workshop_gestao", "workshop_homens",
 ] as const;
 export type AgentKey = typeof AGENT_KEYS[number] | null;
+
+export const MAX_PRODUCT_CONTEXTS = 5;
+export const MAX_PRODUCT_FACTS = 20;
+export const PRODUCT_SUMMARY_LIMIT = 2_000;
+
+export interface ProductContext {
+  funnel_stage: typeof FUNNEL_STAGES[number];
+  current_objection: typeof OBJECTIONS[number] | null;
+  purchase_intent: typeof PURCHASE_INTENTS[number];
+  information_shared: typeof SHARED_INFORMATION[number][];
+  known_product_facts: string[];
+  last_agent_question: string | null;
+  payment_method: typeof PAYMENT_METHODS[number] | null;
+  promised_payment_at: string | null;
+  agreed_next_action: string | null;
+  product_summary: string;
+}
+
+export const DEFAULT_PRODUCT_CONTEXT: ProductContext = {
+  funnel_stage: "novo_lead",
+  current_objection: null,
+  purchase_intent: "none",
+  information_shared: [],
+  known_product_facts: [],
+  last_agent_question: null,
+  payment_method: null,
+  promised_payment_at: null,
+  agreed_next_action: null,
+  product_summary: "",
+};
+
 export const SHARED_INFORMATION = [
   "product_overview", "price", "dates", "time", "location", "duration", "format",
   "benefits", "payment_terms", "pix_key", "payment_link", "registration_request",
@@ -62,6 +93,7 @@ export interface ConversationState {
   previous_agent: AgentKey;
   previous_product: string | null;
   routing_reason: string | null;
+  product_contexts: Record<string, ProductContext>;
 }
 
 export const DEFAULT_CONVERSATION_STATE: ConversationState = {
@@ -90,6 +122,7 @@ export const DEFAULT_CONVERSATION_STATE: ConversationState = {
   previous_agent: null,
   previous_product: null,
   routing_reason: null,
+  product_contexts: {},
 };
 
 const STATE_KEYS = Object.keys(DEFAULT_CONVERSATION_STATE) as (keyof ConversationState)[];
@@ -154,6 +187,85 @@ const RESERVED_FACT_PATTERNS = [
 
 function filterOperationalFacts(facts: string[]): string[] {
   return facts.filter(fact => !RESERVED_FACT_PATTERNS.some(pattern => pattern.test(fact)));
+}
+
+function mergeProductContext(
+  previous: ProductContext,
+  raw: unknown,
+): { context: ProductContext; issues: string[] } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { context: previous, issues: ["esperado objeto"] };
+  }
+  const src = raw as Record<string, unknown>;
+  const issues: string[] = [];
+  const ctx: ProductContext = { ...previous };
+
+  if ("funnel_stage" in src) {
+    if (typeof src.funnel_stage === "string" && (FUNNEL_STAGES as readonly string[]).includes(src.funnel_stage)) {
+      ctx.funnel_stage = src.funnel_stage as typeof FUNNEL_STAGES[number];
+    } else { issues.push("funnel_stage: valor inválido ignorado"); }
+  }
+  if ("current_objection" in src) {
+    if (src.current_objection === null) { ctx.current_objection = null; }
+    else if (typeof src.current_objection === "string" && (OBJECTIONS as readonly string[]).includes(src.current_objection)) {
+      ctx.current_objection = src.current_objection as typeof OBJECTIONS[number];
+    } else { issues.push("current_objection: valor inválido ignorado"); }
+  }
+  if ("purchase_intent" in src) {
+    if (typeof src.purchase_intent === "string" && (PURCHASE_INTENTS as readonly string[]).includes(src.purchase_intent)) {
+      ctx.purchase_intent = src.purchase_intent as typeof PURCHASE_INTENTS[number];
+    } else { issues.push("purchase_intent: valor inválido ignorado"); }
+  }
+  if ("information_shared" in src) {
+    if (!Array.isArray(src.information_shared)) { issues.push("information_shared: esperado array"); }
+    else {
+      const accepted = (src.information_shared as unknown[]).filter(
+        (item): item is typeof SHARED_INFORMATION[number] =>
+          typeof item === "string" && (SHARED_INFORMATION as readonly string[]).includes(item),
+      );
+      ctx.information_shared = unique([...previous.information_shared, ...accepted]);
+    }
+  }
+  if ("known_product_facts" in src) {
+    if (!Array.isArray(src.known_product_facts)) { issues.push("known_product_facts: esperado array"); }
+    else {
+      const accepted = (src.known_product_facts as unknown[])
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim().slice(0, FACT_LIMIT));
+      ctx.known_product_facts = unique([...previous.known_product_facts, ...accepted]).slice(-MAX_PRODUCT_FACTS);
+    }
+  }
+  if ("last_agent_question" in src) {
+    if (src.last_agent_question === null || src.last_agent_question === "") { ctx.last_agent_question = null; }
+    else if (typeof src.last_agent_question === "string") {
+      ctx.last_agent_question = src.last_agent_question.trim().slice(0, STRING_LIMIT);
+    } else { issues.push("last_agent_question: esperado texto ou null"); }
+  }
+  if ("payment_method" in src) {
+    if (src.payment_method === null) { ctx.payment_method = null; }
+    else if (typeof src.payment_method === "string" && (PAYMENT_METHODS as readonly string[]).includes(src.payment_method)) {
+      ctx.payment_method = src.payment_method as typeof PAYMENT_METHODS[number];
+    } else { issues.push("payment_method: valor inválido ignorado"); }
+  }
+  if ("promised_payment_at" in src) {
+    if (src.promised_payment_at === null || src.promised_payment_at === "") { ctx.promised_payment_at = null; }
+    else if (typeof src.promised_payment_at === "string") {
+      ctx.promised_payment_at = src.promised_payment_at.trim().slice(0, STRING_LIMIT);
+    } else { issues.push("promised_payment_at: esperado texto ou null"); }
+  }
+  if ("agreed_next_action" in src) {
+    if (src.agreed_next_action === null || src.agreed_next_action === "") { ctx.agreed_next_action = null; }
+    else if (typeof src.agreed_next_action === "string") {
+      ctx.agreed_next_action = src.agreed_next_action.trim().slice(0, STRING_LIMIT);
+    } else { issues.push("agreed_next_action: esperado texto ou null"); }
+  }
+  if ("product_summary" in src) {
+    if (typeof src.product_summary === "string") {
+      ctx.product_summary = src.product_summary.trim().slice(0, PRODUCT_SUMMARY_LIMIT);
+    } else { issues.push("product_summary: esperado texto"); }
+  }
+
+  return { context: ctx, issues };
 }
 
 function validPreviousState(input: unknown): ConversationState {
@@ -258,6 +370,27 @@ export function mergeConversationState(
       } else {
         (patch as Record<string, unknown>)[key] = value;
       }
+      continue;
+    }
+
+    if (key === "product_contexts") {
+      if (!allowProtectedChanges) continue; // AI não pode escrever diretamente; sync via postMerge
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        issues.push(`${key}: esperado objeto`);
+        continue;
+      }
+      const merged: Record<string, ProductContext> = { ...previous.product_contexts };
+      for (const [slug, rawCtx] of Object.entries(value as Record<string, unknown>)) {
+        if (!(AGENT_KEYS as readonly string[]).includes(slug)) {
+          issues.push(`${key}.${slug}: slug inválido ignorado`);
+          continue;
+        }
+        const base = merged[slug] ?? { ...DEFAULT_PRODUCT_CONTEXT, information_shared: [], known_product_facts: [] };
+        const validated = mergeProductContext(base, rawCtx);
+        merged[slug] = validated.context;
+        if (validated.issues.length) issues.push(...validated.issues.map((i) => `${key}.${slug}: ${i}`));
+      }
+      (patch as Record<string, unknown>)[key] = merged;
       continue;
     }
 
@@ -391,6 +524,7 @@ export interface PersistConversationStateInput {
   updaterOutput: unknown;
   repository: ConversationStateRepository;
   allowProtectedChanges?: boolean;
+  postMerge?: (state: ConversationState) => ConversationState;
 }
 
 export interface PersistConversationStateResult {
@@ -408,10 +542,12 @@ export async function persistConversationState(
 ): Promise<PersistConversationStateResult> {
   const mergeOptions = { allowProtectedChanges: input.allowProtectedChanges === true };
   const firstMerge = mergeConversationState(input.previousState, input.updaterOutput, mergeOptions);
+  const firstState = input.postMerge ? input.postMerge(firstMerge.state) : firstMerge.state;
+
   if (input.mode !== "ativo") {
     return {
       kind: "memory_only",
-      state: firstMerge.state,
+      state: firstState,
       version: input.expectedVersion,
       persisted: false,
       issues: firstMerge.issues,
@@ -421,7 +557,7 @@ export async function persistConversationState(
   const first = await input.repository.compareAndSwap(
     input.leadId,
     input.expectedVersion,
-    firstMerge.state,
+    firstState,
   );
   if (first.kind === "updated") {
     return {
@@ -435,7 +571,7 @@ export async function persistConversationState(
   if (first.kind === "error") {
     return {
       kind: "failed",
-      state: firstMerge.state,
+      state: firstState,
       version: input.expectedVersion,
       persisted: false,
       issues: firstMerge.issues,
@@ -446,7 +582,8 @@ export async function persistConversationState(
   try {
     const latest = await input.repository.load(input.leadId);
     const retryMerge = mergeConversationState(latest.state, input.updaterOutput, mergeOptions);
-    const retry = await input.repository.compareAndSwap(input.leadId, latest.version, retryMerge.state);
+    const retryState = input.postMerge ? input.postMerge(retryMerge.state) : retryMerge.state;
+    const retry = await input.repository.compareAndSwap(input.leadId, latest.version, retryState);
     if (retry.kind === "updated") {
       return {
         kind: "persisted",
@@ -459,7 +596,7 @@ export async function persistConversationState(
     }
     return {
       kind: "failed",
-      state: retryMerge.state,
+      state: retryState,
       version: latest.version,
       persisted: false,
       issues: unique([...firstMerge.issues, ...retryMerge.issues]),
@@ -469,7 +606,7 @@ export async function persistConversationState(
   } catch (error) {
     return {
       kind: "failed",
-      state: firstMerge.state,
+      state: firstState,
       version: input.expectedVersion,
       persisted: false,
       issues: firstMerge.issues,
@@ -477,4 +614,55 @@ export async function persistConversationState(
       conflictRetried: true,
     };
   }
+}
+
+// ─── ProductContext helpers ───────────────────────────────────────────────────
+
+export function getProductContext(state: ConversationState, slug: string): ProductContext {
+  return state.product_contexts[slug] ?? { ...DEFAULT_PRODUCT_CONTEXT, information_shared: [], known_product_facts: [] };
+}
+
+export function syncGlobalToProductContext(state: ConversationState, slug: string): ConversationState {
+  if (!(AGENT_KEYS as readonly string[]).includes(slug)) return state;
+
+  const exists = slug in state.product_contexts;
+  const contextCount = Object.keys(state.product_contexts).length;
+  if (!exists && contextCount >= MAX_PRODUCT_CONTEXTS) return state; // limite atingido
+
+  const existing = getProductContext(state, slug);
+  const updated: ProductContext = {
+    funnel_stage: state.funnel_stage,
+    current_objection: state.current_objection,
+    purchase_intent: state.purchase_intent,
+    information_shared: unique([...existing.information_shared, ...state.information_already_shared]),
+    known_product_facts: unique([...existing.known_product_facts]).slice(-MAX_PRODUCT_FACTS),
+    last_agent_question: state.last_julia_question,
+    payment_method: state.payment_method,
+    promised_payment_at: state.promised_payment_at,
+    agreed_next_action: state.agreed_next_action,
+    product_summary: state.conversation_summary.slice(0, PRODUCT_SUMMARY_LIMIT),
+  };
+
+  return {
+    ...state,
+    product_contexts: { ...state.product_contexts, [slug]: updated },
+  };
+}
+
+export function hydrateFromProductContext(state: ConversationState, slug: string): ConversationState {
+  if (!(AGENT_KEYS as readonly string[]).includes(slug)) return state;
+  if (!(slug in state.product_contexts)) return state;
+
+  const ctx = state.product_contexts[slug];
+  return {
+    ...state,
+    funnel_stage: ctx.funnel_stage,
+    current_objection: ctx.current_objection,
+    purchase_intent: ctx.purchase_intent,
+    information_already_shared: [...ctx.information_shared],
+    last_julia_question: ctx.last_agent_question,
+    payment_method: ctx.payment_method,
+    promised_payment_at: ctx.promised_payment_at,
+    agreed_next_action: ctx.agreed_next_action,
+  };
 }
