@@ -24,6 +24,12 @@ export const AWAITING_VALUES = [
   "payment_validation", "human", "meeting",
 ] as const;
 export const PAYMENT_METHODS = ["pix", "card", "machine"] as const;
+export const AGENT_KEYS = [
+  "general", "opex", "teen_connect", "mulheres_excelencia",
+  "workshop_elevate", "metodo_cis", "pgl", "workshop_pais",
+  "workshop_gestao", "workshop_homens",
+] as const;
+export type AgentKey = typeof AGENT_KEYS[number] | null;
 export const SHARED_INFORMATION = [
   "product_overview", "price", "dates", "time", "location", "duration", "format",
   "benefits", "payment_terms", "pix_key", "payment_link", "registration_request",
@@ -52,6 +58,10 @@ export interface ConversationState {
   handoff_active: boolean;
   do_not_contact: boolean;
   conversation_summary: string;
+  current_agent: AgentKey;
+  previous_agent: AgentKey;
+  previous_product: string | null;
+  routing_reason: string | null;
 }
 
 export const DEFAULT_CONVERSATION_STATE: ConversationState = {
@@ -76,6 +86,10 @@ export const DEFAULT_CONVERSATION_STATE: ConversationState = {
   handoff_active: false,
   do_not_contact: false,
   conversation_summary: "",
+  current_agent: null,
+  previous_agent: null,
+  previous_product: null,
+  routing_reason: null,
 };
 
 const STATE_KEYS = Object.keys(DEFAULT_CONVERSATION_STATE) as (keyof ConversationState)[];
@@ -83,6 +97,11 @@ const STATE_KEY_SET = new Set<string>(STATE_KEYS);
 const NULLABLE_STRINGS = new Set<keyof ConversationState>([
   "preferred_name", "current_product", "origin", "city", "explicit_question", "main_need",
   "last_julia_question", "agreed_next_action", "promised_payment_at",
+  "previous_product", "routing_reason",
+]);
+
+const ROUTER_CONTROLLED_KEYS = new Set<keyof ConversationState>([
+  "current_agent", "previous_agent", "previous_product", "routing_reason",
 ]);
 
 const ENUMS: Partial<Record<keyof ConversationState, readonly string[]>> = {
@@ -172,6 +191,13 @@ export function mergeConversationState(
   for (const key of STATE_KEYS) {
     if (!(key in source)) continue;
     const value = source[key];
+
+    if (ROUTER_CONTROLLED_KEYS.has(key)) {
+      if (value !== (previous as Record<string, unknown>)[key]) {
+        issues.push(`${key}: campo controlado pelo Router — ignorado`);
+      }
+      continue;
+    }
 
     if (NULLABLE_STRINGS.has(key)) {
       if (value === null || (typeof value === "string" && value.trim() === "")) {

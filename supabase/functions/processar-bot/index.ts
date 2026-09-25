@@ -33,6 +33,7 @@ import {
   type JudgeContext,
   type JudgeToolResult,
 } from "./response-judge.ts";
+import { resolveActiveAgent, buildAgentConfig } from "./router.ts";
 
 declare const Supabase: {
   ai: {
@@ -1027,6 +1028,19 @@ Deno.serve(async (req) => {
         }
 
         const blocoEstado = buildConversationStateContext(estadoAtualizado);
+
+        // ─── Router de Agente ─────────────────────────────────────────────────
+        const routingDecision = resolveActiveAgent(estadoAtualizado);
+        const _agentConfig = buildAgentConfig(routingDecision);
+        estadoAtualizado = {
+          ...estadoAtualizado,
+          previous_agent: routingDecision.changed ? estadoAtualizado.current_agent : estadoAtualizado.previous_agent,
+          previous_product: routingDecision.changed ? estadoAtualizado.current_product : estadoAtualizado.previous_product,
+          current_agent: routingDecision.agent_key,
+          routing_reason: routingDecision.routing_reason,
+        };
+        console.log(`[processar-bot] router lead=${lead.id} agent=${routingDecision.agent_key} action=${routingDecision.routing_action} changed=${routingDecision.changed}`);
+        // ─────────────────────────────────────────────────────────────────────
 
         // ─── Cérebro Comercial: decide a estratégia antes de Júlia responder ──
         const brainMessages: BrainMessage[] = historico.map((m: any) => ({
