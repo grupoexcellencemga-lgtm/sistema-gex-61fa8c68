@@ -14,7 +14,11 @@ import {
   type BrainOperationalContext,
   type CommercialDecision,
 } from "../../supabase/functions/processar-bot/commercial-brain";
-import { DEFAULT_CONVERSATION_STATE, type ConversationState } from "../../supabase/functions/processar-bot/conversation-state";
+import {
+  DEFAULT_CONVERSATION_STATE,
+  mergeConversationState,
+  type ConversationState,
+} from "../../supabase/functions/processar-bot/conversation-state";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -671,5 +675,189 @@ describe("decideCommercialTurn — integração", () => {
     const { history, lastMessage } = prepareCommercialBrainConversation(conversationMsgs);
     expect(lastMessage).toBe("Quanto custa o OPEX?");
     expect(history).not.toContain("Quanto custa o OPEX?");
+  });
+});
+
+// ─── 9. Testes de coerência da homologação (A-I) ─────────────────────────────
+
+describe("Coerência da homologação — correções Parte 3", () => {
+  // Teste A: action=answer_only → should_ask_question=false, question_goal=null
+  it("A: answer_only força should_ask_question=false e question_goal=null", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "answer_only",
+      turn_goal: "answer_question",
+      should_ask_question: true,
+      question_goal: "Você é de Maringá?",
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    expect(enforced.should_ask_question).toBe(false);
+    expect(enforced.question_goal).toBeNull();
+  });
+
+  // Teste B: answer_only não deve produzir bloco com pergunta
+  it("B: formatCommercialDecisionContext com answer_only mostra 'Deve fazer uma pergunta: não'", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "answer_only",
+      should_ask_question: false,
+      question_goal: null,
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    const bloco = formatCommercialDecisionContext(enforced);
+    expect(bloco).toContain("Deve fazer uma pergunta: não");
+    expect(bloco).not.toMatch(/objetivo:.*[Mm]aringá/);
+    expect(bloco).not.toMatch(/objetivo:.*qualific/i);
+  });
+
+  // Teste C: Júlia não pode sugerir parcelamento além do autorizado
+  // Verificamos via guardrail no bloco injetado — o bloco deve conter a restrição
+  it("C: guardrail de condições comerciais está presente no bloco de qualquer decisão não-no_response", () => {
+    const d = applyCommercialDecisionPolicies(
+      { ...validDecision(), action: "handle_objection", turn_goal: "handle_objection", objection_strategy: "clarify_financial" },
+      baseState(),
+    );
+    const bloco = formatCommercialDecisionContext(d);
+    expect(bloco).toContain("NUNCA invente");
+    expect(bloco).toContain("extensão de parcelas");
+    expect(bloco).toContain("condição personalizada");
+  });
+
+  // Teste D: State Updater não pode registrar "Vaga reservada" em known_user_facts
+  it("D: known_user_facts rejeita fatos operacionais de ação concluída", () => {
+    const result = mergeConversationState(
+      { ...DEFAULT_CONVERSATION_STATE, information_already_shared: [], known_user_facts: [] },
+      {
+        known_user_facts: [
+          "Vaga reservada (15-17 de outubro)",
+          "Inscrição confirmada",
+          "Aluno cadastrado no sistema",
+          "Interessado em OPEX",
+          "Cliente quer reservar uma vaga",
+        ],
+        current_intent: "inscricao",
+      },
+    );
+    expect(result.state.known_user_facts).not.toContain("Vaga reservada (15-17 de outubro)");
+    expect(result.state.known_user_facts).not.toContain("Inscrição confirmada");
+    expect(result.state.known_user_facts).not.toContain("Aluno cadastrado no sistema");
+    // intenção legítima deve passar
+    expect(result.state.known_user_facts).toContain("Interessado em OPEX");
+    expect(result.state.known_user_facts).toContain("Cliente quer reservar uma vaga");
+    // issue registrada
+    expect(result.issues.some(i => i.includes("operacional") && i.includes("removido"))).toBe(true);
+  });
+
+  // Teste E: reservar_vaga retorna status=requested; bloco injetado alerta sobre isso
+  it("E: guardrail diferencia tools de solicitação vs. confirmadas no bloco injetado", () => {
+    const d = applyCommercialDecisionPolicies(
+      { ...validDecision(), action: "close_sale", turn_goal: "close_sale" },
+      baseState(),
+    );
+    const bloco = formatCommercialDecisionContext(d);
+    expect(bloco).toContain("reservar_vaga");
+    expect(bloco).toContain("PEDIDOS");
+    expect(bloco).toContain("solicitei");
+  });
+
+  // Teste F: "Como faço o pagamento?" sem payment_method → deve pedir escolha
+  it("F: send_payment sem payment_method → should_ask_question=true e question_goal definido", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "send_payment",
+      turn_goal: "send_payment",
+      should_ask_question: false,
+      question_goal: null,
+    };
+    const state = { ...baseState(), payment_method: null };
+    const enforced = applyCommercialDecisionPolicies(d, state);
+    expect(enforced.should_ask_question).toBe(true);
+    expect(enforced.question_goal).toBeTruthy();
+    expect(enforced.question_goal).toContain("à vista");
+  });
+
+  // Teste G: "Pode mandar o Pix" → payment_method=pix → send_payment sem perguntar de novo
+  it("G: send_payment com payment_method=pix → não pede escolha de pagamento", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "send_payment",
+      turn_goal: "send_payment",
+      should_ask_question: false,
+      question_goal: null,
+    };
+    const state = { ...baseState(), payment_method: "pix" as const };
+    const enforced = applyCommercialDecisionPolicies(d, state);
+    // com payment_method definido, não deve forçar pergunta
+    expect(enforced.should_ask_question).toBe(false);
+  });
+
+  // Teste H: follow_up → criar_tarefa e não agendar_reuniao
+  it("H: action=follow_up remove agendar_reuniao das recommended_tools", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "follow_up",
+      turn_goal: "follow_up",
+      recommended_tools: ["agendar_reuniao", "registrar_nota", "criar_tarefa"],
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    expect(enforced.recommended_tools).not.toContain("agendar_reuniao");
+    expect(enforced.recommended_tools).toContain("registrar_nota");
+    expect(enforced.recommended_tools).toContain("criar_tarefa");
+  });
+
+  // Teste I: Objeção financeira inicial → não inclui pontuar_lead
+  it("I: handle_objection financeira remove pontuar_lead das recommended_tools", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "handle_objection",
+      turn_goal: "handle_objection",
+      objection_strategy: "clarify_financial",
+      reason_code: "financial_objection",
+      recommended_tools: ["consultar_pagamento", "pontuar_lead"],
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    expect(enforced.recommended_tools).not.toContain("pontuar_lead");
+    expect(enforced.recommended_tools).not.toContain("consultar_contexto_lead");
+  });
+
+  // Bônus: consultar_contexto_lead nunca deve estar nas recomendações
+  it("contexto_lead nunca recomendado: sempre removido pelas políticas", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      recommended_tools: ["consultar_contexto_lead", "consultar_produtos"],
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    expect(enforced.recommended_tools).not.toContain("consultar_contexto_lead");
+    expect(enforced.recommended_tools).toContain("consultar_produtos");
+  });
+
+  // no_response coerência completa
+  it("no_response implica should_ask_question=false e should_sell=false", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      no_response: true,
+      should_ask_question: true,
+      should_sell: true,
+      handoff_required: true,
+    };
+    const enforced = applyCommercialDecisionPolicies(d, { ...baseState(), handoff_active: false });
+    expect(enforced.no_response).toBe(true);
+    expect(enforced.should_ask_question).toBe(false);
+    expect(enforced.should_sell).toBe(false);
+    expect(enforced.handoff_required).toBe(false);
+    expect(enforced.action).toBe("no_response");
+  });
+
+  // handoff coerência
+  it("handoff sempre inclui solicitar_handoff nas recommended_tools", () => {
+    const d: CommercialDecision = {
+      ...validDecision(),
+      action: "handoff",
+      turn_goal: "handoff",
+      handoff_required: true,
+      recommended_tools: ["registrar_nota"],
+    };
+    const enforced = applyCommercialDecisionPolicies(d, baseState());
+    expect(enforced.recommended_tools).toContain("solicitar_handoff");
   });
 });

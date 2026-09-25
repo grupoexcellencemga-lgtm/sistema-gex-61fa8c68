@@ -309,24 +309,26 @@ export function applyCommercialDecisionPolicies(
     result.should_sell = false;
     result.turn_goal = "handoff";
     result.action = "handoff";
-    // garantir solicitar_handoff nas tools
     if (!result.recommended_tools.includes("solicitar_handoff")) {
       result.recommended_tools = [...result.recommended_tools, "solicitar_handoff"];
     }
   }
 
-  // 3. handoff_required (pedido pelo modelo ou pela política): garantir tool
+  // 3. handoff_required: garantir tool
   if (result.handoff_required && !result.recommended_tools.includes("solicitar_handoff")) {
     result.recommended_tools = [...result.recommended_tools, "solicitar_handoff"];
   }
 
-  // 4. no_response: coerência
-  if (result.no_response) {
+  // 4. no_response: coerência total
+  if (result.no_response || result.action === "no_response" || result.turn_goal === "no_response") {
+    result.no_response = true;
     result.turn_goal = "no_response";
     result.action = "no_response";
     result.must_answer_user = false;
     result.should_sell = false;
     result.should_ask_question = false;
+    result.question_goal = null;
+    if (!state.handoff_active) result.handoff_required = false;
   }
 
   // 5. explicit_question: obrigar resposta
@@ -334,12 +336,18 @@ export function applyCommercialDecisionPolicies(
     result.must_answer_user = true;
   }
 
-  // 6. should_ask_question sem question_goal: corrigir
+  // 6. answer_only: nunca acrescentar pergunta — coerência Fix#1
+  if (result.action === "answer_only") {
+    result.should_ask_question = false;
+    result.question_goal = null;
+  }
+
+  // 7. should_ask_question sem question_goal: corrigir
   if (result.should_ask_question && !result.question_goal) {
     result.should_ask_question = false;
   }
 
-  // 7. purchase_intent = "clear": não regredir
+  // 8. purchase_intent = "clear": não regredir
   if (state.purchase_intent === "clear") {
     const regressiveGoals: TurnGoal[] = ["discover_need", "qualify", "explain_product"];
     if (regressiveGoals.includes(result.turn_goal)) {
@@ -349,7 +357,16 @@ export function applyCommercialDecisionPolicies(
     }
   }
 
-  // 8. information_already_shared: alimentar avoid_repeating
+  // 9. send_payment sem payment_method escolhido: pedir escolha antes — Fix#6
+  if (result.action === "send_payment" && !state.payment_method) {
+    result.should_ask_question = true;
+    if (!result.question_goal) {
+      result.question_goal =
+        "Pergunte qual forma de pagamento prefere: à vista (Pix) ou parcelado no cartão. Não envie dados de pagamento antes da escolha explícita.";
+    }
+  }
+
+  // 10. information_already_shared: alimentar avoid_repeating
   if (state.information_already_shared.length) {
     const existing = new Set(result.avoid_repeating);
     for (const item of state.information_already_shared) {
@@ -358,7 +375,29 @@ export function applyCommercialDecisionPolicies(
     result.avoid_repeating = [...existing];
   }
 
-  // 9. Filtrar tools inválidas que possam ter escapado
+  // 11. Nunca recomendar consultar_contexto_lead: contexto já é injetado — Fix#7
+  result.recommended_tools = result.recommended_tools.filter(
+    t => t !== "consultar_contexto_lead",
+  ) as ValidBrainTool[];
+
+  // 12. follow_up: usar criar_tarefa, não agendar_reuniao — Fix#9
+  if (result.action === "follow_up" || result.turn_goal === "follow_up") {
+    result.recommended_tools = result.recommended_tools.filter(
+      t => t !== "agendar_reuniao",
+    ) as ValidBrainTool[];
+  }
+
+  // 13. handle_objection financeira: não recomendar pontuar_lead no primeiro turno — Fix#8
+  if (
+    result.action === "handle_objection" &&
+    (result.reason_code.includes("financial") || result.objection_strategy === "clarify_financial")
+  ) {
+    result.recommended_tools = result.recommended_tools.filter(
+      t => t !== "pontuar_lead",
+    ) as ValidBrainTool[];
+  }
+
+  // 14. Filtrar tools inválidas que possam ter escapado
   result.recommended_tools = result.recommended_tools.filter(t => VALID_TOOL_SET.has(t)) as ValidBrainTool[];
 
   return result;
@@ -517,6 +556,17 @@ export function formatCommercialDecisionContext(decision: CommercialDecision): s
   }
 
   lines.push("");
+  lines.push("─── GUARDRAILS PERMANENTES ───");
+  lines.push("1. Condições comerciais: só cite valores/condições retornados por consultar_produtos ou consultar_pagamento.");
+  lines.push("   NUNCA invente: desconto, extensão de parcelas, bolsa, exceção, negociação especial, condição personalizada.");
+  lines.push("   Se a condição oficial é 12x, não sugira 'talvez dê para fazer em mais vezes'.");
+  lines.push("2. Tools de solicitação (reservar_vaga, cadastrar_aluno, agendar_reuniao, adicionar_grupo_turma, enviar_material)");
+  lines.push("   criam apenas PEDIDOS — não confirmam ação concluída. Diga 'solicitei'/'registrei', NUNCA 'está reservado'/'foi confirmado'.");
+  lines.push("3. Tools diretas (mover_etapa, registrar_nota, classificar_lead, marcar_nao_contatar, solicitar_handoff, criar_tarefa)");
+  lines.push("   têm efeito imediato — mas só use quando há necessidade operacional clara.");
+  lines.push("4. Não altere CRM (classificar_lead, mover_etapa, atualizar_lead, pontuar_lead) como efeito colateral automático.");
+  lines.push("5. answer_only = resposta direta sem qualificação, diagnóstico ou perguntas adicionais.");
+  lines.push("");
   lines.push("Siga essas orientações. Elas não substituem bom senso, segurança ou as tools.");
 
   return lines.join("\n");
@@ -559,9 +609,21 @@ Sua única função é analisar a situação atual e devolver uma DECISÃO ESTRA
 
 - "Quero fechar" / "Quanto custa?" / "Tem turma?" → resposta direta, sem pitch desnecessário.
 - "Quero muito mas..." → objeção, não recusa.
-- "Pode mandar o Pix" → send_payment + consultar_pagamento.
+- "Pode mandar o Pix" → send_payment + consultar_pagamento. payment_method já implícito = pix.
+- "Como faço o pagamento?" (sem escolha) → send_payment mas orientar escolha à vista/parcelado antes de enviar Pix.
 - "Me chama alguém" / "Quero falar com pessoa" → handoff.
 - "Obrigado" sem pendência → no_response ou wait_for_user.
+- "Pode me mandar mensagem amanhã" / "Vou pensar" → follow_up: criar_tarefa + registrar_nota. NÃO agendar_reuniao.
+
+## REGRAS DE COERÊNCIA DE AÇÃO
+
+- action = answer_only → should_ask_question = false, question_goal = null. Sem qualificação, sem diagnóstico.
+- action = no_response → should_ask_question = false, should_sell = false, handoff_required = false (salvo operacional).
+- action = handoff → handoff_required = true, recommended_tools inclui solicitar_handoff.
+- action = send_payment + payment_method não definido → orientar escolha de forma de pagamento primeiro.
+- action = follow_up → NÃO inclua agendar_reuniao em recommended_tools.
+- Objeção financeira (primeiro turno) → recommended_tools não inclui pontuar_lead.
+- Nunca inclua consultar_contexto_lead: o contexto já está injetado no prompt.
 
 Use a ferramenta decidir_turno_comercial para retornar a decisão estruturada.`;
 

@@ -108,6 +108,35 @@ export interface MergeResult {
 
 const unique = <T>(values: T[]) => [...new Set(values)];
 
+// ─── Filtro de fatos operacionais reservados ──────────────────────────────────
+// O State Updater não pode registrar como fato consumado algo que só existe
+// como intenção ou pedido — confirmações operacionais dependem de tool real.
+// Lista de padrões (lowercase) que indicam conclusão não autorizada.
+const RESERVED_FACT_PATTERNS = [
+  /\bvaga\s+(foi\s+)?reservad[ao]/i,
+  /\binscri[çc][ãa]o\s+(foi\s+)?confirmad[ao]/i,
+  /\bpagamento\s+(foi\s+)?confirmad[ao]/i,
+  /\baluno\s+(foi\s+)?cadastrad[ao]/i,
+  /\breuni[ãa]o\s+(foi\s+)?agendad[ao]/i,
+  /\bdesconto\s+(foi\s+)?autoriz[ao]/i,
+  /\bpix\s+(foi\s+)?pag[ou]/i,
+  /\bgrupo\s+(foi\s+)?adicionad[ao]/i,
+  /\bmaterial\s+(foi\s+)?enviad[ao]/i,
+  /\bcadastro\s+(foi\s+)?realizad[ao]/i,
+  /\bacesso\s+(foi\s+)?liberad[ao]/i,
+  /\bturma\s+(foi\s+)?confirmad[ao]/i,
+  // padrões positivos curtos de conclusão de ação operacional
+  /\bvaga\s+reservada\b/i,
+  /\bpagamento\s+confirmado\b/i,
+  /\binscri[çc][ãa]o\s+confirmada\b/i,
+  /\baluno\s+cadastrado\b/i,
+  /\breuni[ãa]o\s+agendada\b/i,
+] as const;
+
+function filterOperationalFacts(facts: string[]): string[] {
+  return facts.filter(fact => !RESERVED_FACT_PATTERNS.some(pattern => pattern.test(fact)));
+}
+
 function validPreviousState(input: unknown): ConversationState {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return { ...DEFAULT_CONVERSATION_STATE, information_already_shared: [], known_user_facts: [] };
@@ -187,7 +216,11 @@ export function mergeConversationState(
         .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
         .map((item) => item.trim().slice(0, FACT_LIMIT));
       if (accepted.length !== value.length) issues.push(`${key}: itens inválidos ignorados`);
-      patch.known_user_facts = unique([...previous.known_user_facts, ...accepted]).slice(-KNOWN_FACTS_LIMIT);
+      const filtered = filterOperationalFacts(accepted);
+      if (filtered.length !== accepted.length) {
+        issues.push(`${key}: ${accepted.length - filtered.length} fato(s) operacional(is) reservado(s) removido(s)`);
+      }
+      patch.known_user_facts = unique([...previous.known_user_facts, ...filtered]).slice(-KNOWN_FACTS_LIMIT);
       continue;
     }
 
