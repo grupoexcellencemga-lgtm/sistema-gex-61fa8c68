@@ -24,7 +24,15 @@ import {
   toCommercialDecisionLog,
   type BrainMessage,
   type BrainOperationalContext,
+  type CommercialDecision,
 } from "./commercial-brain.ts";
+import {
+  executeJudgePipeline,
+  inferToolStatus,
+  toJudgeLog,
+  type JudgeContext,
+  type JudgeToolResult,
+} from "./response-judge.ts";
 
 declare const Supabase: {
   ai: {
@@ -1033,6 +1041,7 @@ Deno.serve(async (req) => {
           humanServiceActive: (lead as any).atendente_id != null,
         };
         let blocoDecisao = "";
+        let lastBrainDecision: CommercialDecision | null = null;
         try {
           const brainResult = await decideCommercialTurn(anthropic as any, estadoAtualizado, brainMessages, brainOperational);
           if (brainResult.issues.length) {
@@ -1040,6 +1049,7 @@ Deno.serve(async (req) => {
           }
           console.log(`[processar-bot] cerebro-comercial lead=${lead.id} fallback=${brainResult.usedFallback}`, toCommercialDecisionLog(brainResult.decision));
           blocoDecisao = formatCommercialDecisionContext(brainResult.decision);
+          lastBrainDecision = brainResult.decision;
         } catch (brainErr) {
           console.error(`[processar-bot] cerebro-comercial erro lead=${lead.id}:`, brainErr);
         }
@@ -1066,6 +1076,7 @@ Deno.serve(async (req) => {
         // queria — encerrava sem texto novo. A resposta ficava nula e o cliente
         // ficava sem retorno, em silêncio. Juntamos o texto de todas as voltas.
         const partesResposta: string[] = [];
+        const judgeToolResults: JudgeToolResult[] = [];
         const extrairTexto = (content: Anthropic.ContentBlock[]) =>
           content
             .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -1145,6 +1156,13 @@ Deno.serve(async (req) => {
               // O agente recebe um "ok" para a conversa seguir naturalmente.
               if (modoAgente !== "ativo") {
                 ferramentasIntencionadas.push({ nome: block.name, input });
+                judgeToolResults.push({
+                  tool: block.name,
+                  input,
+                  resultado: "ok",
+                  success: true,
+                  status: inferToolStatus(block.name, "ok"),
+                });
                 toolResults.push({
                   type: "tool_result",
                   tool_use_id: block.id,
@@ -1594,6 +1612,13 @@ Deno.serve(async (req) => {
                 console.error(`[processar-bot] erro em ${block.name}:`, toolErr);
               }
 
+              judgeToolResults.push({
+                tool: block.name,
+                input,
+                resultado,
+                success: !resultado.startsWith('{"ok":false'),
+                status: inferToolStatus(block.name, resultado),
+              });
               toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultado });
             }
 
@@ -1615,6 +1640,33 @@ Deno.serve(async (req) => {
         if (!resposta) {
           console.log(`[processar-bot] sem texto de resposta para lead ${lead.id} após ${totalIteracoes} volta(s) de ferramenta`);
           continue;
+        }
+
+        // ─── Juiz da Resposta ─────────────────────────────────────────────────
+        if (lastBrainDecision) {
+          const judgeCtx: JudgeContext = {
+            clientMessage: ultimaMensagem.conteudo ?? "",
+            conversationState: estadoAtualizado,
+            decision: lastBrainDecision,
+            candidateResponse: resposta,
+            toolResults: judgeToolResults,
+          };
+          const judgeResult = await executeJudgePipeline(
+            anthropic as any,
+            judgeCtx,
+            systemPrompt,
+            "claude-haiku-4-5-20251001",
+            agente.modelo,
+          );
+          console.log(`[processar-bot] juiz lead=${lead.id}`, toJudgeLog(judgeResult));
+          if (judgeResult.blocked) {
+            console.log(`[processar-bot] juiz bloqueou resposta lead=${lead.id} reason=${judgeResult.judgeDecision?.reason_code ?? "deterministic"}`);
+            continue;
+          }
+          if (judgeResult.finalResponse && judgeResult.finalResponse !== resposta) {
+            console.log(`[processar-bot] juiz reescreveu resposta lead=${lead.id}`);
+            resposta = judgeResult.finalResponse;
+          }
         }
 
         // O agente pode decidir que não há o que responder: um "ok" ou
