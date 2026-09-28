@@ -13,7 +13,10 @@ const centavos = (valor: number) => Math.round((valor + Number.EPSILON) * 100);
 
 /** Quitação da dívida: taxas da adquirente não reduzem o valor pago pelo aluno. */
 export function valorPagoAluno(p: Pagamento): number {
-  return p.status === "pago" ? Number(p.valor_pago ?? p.valor) : 0;
+  if (p.status !== "pago") return 0;
+  // Quando a empresa absorve a taxa, o aluno pagou o valor bruto integralmente — a taxa é despesa da empresa
+  if (p.taxa_absorvida_por === "empresa" && p.valor_pago != null) return Number(p.valor);
+  return Number(p.valor_pago ?? p.valor);
 }
 
 export function temTaxaSeparada(p: Pagamento): boolean {

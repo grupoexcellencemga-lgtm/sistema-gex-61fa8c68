@@ -325,7 +325,7 @@ export const AlunoDetailSheet = (props: Props) => {
     }
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
-  const totalPago = pagamentos.reduce((s: number, p: any) => s + (temTaxaSeparada(p) ? Number(p.valor) : valorPagoAluno(p)), 0);
+  const totalPago = pagamentos.reduce((s: number, p: any) => s + valorPagoAluno(p), 0);
   const totalPendente = matriculas.reduce((acc: number, m: any) =>
     acc + resumirMatricula(Number(m.valor_final || 0), pagamentos.filter((p: any) => p.matricula_id === m.id)).pendente, 0)
     + pagamentos.filter((p: any) => !p.matricula_id && (p.status === "pendente" || p.status === "vencido"))
