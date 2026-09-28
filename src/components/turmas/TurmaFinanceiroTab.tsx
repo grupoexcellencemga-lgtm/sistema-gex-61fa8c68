@@ -12,6 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { valorPagoAluno } from "@/lib/alunoFinanceiro";
 
 const getValorPago = (p: any) => {
   const pago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
@@ -123,22 +124,21 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       const pgtos = pagamentos.filter((p: any) => p.matricula_id === m.id);
       const contratado = Number(m.valor_final || 0);
 
-      // Caixa: líquido que entrou no banco. Quando a empresa absorve a taxa da
-      // maquininha, ela é descontada — o aluno quitou o valor cheio, mas a
-      // maquininha ficou com uma parte antes de cair na conta.
+      // Caixa: líquido que entrou no banco.
+      // Quando valor_pago está preenchido já é o líquido (taxa debitada antes do depósito).
+      // Quando não está (registros antigos), calcula: valor - taxa_empresa.
       const pago = pgtos
         .filter((p: any) => p.status === "pago")
         .reduce((s: number, p: any) => {
-          const taxaEmp = p.taxa_absorvida_por === "empresa" ? Number(p.taxa_valor || 0) : 0;
-          return s + getValorPago(p) - taxaEmp;
+          if (p.taxa_absorvida_por === "empresa") {
+            if (p.valor_pago != null) return s + Number(p.valor_pago);
+            return s + Number(p.valor || 0) - Number(p.taxa_valor || 0);
+          }
+          return s + getValorPago(p);
         }, 0);
 
-      // Obrigação do aluno: valor cheio da parcela, sem taxa de maquininha —
-      // quem absorve o custo da maquininha não muda quanto do contratado já
-      // foi quitado.
-      const pagoEfetivo = pgtos
-        .filter((p: any) => p.status === "pago")
-        .reduce((s: number, p: any) => s + getValorPago(p), 0);
+      // Obrigação do aluno: valor bruto pago, taxa da empresa não é dívida do aluno.
+      const pagoEfetivo = pgtos.reduce((s: number, p: any) => s + valorPagoAluno(p), 0);
 
       const pendente = pgtos
         .filter((p: any) => p.status === "pendente")
