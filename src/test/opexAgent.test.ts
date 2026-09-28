@@ -148,6 +148,54 @@ describe("PROMPT_AGENTE_OPEX — conteúdo e limites", () => {
   it("registry.opex.systemPrompt bate com PROMPT_AGENTE_OPEX", () => {
     expect(AGENT_REGISTRY.opex?.systemPrompt).toBe(PROMPT_AGENTE_OPEX);
   });
+
+  // ── Fase 3.1.1 — fontes dinâmicas corrigidas ──────────────────────────────
+
+  it("NÃO trata Maringá como local estático da turma atual", () => {
+    expect(PROMPT_AGENTE_OPEX).not.toMatch(/Local habitual: Maringá/);
+  });
+
+  it("indica que vagas não possuem fonte automática disponível", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/vaga/i);
+    expect(PROMPT_AGENTE_OPEX).toMatch(/nenhuma tool retorna|não informar|sem fonte/i);
+  });
+
+  it("indica que número de encontros não possui fonte", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/encontros/i);
+    expect(PROMPT_AGENTE_OPEX).toMatch(/nenhuma tool retorna|não informar|sem fonte/i);
+  });
+
+  it("indica que frequência não possui fonte", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/frequência|frequencia/i);
+    expect(PROMPT_AGENTE_OPEX).toMatch(/nenhuma tool retorna|não informar|sem fonte/i);
+  });
+
+  it("indica que horário não possui fonte", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/horário|horario/i);
+    expect(PROMPT_AGENTE_OPEX).toMatch(/nenhuma tool retorna|não informar|sem fonte/i);
+  });
+
+  it("indica que endereço específico não está em consultar_turmas", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/endereço|Local\/endereço|local específico/i);
+    expect(PROMPT_AGENTE_OPEX).toMatch(/cidade, não endereço|nenhuma tool retorna|não informar/i);
+  });
+
+  it("não atribui a consultar_turmas campos que ela não retorna (horário, vagas, duração)", () => {
+    // consultar_turmas retorna: nome, cidade, modalidade, data_inicio, data_fim, status
+    // NÃO deve aparecer "horário → consultar_turmas" nem "vagas → consultar_turmas"
+    expect(PROMPT_AGENTE_OPEX).not.toMatch(/horário.*consultar_turmas/i);
+    expect(PROMPT_AGENTE_OPEX).not.toMatch(/vagas.*consultar_turmas/i);
+  });
+
+  it("duração comercial está sob consultar_produtos, não consultar_turmas", () => {
+    // Duração deve aparecer no bloco consultar_produtos, não atribuída a consultar_turmas
+    expect(PROMPT_AGENTE_OPEX).toMatch(/Disponível via consultar_produtos[\s\S]*?[Dd]uração/);
+    expect(PROMPT_AGENTE_OPEX).not.toMatch(/duração.*consultar_turmas|Duração.*consultar_turmas/i);
+  });
+
+  it("proíbe prometer verificação sem ação operacional", () => {
+    expect(PROMPT_AGENTE_OPEX).toMatch(/solicitar_handoff|criar_tarefa/);
+  });
 });
 
 // ─── getAgentConfigForTesting ─────────────────────────────────────────────────
