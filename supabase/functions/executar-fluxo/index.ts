@@ -181,11 +181,13 @@ Deno.serve(async (req) => {
     // Dados do lead para interpolação
     const { data: leadData } = await supabase
       .from("leads")
-      .select("nome, telefone, contato_id")
+      .select("nome, nome_whatsapp, telefone, contato_id")
       .eq("id", leadId)
       .maybeSingle();
     const msgVars: Record<string, string> = {
-      nome: leadData?.nome ?? "",
+      // nome_whatsapp reflete o pushName atual do WhatsApp (sempre atualizado).
+      // nome é o nome curado (agenda > manual) — fallback quando sem pushName.
+      nome: leadData?.nome_whatsapp ?? leadData?.nome ?? "",
       telefone: leadData?.telefone ?? leadData?.contato_id ?? telefone ?? "",
     };
 

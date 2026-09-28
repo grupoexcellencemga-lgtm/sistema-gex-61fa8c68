@@ -386,10 +386,11 @@ Deno.serve(async (req) => {
         }
 
         // 5. Atualiza nome do lead.
-        // Nome vindo da agenda sobrepoe o que estiver la: se alguem salvou o
-        // contato como "Jaqueline", e porque quer que ela seja chamada assim.
-        // pushName so preenche quando o lead ainda esta com o telefone no
-        // lugar do nome -- senao toda mensagem desfaria a correcao manual.
+        // `nome`: nome curado — agenda sobrepõe tudo; pushName só preenche
+        //   quando o campo ainda é o telefone (evita desfazer edição manual).
+        // `nome_whatsapp`: sempre atualizado com pushName recebido, sem guard.
+        //   Serve como fonte de verdade para interpolação de {nome} nos fluxos
+        //   e no contexto da IA — reflete o nome real no WhatsApp atual.
         if (leadId && nomeVeioDaAgenda) {
           await supabase.from("leads").update({ nome: nomeContato }).eq("id", leadId);
         } else if (leadId && msg.pushName) {
@@ -397,6 +398,11 @@ Deno.serve(async (req) => {
             .update({ nome: msg.pushName })
             .eq("id", leadId)
             .like("nome", telefone);
+        }
+        if (leadId && msg.pushName && !fromMe) {
+          await supabase.from("leads")
+            .update({ nome_whatsapp: msg.pushName })
+            .eq("id", leadId);
         }
 
         await supabase.from("leads").update({

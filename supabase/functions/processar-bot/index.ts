@@ -600,7 +600,7 @@ Deno.serve(async (req) => {
         // Modo direto: processa o lead específico sem exigir status "fila"
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
+          .select("id, nome, nome_whatsapp, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
           .eq("id", forceLeadId)
           .eq("empresa_id", agente.empresa_id)
           .in("canal_id", agente.canais_ids)
@@ -614,7 +614,7 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - agente.tempo_espera_minutos * 60 * 1000).toISOString();
         let q = supabase
           .from("leads")
-          .select("id, nome, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
+          .select("id, nome, nome_whatsapp, contato_id, canal_id, empresa_id, lead_score, produto_interesse, origem, etapa_id, bot_ativo, status_atendimento, atendente_id, conversation_state, conversation_state_version")
           .eq("empresa_id", agente.empresa_id)
           .eq("status_atendimento", "fila")
           .in("canal_id", agente.canais_ids)
@@ -884,16 +884,19 @@ Deno.serve(async (req) => {
         const temperaturaNome = score >= 61 ? "quente" : score >= 31 ? "morno" : score > 0 ? "frio" : null;
 
         // Contexto do contato (nome + telefone + perfil + dados do funil) injetado no system prompt
-        const nomeContato = lead.nome && lead.nome !== lead.contato_id ? lead.nome : null;
+        // Prefere nome_whatsapp (pushName atual) sobre nome curado do CRM.
+        const nomeContato = ((lead as any).nome_whatsapp ?? lead.nome) || null;
+        // Garante que não mostramos o telefone como nome.
+        const nomeContatoFinal = nomeContato && nomeContato !== lead.contato_id ? nomeContato : null;
         const linhasCtx: string[] = [`\n\n---\n# CONTATO ATUAL`];
-        if (nomeContato) linhasCtx.push(`Nome: ${nomeContato}`);
+        if (nomeContatoFinal) linhasCtx.push(`Nome: ${nomeContatoFinal}`);
         linhasCtx.push(`Telefone: ${lead.contato_id}`);
         linhasCtx.push(`Perfil: ${perfilContato}`);
         if (etapaNome) linhasCtx.push(`Etapa no funil: ${etapaNome}`);
         if ((lead as any).produto_interesse) linhasCtx.push(`Produto de interesse: ${(lead as any).produto_interesse}`);
         if (temperaturaNome) linhasCtx.push(`Temperatura: ${temperaturaNome} (score ${score})`);
         if ((lead as any).origem) linhasCtx.push(`Origem: ${(lead as any).origem}`);
-        if (nomeContato) linhasCtx.push(`Use o nome da pessoa naturalmente na conversa quando fizer sentido.`);
+        if (nomeContatoFinal) linhasCtx.push(`Use o nome da pessoa naturalmente na conversa quando fizer sentido.`);
         const contextoContato = linhasCtx.join("\n");
 
         // Ficha que a IA mantém do contato: dores, momento, objeções e
