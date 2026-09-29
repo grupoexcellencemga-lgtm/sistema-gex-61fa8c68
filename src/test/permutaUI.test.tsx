@@ -240,14 +240,11 @@ describe("T10: Idempotency behavioral test", () => {
     fireEvent.change(screen.getByTestId("permuta-valor-input"), { target: { value: "500" } });
     fireEvent.click(screen.getByTestId("btn-proximo"));
 
-    // Fill step 2
+    // Fill step 2 — btn-registrar agora está direto no step 2
     await waitFor(() => screen.getByTestId("item-descricao-0"));
     fireEvent.change(screen.getByTestId("item-descricao-0"), { target: { value: "Serviço" } });
     fireEvent.change(screen.getByTestId("item-valor-0"), { target: { value: "500" } });
-    fireEvent.click(screen.getByTestId("btn-proximo"));
-
-    // Step 3 — submit
-    await waitFor(() => screen.getByTestId("btn-registrar"));
+    await waitFor(() => expect(screen.getByTestId("btn-registrar")).not.toBeDisabled());
     fireEvent.click(screen.getByTestId("btn-registrar"));
 
     await waitFor(() => expect(mockRpc).toHaveBeenCalledTimes(1));
@@ -272,8 +269,7 @@ describe("T10: Idempotency behavioral test", () => {
     await waitFor(() => screen.getByTestId("item-descricao-0"));
     fireEvent.change(screen.getByTestId("item-descricao-0"), { target: { value: "Serviço" } });
     fireEvent.change(screen.getByTestId("item-valor-0"), { target: { value: "500" } });
-    fireEvent.click(screen.getByTestId("btn-proximo"));
-    await waitFor(() => screen.getByTestId("btn-registrar"));
+    await waitFor(() => expect(screen.getByTestId("btn-registrar")).not.toBeDisabled());
     fireEvent.click(screen.getByTestId("btn-registrar"));
 
     await waitFor(() => expect(mockRpc).toHaveBeenCalledTimes(2));
@@ -302,16 +298,16 @@ describe("T11-T14: PermutaModal item validation + submit", () => {
     await goToStep2();
     fireEvent.change(screen.getByTestId("item-descricao-0"), { target: { value: "Aula de inglês" } });
     fireEvent.change(screen.getByTestId("item-valor-0"), { target: { value: "500" } });
-    fireEvent.click(screen.getByTestId("btn-proximo"));
-    await waitFor(() => screen.getByTestId("btn-registrar"));
+    // step 3 removido: btn-registrar agora está diretamente no step 2
+    await waitFor(() => expect(screen.getByTestId("btn-registrar")).not.toBeDisabled());
   }
 
-  it("T11 step 2 btn-proximo disabled when soma diverges", async () => {
+  it("T11 step 2 btn-registrar disabled when soma diverges", async () => {
     wrap(<PermutaModal {...baseModalProps} />);
     await goToStep2();
     fireEvent.change(screen.getByTestId("item-descricao-0"), { target: { value: "Item" } });
     fireEvent.change(screen.getByTestId("item-valor-0"), { target: { value: "200" } }); // diverges from 500
-    expect(screen.getByTestId("btn-proximo").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("btn-registrar").hasAttribute("disabled")).toBe(true);
   });
 
   it("T12 add-item-btn adds a second item row", async () => {
@@ -385,7 +381,7 @@ describe("T15-T19: PermutaStatusCard", () => {
     })));
   });
 
-  it("T18 cancelar item: requires motivo, calls rpc cancelar_item_permuta", async () => {
+  it("T18 excluir item: requires motivo, calls rpc excluir_item_permuta", async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
     wrap(<PermutaStatusCard pagamento={pagamento} itens={items} onRefresh={onRefresh} />);
     fireEvent.click(screen.getByTestId("btn-cancelar-item-item1"));
@@ -394,24 +390,24 @@ describe("T15-T19: PermutaStatusCard", () => {
     fireEvent.change(screen.getByTestId("input-motivo-item"), { target: { value: "Não entregou" } });
     expect(screen.getByTestId("btn-cancelar-item-ok").hasAttribute("disabled")).toBe(false);
     fireEvent.click(screen.getByTestId("btn-cancelar-item-ok"));
-    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith("cancelar_item_permuta", expect.objectContaining({
-      p_permuta_item_id: "item1",
-      p_motivo_cancelamento: "Não entregou",
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith("excluir_item_permuta", expect.objectContaining({
+      p_item_id: "item1",
+      p_motivo: "Não entregou",
     })));
   });
 
-  it("T19 cancelar permuta: requires motivo, calls rpc cancelar_permuta", async () => {
+  it("T19 excluir permuta: requires motivo, calls rpc excluir_permuta", async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
     wrap(<PermutaStatusCard pagamento={pagamento} itens={items} onRefresh={onRefresh} />);
-    fireEvent.click(screen.getByTestId("btn-cancelar-permuta"));
-    await waitFor(() => screen.getByTestId("btn-cancelar-permuta-ok"));
-    expect(screen.getByTestId("btn-cancelar-permuta-ok").hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByTestId("btn-excluir-permuta"));
+    await waitFor(() => screen.getByTestId("btn-excluir-permuta-ok"));
+    expect(screen.getByTestId("btn-excluir-permuta-ok").hasAttribute("disabled")).toBe(true);
     fireEvent.change(screen.getByTestId("input-motivo-permuta"), { target: { value: "Desistência" } });
-    expect(screen.getByTestId("btn-cancelar-permuta-ok").hasAttribute("disabled")).toBe(false);
-    fireEvent.click(screen.getByTestId("btn-cancelar-permuta-ok"));
-    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith("cancelar_permuta", expect.objectContaining({
+    expect(screen.getByTestId("btn-excluir-permuta-ok").hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByTestId("btn-excluir-permuta-ok"));
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith("excluir_permuta", expect.objectContaining({
       p_pagamento_id: "perm1",
-      p_motivo_cancelamento: "Desistência",
+      p_motivo: "Desistência",
     })));
   });
 });

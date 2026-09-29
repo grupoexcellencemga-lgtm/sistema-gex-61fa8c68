@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,7 +54,7 @@ export function PermutaModal({
   permutaItens,
   onSuccess,
 }: PermutaModalProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([emptyItem()]);
@@ -133,7 +132,6 @@ export function PermutaModal({
   const stepTitles: Record<number, string> = {
     1: "Valor da permuta",
     2: "Itens da permuta",
-    3: "Confirmar registro",
   };
 
   return (
@@ -246,47 +244,12 @@ export function PermutaModal({
           </div>
         )}
 
-        {step === 3 && (
-          <div className="space-y-3 text-sm">
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Valor total:</span>
-                <span className="font-semibold" data-testid="confirm-valor">
-                  {formatCurrency(valorNum)}
-                </span>
-              </div>
-              {observacao && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Observação:</span>
-                  <span className="text-right">{observacao}</span>
-                </div>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Itens</p>
-              {itens.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between rounded border p-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {item.tipo}
-                    </Badge>
-                    <span>{item.descricao}</span>
-                  </div>
-                  <span className="font-medium">
-                    {formatCurrency(parseFloat(item.valor.replace(",", ".")) || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <DialogFooter className="gap-2 flex-wrap">
           {step > 1 && (
             <Button
               variant="outline"
               data-testid="btn-voltar"
-              onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
+              onClick={() => setStep((s) => (s - 1) as 1 | 2)}
               disabled={submitting}
             >
               ← Voltar
@@ -295,22 +258,19 @@ export function PermutaModal({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
-          {step < 3 && (
+          {step === 1 && (
             <Button
               data-testid="btn-proximo"
-              onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
-              disabled={
-                (step === 1 && !step1Valid) ||
-                (step === 2 && !step2Valid)
-              }
+              onClick={() => setStep(2)}
+              disabled={!step1Valid}
             >
               Próximo →
             </Button>
           )}
-          {step === 3 && (
-            <Button data-testid="btn-registrar" onClick={handleSubmit} disabled={submitting}>
+          {step === 2 && (
+            <Button data-testid="btn-registrar" onClick={handleSubmit} disabled={submitting || !step2Valid}>
               {submitting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              Registrar permuta
+              Lançar permuta
             </Button>
           )}
         </DialogFooter>
