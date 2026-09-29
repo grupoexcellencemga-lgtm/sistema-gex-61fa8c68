@@ -166,10 +166,152 @@ describe("permuta routing — Fase 3 UI", () => {
     expect(onReg).not.toHaveBeenCalled();
   });
 
-  // T4: "Permuta" NÃO aparece como opção no confirm dialog
-  it("T4 confirmPagamentoDialog não expõe 'Permuta' como opção", () => {
+  // T4: "Permuta" aparece como opção no confirm dialog (após fix)
+  it("T4 confirmPagamentoDialog expõe 'Permuta' como opção", async () => {
     render(<AlunoDetailSheet {...props()} />);
     fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
-    expect(screen.queryByRole("option", { name: "Permuta" })).toBeNull();
+    // Abrir o Select para renderizar as opções — primeiro combobox é Forma de pagamento
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("option", { name: "Permuta" })).toBeInTheDocument();
+  });
+});
+
+// ─── T01-T09: Permuta intercept no "Confirmar pagamento" ─────────────────────
+
+function ConfirmPagWrapper({ onRegistrarPermuta: onReg }: { onRegistrarPermuta: (id: string) => void }) {
+  const p = { ...props(), onRegistrarPermuta: onReg };
+  return <AlunoDetailSheet {...p} />;
+}
+
+describe("T01-T09 — permuta intercept no Confirmar pagamento", () => {
+  // T01: Select contém Permuta
+  it("T01 Select de forma de pagamento contém Permuta", async () => {
+    render(<ConfirmPagWrapper onRegistrarPermuta={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("option", { name: "Permuta" })).toBeInTheDocument();
+  });
+
+  // T02: Selecionar Permuta fecha o modal monetário
+  it("T02 Selecionar Permuta fecha o modal monetário imediatamente", async () => {
+    const onReg = vi.fn();
+    render(<ConfirmPagWrapper onRegistrarPermuta={onReg} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const permutaOpt = await screen.findByRole("option", { name: "Permuta" });
+    fireEvent.click(permutaOpt);
+    expect(onReg).toHaveBeenCalled();
+    // Dialog fecha — botão "Confirmar pagamento" some
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Confirmar pagamento" })).toBeNull()
+    );
+  });
+
+  // T03: Permuta usa o matricula_id correto da pendência
+  it("T03 onRegistrarPermuta recebe o matricula_id da pendência", async () => {
+    const onReg = vi.fn();
+    render(<ConfirmPagWrapper onRegistrarPermuta={onReg} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const permutaOpt = await screen.findByRole("option", { name: "Permuta" });
+    fireEvent.click(permutaOpt);
+    expect(onReg).toHaveBeenCalledWith("mat");
+  });
+
+  // T04: Permuta NÃO chama onConfirmPagamento
+  it("T04 Permuta NÃO chama onConfirmPagamento", async () => {
+    const onReg = vi.fn();
+    const p = { ...props(), onRegistrarPermuta: onReg };
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const permutaOpt = await screen.findByRole("option", { name: "Permuta" });
+    fireEvent.click(permutaOpt);
+    expect(p.onConfirmPagamento).not.toHaveBeenCalled();
+  });
+
+  // T05: Permuta NÃO chama onSaveNovoPagamento (fluxo monetário)
+  it("T05 Permuta NÃO chama onSaveNovoPagamento", async () => {
+    const onReg = vi.fn();
+    const p = { ...props(), onRegistrarPermuta: onReg };
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const permutaOpt = await screen.findByRole("option", { name: "Permuta" });
+    fireEvent.click(permutaOpt);
+    expect(p.onSaveNovoPagamento).not.toHaveBeenCalled();
+  });
+
+  // T06: Safety net — submit com forma=permuta redireciona
+  it("T06 safety-net submit com forma=permuta chama onRegistrarPermuta e não onConfirmPagamento", async () => {
+    const onReg = vi.fn();
+    const p = { ...props(), onRegistrarPermuta: onReg };
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    // Selecionar Permuta já intercepta no onValueChange, não chega ao submit
+    // Este teste valida o intercept (mesmo resultado)
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const permutaOpt = await screen.findByRole("option", { name: "Permuta" });
+    fireEvent.click(permutaOpt);
+    expect(onReg).toHaveBeenCalledWith("mat");
+    expect(p.onConfirmPagamento).not.toHaveBeenCalled();
+  });
+
+  // T07: PIX continua funcionando normalmente
+  it("T07 PIX no Confirmar pagamento chama onConfirmPagamento (regressão)", async () => {
+    const p = props();
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    fireEvent.change(screen.getByLabelText("Valor recebido agora (R$)"), { target: { value: "600" } });
+    // forma_pagamento padrão do pendente é "pix" → botão já habilitado
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Confirmar pagamento" })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
+    await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalled());
+    expect(p.onRegistrarPermuta).not.toHaveBeenCalled();
+  });
+
+  // T08: Crédito continua funcionando normalmente
+  it("T08 Crédito no Confirmar pagamento chama onConfirmPagamento (regressão)", async () => {
+    const p = props();
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    fireEvent.change(screen.getByLabelText("Valor recebido agora (R$)"), { target: { value: "600" } });
+    // Trocar forma para Crédito — primeiro combobox é Forma de pagamento
+    const trigger = screen.getAllByRole("combobox")[0];
+    fireEvent.click(trigger);
+    const creditOpt = await screen.findByRole("option", { name: "Crédito" });
+    fireEvent.click(creditOpt);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Confirmar pagamento" })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
+    await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(),
+      expect.objectContaining({ forma_pagamento: "credito" })
+    ));
+    expect(p.onRegistrarPermuta).not.toHaveBeenCalled();
+  });
+
+  // T09: Pagamento parcial continua funcionando normalmente
+  it("T09 pagamento parcial com valor válido chama onConfirmPagamento (regressão)", async () => {
+    const p = props();
+    render(<AlunoDetailSheet {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    fireEvent.change(screen.getByLabelText("Valor recebido agora (R$)"), { target: { value: "500" } });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Confirmar pagamento" })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
+    await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalled());
+    expect(p.onRegistrarPermuta).not.toHaveBeenCalled();
   });
 });

@@ -941,12 +941,19 @@ export const AlunoDetailSheet = (props: Props) => {
                   <Label>Forma de pagamento</Label>
                   <Select
                     value={confirmPagamentoForm.forma_pagamento}
-                    onValueChange={(value) =>
+                    onValueChange={(value) => {
+                      if (value === "permuta") {
+                        setConfirmPagamentoDialog(false);
+                        if (confirmingPagamento?.matricula_id) {
+                          onRegistrarPermuta(confirmingPagamento.matricula_id);
+                        }
+                        return;
+                      }
                       setConfirmPagamentoForm((prev) => ({
                         ...prev,
                         forma_pagamento: value,
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
@@ -958,7 +965,7 @@ export const AlunoDetailSheet = (props: Props) => {
                           Nenhuma forma cadastrada
                         </SelectItem>
                       ) : (
-                        formasPagamento.filter((f) => f.codigo !== "permuta").map((forma) => (
+                        formasPagamento.map((forma) => (
                           <SelectItem key={forma.id} value={forma.codigo}>
                             {forma.nome}
                           </SelectItem>
@@ -1070,6 +1077,12 @@ export const AlunoDetailSheet = (props: Props) => {
                 disabled={!confirmValorValido || !confirmPagamentoForm.data_pagamento || !confirmPagamentoForm.forma_pagamento || props.confirmPagamentoIsPending}
                 onClick={async () => {
                   if (!confirmingPagamento || !confirmValorValido || props.confirmPagamentoIsPending) return;
+
+                  if (confirmPagamentoForm.forma_pagamento === "permuta") {
+                    setConfirmPagamentoDialog(false);
+                    if (confirmingPagamento?.matricula_id) onRegistrarPermuta(confirmingPagamento.matricula_id);
+                    return;
+                  }
 
                   try {
                   await onConfirmPagamento(confirmingPagamento, confirmingFees, {
