@@ -218,3 +218,81 @@ describe("T07 — permuta parcialmente entregue: acordado não conta como quitad
     expect(resumo.saldoFinanceiro).toBe(1970);
   });
 });
+
+// ─── Ajuste visual v2 — semântica dos cards ───────────────────────────────────
+// Testa os 7 requisitos do ajuste de cores e card Permutas.
+
+describe("C01 — card Permutas: permuta entregue aumenta quitadoPermuta", () => {
+  it("R$60 permuta entregue → quitadoPermuta=60", () => {
+    const pagPerm = makePermuta("perm-c1", 60);
+    const itens = makePermutaItens("perm-c1", 60);
+    const resumo = resumirMatriculaV2(1970, [pagPerm], itens);
+    expect(resumo.quitadoPermuta).toBe(60);
+  });
+});
+
+describe("C02 — card Permutas: permuta NÃO aumenta Recebido (quitadoDinheiro)", () => {
+  it("só permuta → quitadoDinheiro=0", () => {
+    const pagPerm = makePermuta("perm-c2", 60);
+    const itens = makePermutaItens("perm-c2", 60);
+    const resumo = resumirMatriculaV2(1970, [pagPerm], itens);
+    expect(resumo.quitadoDinheiro).toBe(0);
+  });
+});
+
+describe("C03 — card Recebido: dinheiro aumenta quitadoDinheiro", () => {
+  it("R$100 PIX → quitadoDinheiro=100", () => {
+    const pag = makePix(100);
+    const resumo = resumirMatriculaV2(1970, [pag], {});
+    expect(resumo.quitadoDinheiro).toBe(100);
+  });
+});
+
+describe("C04 — card Recebido: dinheiro NÃO aumenta Permutas (quitadoPermuta)", () => {
+  it("só PIX → quitadoPermuta=0", () => {
+    const pag = makePix(100);
+    const resumo = resumirMatriculaV2(1970, [pag], {});
+    expect(resumo.quitadoPermuta).toBe(0);
+  });
+});
+
+describe("C05 — A receber reflete abatimento de dinheiro + permuta", () => {
+  it("R$100 PIX + R$60 permuta → saldoFinanceiro=1810", () => {
+    const pagPix = makePix(100);
+    const pagPerm = makePermuta("perm-c5", 60);
+    const itens = makePermutaItens("perm-c5", 60);
+    const resumo = resumirMatriculaV2(1970, [pagPix, pagPerm], itens);
+    expect(resumo.saldoFinanceiro).toBe(1810);
+    expect(resumo.quitadoDinheiro).toBe(100);
+    expect(resumo.quitadoPermuta).toBe(60);
+  });
+});
+
+describe("C06 — Total quitado da linha = dinheiro + permuta", () => {
+  it("R$100 PIX + R$60 permuta → totalQuitado=160", () => {
+    const pagPix = makePix(100);
+    const pagPerm = makePermuta("perm-c6", 60);
+    const itens = makePermutaItens("perm-c6", 60);
+    const resumo = resumirMatriculaV2(1970, [pagPix, pagPerm], itens);
+    expect(resumo.totalQuitado).toBe(160);
+    expect(resumo.totalQuitado).toBe(resumo.quitadoDinheiro + resumo.quitadoPermuta);
+  });
+});
+
+describe("C07 — Total quitado usa cor neutra, não verde de caixa", () => {
+  it("classe text-emerald-700 não está na célula pagoEfetivo", () => {
+    const { readFileSync } = require("fs");
+    const { resolve } = require("path");
+    const src: string = readFileSync(
+      resolve(__dirname, "../components/turmas/TurmaFinanceiroTab.tsx"),
+      "utf-8"
+    );
+    // Encontra o bloco da célula de pagoEfetivo (entre as duas células de permuta e pendente)
+    const match = src.match(/quitadoPermuta > 0[\s\S]*?pagoEfetivo > 0[\s\S]*?<\/TableCell>/);
+    expect(match).not.toBeNull();
+    const celula = match![0];
+    expect(celula).not.toMatch(/text-emerald/);
+    // Deve usar cor de texto neutra
+    expect(celula).toMatch(/text-foreground|text-slate|text-gray|text-muted/);
+  });
+});

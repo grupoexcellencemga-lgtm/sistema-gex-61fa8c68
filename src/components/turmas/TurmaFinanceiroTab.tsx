@@ -228,6 +228,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     );
 
     const totalRecebido = alunoEntries.reduce((s, a) => s + a.pago, 0);
+    const totalQuitadoPermuta = alunoEntries.reduce((s, a) => s + a.quitadoPermuta, 0);
     const totalPendente = alunoEntries.reduce((s, a) => s + a.aReceber, 0);
     const totalContratado = alunoEntries.reduce((s, a) => s + a.contratado, 0);
     const totalTaxaEmpresa = alunoEntries.reduce((s, a) => s + a.taxaEmpresa, 0);
@@ -240,6 +241,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     return {
       alunoEntries,
       totalRecebido,
+      totalQuitadoPermuta,
       totalPendente,
       totalContratado,
       totalTaxaEmpresa,
@@ -357,7 +359,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Contratado</p>
           <p className="font-bold text-sm">{formatCurrency(dados.totalContratado)}</p>
@@ -365,6 +367,12 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Recebido</p>
           <p className="font-bold text-sm text-emerald-600">{formatCurrency(dados.totalRecebido)}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="text-xs text-muted-foreground">Permutas</p>
+          <p className={`font-bold text-sm ${dados.totalQuitadoPermuta > 0 ? "text-violet-600" : "text-muted-foreground"}`}>
+            {dados.totalQuitadoPermuta > 0 ? formatCurrency(dados.totalQuitadoPermuta) : "—"}
+          </p>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
           <p className="text-xs text-muted-foreground">Taxa empresa</p>
@@ -474,7 +482,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                   <TableCell className="text-sm text-right font-medium text-violet-600">
                     {a.quitadoPermuta > 0 ? formatCurrency(a.quitadoPermuta) : "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-right font-semibold text-emerald-700">
+                  <TableCell className="text-sm text-right font-semibold text-foreground">
                     {a.pagoEfetivo > 0 ? formatCurrency(a.pagoEfetivo) : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-right text-amber-600">
