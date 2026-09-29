@@ -1880,7 +1880,12 @@ const Alunos = () => {
         insertPagamentoIsPending={insertPagamento.isPending}
         permutaItens={permutaItens}
         onRegistrarPermuta={(matriculaId) => {
-          setPermutaModalMatriculaId(matriculaId);
+          const mid = matriculaId || (matriculas as any[])[0]?.id || "";
+          if (!mid) {
+            toast.error("Aluno não possui matrículas para registrar permuta.");
+            return;
+          }
+          setPermutaModalMatriculaId(mid);
           setPermutaModalOpen(true);
         }}
       />

@@ -1445,16 +1445,12 @@ export const AlunoDetailSheet = (props: Props) => {
                 <Select
                   value={novoPagForm.forma_pagamento}
                   onValueChange={(v) => {
-                    setNovoPagForm((p: any) => ({ ...p, forma_pagamento: v, repassar_taxa: false, taxa_valor: "" }));
                     if (v === "permuta") {
-                      if (!novoPagForm.matricula_id) {
-                        toast.error("Selecione uma matrícula antes de registrar permuta.");
-                        setNovoPagForm((p: any) => ({ ...p, forma_pagamento: "" }));
-                        return;
-                      }
                       setNovoPagamentoDialog(false);
                       onRegistrarPermuta(novoPagForm.matricula_id);
+                      return;
                     }
+                    setNovoPagForm((p: any) => ({ ...p, forma_pagamento: v, repassar_taxa: false, taxa_valor: "" }));
                   }}
                 >
                   <SelectTrigger>
@@ -1547,10 +1543,6 @@ export const AlunoDetailSheet = (props: Props) => {
               className="w-full"
               onClick={() => {
                 if (novoPagForm.forma_pagamento === "permuta") {
-                  if (!novoPagForm.matricula_id) {
-                    toast.error("Selecione uma matrícula antes de registrar permuta.");
-                    return;
-                  }
                   setNovoPagamentoDialog(false);
                   onRegistrarPermuta(novoPagForm.matricula_id);
                   return;
