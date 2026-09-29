@@ -1,4 +1,5 @@
 type Pagamento = {
+  id?: string;
   status: string;
   valor: number | string;
   valor_pago?: number | string | null;
@@ -7,6 +8,28 @@ type Pagamento = {
   forma_pagamento?: string | null;
   taxa_valor?: number | string | null;
   taxa_absorvida_por?: string | null;
+  gera_caixa?: boolean | null;
+  deleted_at?: string | null;
+};
+
+export type PermutaItem = {
+  id?: string;
+  pagamento_id: string;
+  valor: number | string;
+  status: 'acordado' | 'entregue' | 'cancelado';
+  deleted_at?: string | null;
+};
+
+export type ResumoMatriculaV2 = {
+  total:                         number;
+  quitadoDinheiro:               number; // pagamentos monetários reais (pix, cartao, boleto…)
+  quitadoPermuta:                number; // itens de permuta entregues
+  quitadoNaoMonetario:           number; // gratuidades/probono (quita obrigação sem gerar caixa)
+  totalQuitado:                  number; // = quitadoDinheiro + quitadoPermuta + quitadoNaoMonetario
+  valorPermutaPendenteEntrega:   number;
+  saldoFinanceiro:               number;
+  saldoDisponivelNovoPagamento:  number;
+  caixa:                         number;
 };
 
 const centavos = (valor: number) => Math.round((valor + Number.EPSILON) * 100);
@@ -57,4 +80,63 @@ export function ordenarPagamentos<T extends Pagamento>(pagamentos: T[]): T[] {
       ? (b.data_pagamento ?? "").localeCompare(a.data_pagamento ?? "")
       : (a.data_vencimento ?? "9999").localeCompare(b.data_vencimento ?? "9999");
   });
+}
+
+export function resumirMatriculaV2(
+  total: number,
+  pagamentos: Pagamento[],
+  itensPorPagamento: Record<string, PermutaItem[]>
+): ResumoMatriculaV2 {
+  let pagoDinhCents = 0, pagoPermCents = 0, pendPermCents = 0, caixaCents = 0, naoMonetarioCents = 0;
+  for (const p of pagamentos) {
+    if (p.deleted_at || p.status === "cancelado") continue;
+    if (p.forma_pagamento === "permuta") {
+      const itens = (itensPorPagamento[p.id ?? ""] ?? []).filter(i => !i.deleted_at);
+      for (const item of itens) {
+        if (item.status === "entregue") pagoPermCents += centavos(Number(item.valor));
+        else if (item.status === "acordado") pendPermCents += centavos(Number(item.valor));
+      }
+    } else if (p.forma_pagamento === "probono") {
+      // Probono quita a obrigação sem gerar caixa monetário
+      if (p.status !== "pago") continue;
+      naoMonetarioCents += centavos(valorPagoAluno(p));
+    } else {
+      if (p.status !== "pago") continue;
+      const v = centavos(valorPagoAluno(p));
+      pagoDinhCents += v;
+      if (p.gera_caixa !== false) caixaCents += v;
+    }
+  }
+  const totalQuitCents = pagoDinhCents + pagoPermCents + naoMonetarioCents;
+  const saldoFinCents = Math.max(0, centavos(total) - totalQuitCents);
+  const saldoDispCents = Math.max(0, saldoFinCents - pendPermCents);
+  return {
+    total,
+    quitadoDinheiro: pagoDinhCents / 100,
+    quitadoPermuta: pagoPermCents / 100,
+    quitadoNaoMonetario: naoMonetarioCents / 100,
+    totalQuitado: totalQuitCents / 100,
+    valorPermutaPendenteEntrega: pendPermCents / 100,
+    saldoFinanceiro: saldoFinCents / 100,
+    saldoDisponivelNovoPagamento: saldoDispCents / 100,
+    caixa: caixaCents / 100,
+  };
+}
+
+export function statusPermutaDerived(
+  itens: PermutaItem[]
+): "pendente_permuta" | "pago" | "cancelado" {
+  const ativos = itens.filter(i => !i.deleted_at);
+  if (ativos.some(i => i.status === "acordado")) return "pendente_permuta";
+  if (ativos.some(i => i.status === "entregue")) return "pago";
+  return "cancelado";
+}
+
+export function validarSomaItensPermuta(
+  valorPermuta: number,
+  itens: { valor: number | string }[]
+): { valido: boolean; soma: number; diferenca: number } {
+  const somaCents = itens.reduce((s, i) => s + centavos(Number(i.valor)), 0);
+  const diferenca = Math.abs(somaCents - centavos(valorPermuta)) / 100;
+  return { valido: diferenca < 0.005, soma: somaCents / 100, diferenca };
 }

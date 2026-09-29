@@ -80,7 +80,7 @@ describe("resumirMatriculaV2 — Fase 4 cenário canônico", () => {
 });
 
 describe("resumirMatriculaV2 — edge cases", () => {
-  it("probono não entra no caixa mas quita a obrigação", () => {
+  it("probono não entra no caixa e não entra em quitadoDinheiro", () => {
     const probono: any = {
       id: "pag-pb-1",
       forma_pagamento: "probono",
@@ -91,10 +91,10 @@ describe("resumirMatriculaV2 — edge cases", () => {
       deleted_at: null,
     };
     const resumo = resumirMatriculaV2(500, [probono], {});
-    // probono com gera_caixa=false: não entra no caixa monetário
     expect(resumo.caixa).toBe(0);
-    // mas quita a obrigação (é um pagamento de "dinheiro", não permuta)
-    expect(resumo.quitadoDinheiro).toBe(500);
+    expect(resumo.quitadoDinheiro).toBe(0);       // não é monetário
+    expect(resumo.quitadoNaoMonetario).toBe(500); // gratuidade quita a obrigação
+    expect(resumo.totalQuitado).toBe(500);
     expect(resumo.saldoFinanceiro).toBe(0);
   });
 
