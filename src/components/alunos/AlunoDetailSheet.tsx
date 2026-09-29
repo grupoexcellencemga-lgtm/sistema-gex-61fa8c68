@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,7 +28,9 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { TarefasContextSection } from "@/components/tarefas/TarefasContextSection";
 import { useFormasPagamento, getFormaPagamentoLabel } from "@/hooks/useFormasPagamento";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
-import { ordenarPagamentos, resumirMatricula, valorPagoAluno, calcularPagamentoComTaxa, temTaxaSeparada } from "@/lib/alunoFinanceiro";
+import { ordenarPagamentos, resumirMatricula, resumirMatriculaV2, valorPagoAluno, calcularPagamentoComTaxa, temTaxaSeparada, type PermutaItem } from "@/lib/alunoFinanceiro";
+import { PermutaStatusCard } from "./PermutaStatusCard";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -84,6 +86,9 @@ interface Props {
   setNovoPagForm: (fn: (prev: any) => any) => void;
   onSaveNovoPagamento: () => void;
   insertPagamentoIsPending: boolean;
+  // Permuta
+  permutaItens: Record<string, PermutaItem[]>;
+  onRegistrarPermuta: (matriculaId: string) => void;
 }
 
 export const AlunoDetailSheet = (props: Props) => {
@@ -95,9 +100,18 @@ export const AlunoDetailSheet = (props: Props) => {
     parcelasDetailOpen, setParcelasDetailOpen, selectedParcelas, setSelectedParcelas,
     editPagamentoDialog, setEditPagamentoDialog, editPagForm, setEditPagForm, onSavePagamento, updatePagamentoIsPending,
     novoPagamentoDialog, setNovoPagamentoDialog, novoPagForm, setNovoPagForm, onSaveNovoPagamento, insertPagamentoIsPending,
+    permutaItens, onRegistrarPermuta,
   } = props;
 
   const { singular, lower } = useAlunoLabel();
+  const queryClient = useQueryClient();
+
+  const handleRefreshPermuta = useCallback(() => {
+    if (selectedAluno) {
+      queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno.id] });
+      queryClient.invalidateQueries({ queryKey: ["permuta-itens"] });
+    }
+  }, [queryClient, selectedAluno]);
 
   const getComprovantesMatricula = (matricula: any) => {
     const lista = Array.isArray(matricula?.comprovantes_urls)
@@ -325,11 +339,24 @@ export const AlunoDetailSheet = (props: Props) => {
     }
   }, [editTaxaVal, editShowTaxa, editPagForm.valor]);
 
-  const totalPago = pagamentos.reduce((s: number, p: any) => s + valorPagoAluno(p), 0);
-  const totalPendente = matriculas.reduce((acc: number, m: any) =>
-    acc + resumirMatricula(Number(m.valor_final || 0), pagamentos.filter((p: any) => p.matricula_id === m.id)).pendente, 0)
-    + pagamentos.filter((p: any) => !p.matricula_id && (p.status === "pendente" || p.status === "vencido"))
+  // V2 header metrics: sum per-matrícula resumirMatriculaV2 results
+  const { totalPagoDinheiro, totalPagoPermuta, totalPendente } = useMemo(() => {
+    let pDinheiro = 0;
+    let pPermuta = 0;
+    let pendente = 0;
+    for (const m of matriculas) {
+      const mPags = pagamentos.filter((p: any) => p.matricula_id === m.id);
+      const r = resumirMatriculaV2(Number(m.valor_final || 0), mPags, permutaItens);
+      pDinheiro += r.quitadoDinheiro;
+      pPermuta += r.quitadoPermuta;
+      pendente += r.saldoFinanceiro;
+    }
+    // orphan pagamentos
+    pendente += pagamentos
+      .filter((p: any) => !p.matricula_id && (p.status === "pendente" || p.status === "vencido"))
       .reduce((s: number, p: any) => s + Number(p.valor), 0);
+    return { totalPagoDinheiro: pDinheiro, totalPagoPermuta: pPermuta, totalPendente: pendente };
+  }, [matriculas, pagamentos, permutaItens]);
   const pendencias = ordenarPagamentos(pagamentos.filter((p: any) => p.status === "pendente" || p.status === "vencido"));
   const iniciarPagamento = () => {
     if (pendencias.length === 1) openConfirmPagamentoDialog(pendencias[0], null);
@@ -532,10 +559,14 @@ export const AlunoDetailSheet = (props: Props) => {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Pago pelo aluno</p>
-                        <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPago)}</p>
+                        <p className="text-xs text-muted-foreground">Pago dinheiro</p>
+                        <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPagoDinheiro)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Pago permuta</p>
+                        <p className="text-base font-semibold text-purple-600 dark:text-purple-400">{formatCurrency(totalPagoPermuta)}</p>
                       </div>
                       <div className="rounded-lg border p-3">
                         <p className="text-xs text-muted-foreground">Pendente</p>
@@ -573,11 +604,14 @@ export const AlunoDetailSheet = (props: Props) => {
                         ].map((group) => {
                           // Cada recebimento fica separado para preservar forma e data do pagamento.
                           const rowItems = ordenarPagamentos(group.pgs).map((p) => ({ type: "single", data: p }));
-                          const resumo = resumirMatricula(group.valorFinal ?? 0, group.pgs);
-                          const grpPago = resumo.pago;
+                          const resumo = group.id === "__orphan__"
+                            ? resumirMatricula(group.valorFinal ?? 0, group.pgs)
+                            : resumirMatriculaV2(group.valorFinal ?? 0, group.pgs, permutaItens);
+                          const grpPago = group.id === "__orphan__" ? (resumo as any).pago : (resumo as any).totalQuitado;
                           const grpPendente = group.id === "__orphan__"
                             ? group.pgs.filter((p: any) => p.status !== "pago").reduce((s: number, p: any) => s + Number(p.valor), 0)
-                            : resumo.pendente;
+                            : (resumo as any).saldoFinanceiro;
+                          const grpSaldoDisponivel = group.id === "__orphan__" ? 0 : (resumo as any).saldoDisponivelNovoPagamento;
 
                           return (
                             <div key={group.id} className="space-y-1.5">
@@ -595,6 +629,17 @@ export const AlunoDetailSheet = (props: Props) => {
                                     )}
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {group.id !== "__orphan__" && grpSaldoDisponivel > 0 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs text-purple-700 border-purple-300 dark:text-purple-400 dark:border-purple-700"
+                                      onClick={() => onRegistrarPermuta(group.id)}
+                                    >
+                                      Nova permuta
+                                    </Button>
+                                  )}
                                 {group.status && (
                                   <Badge
                                     variant="outline"
@@ -610,6 +655,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                     {group.status}
                                   </Badge>
                                 )}
+                                </div>
                               </div>
 
                               {grpPendente > 0 && (
@@ -621,6 +667,20 @@ export const AlunoDetailSheet = (props: Props) => {
                               <div className="space-y-1.5">
                                 {rowItems.map((item, idx) => {
                                   const p = item.data;
+                                  const isPermuta = p.forma_pagamento === "permuta";
+
+                                  if (isPermuta) {
+                                    return (
+                                      <div key={p.id}>
+                                        <PermutaStatusCard
+                                          pagamento={p}
+                                          itens={permutaItens[p.id] ?? []}
+                                          onRefresh={handleRefreshPermuta}
+                                        />
+                                      </div>
+                                    );
+                                  }
+
                                   const valorTaxaMaquina = getValorTaxaMaquina(p);
                                   const isVencido = p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje);
 
@@ -898,7 +958,7 @@ export const AlunoDetailSheet = (props: Props) => {
                           Nenhuma forma cadastrada
                         </SelectItem>
                       ) : (
-                        formasPagamento.map((forma) => (
+                        formasPagamento.filter((f) => f.codigo !== "permuta").map((forma) => (
                           <SelectItem key={forma.id} value={forma.codigo}>
                             {forma.nome}
                           </SelectItem>
@@ -1230,7 +1290,7 @@ export const AlunoDetailSheet = (props: Props) => {
                     {formasPagamento.length === 0 ? (
                       <SelectItem value="nenhuma_forma_pagamento" disabled>Nenhuma forma cadastrada</SelectItem>
                     ) : (
-                      formasPagamento.map((forma) => (
+                      formasPagamento.filter((f) => f.codigo !== "permuta").map((forma) => (
                         <SelectItem key={forma.id} value={forma.codigo}>{forma.nome}</SelectItem>
                       ))
                     )}
@@ -1382,7 +1442,21 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Forma de pagamento</Label>
-                <Select value={novoPagForm.forma_pagamento} onValueChange={(v) => setNovoPagForm((p: any) => ({ ...p, forma_pagamento: v, repassar_taxa: false, taxa_valor: "" }))}>
+                <Select
+                  value={novoPagForm.forma_pagamento}
+                  onValueChange={(v) => {
+                    setNovoPagForm((p: any) => ({ ...p, forma_pagamento: v, repassar_taxa: false, taxa_valor: "" }));
+                    if (v === "permuta") {
+                      if (!novoPagForm.matricula_id) {
+                        toast.error("Selecione uma matrícula antes de registrar permuta.");
+                        setNovoPagForm((p: any) => ({ ...p, forma_pagamento: "" }));
+                        return;
+                      }
+                      setNovoPagamentoDialog(false);
+                      onRegistrarPermuta(novoPagForm.matricula_id);
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -1469,7 +1543,22 @@ export const AlunoDetailSheet = (props: Props) => {
               </div>
             </div>
 
-            <Button className="w-full" onClick={onSaveNovoPagamento} disabled={insertPagamentoIsPending}>
+            <Button
+              className="w-full"
+              onClick={() => {
+                if (novoPagForm.forma_pagamento === "permuta") {
+                  if (!novoPagForm.matricula_id) {
+                    toast.error("Selecione uma matrícula antes de registrar permuta.");
+                    return;
+                  }
+                  setNovoPagamentoDialog(false);
+                  onRegistrarPermuta(novoPagForm.matricula_id);
+                  return;
+                }
+                onSaveNovoPagamento();
+              }}
+              disabled={insertPagamentoIsPending}
+            >
               {insertPagamentoIsPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Lançar Pagamento
             </Button>

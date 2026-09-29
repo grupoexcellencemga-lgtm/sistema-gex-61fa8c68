@@ -2,7 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 
-vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [{ tipo: "maquininha", nome: "Crédito 1x", percentual: 3 }] }) }));
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: [{ tipo: "maquininha", nome: "Crédito 1x", percentual: 3 }] }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@/components/ActivityTimeline", () => ({ ActivityTimeline: () => null }));
 vi.mock("@/components/WhatsAppDialog", () => ({ WhatsAppDialog: () => null, WhatsAppHistory: () => null }));
@@ -10,8 +13,16 @@ vi.mock("@/components/tarefas/TarefasContextSection", () => ({ TarefasContextSec
 vi.mock("@/lib/pdfUtils", () => ({ gerarReciboPagamento: vi.fn() }));
 vi.mock("@/hooks/useAlunoLabel", () => ({ useAlunoLabel: () => ({ singular: "Aluno", lower: "aluno" }) }));
 vi.mock("@/hooks/useFormasPagamento", () => ({
-  useFormasPagamento: () => ({ data: [{ codigo: "pix", nome: "PIX" }, { codigo: "credito", nome: "Crédito", tipo: "credito" }] }),
-  getFormaPagamentoLabel: (v: string) => v === "credito" ? "Crédito" : v === "pix" ? "PIX" : "—",
+  useFormasPagamento: () => ({ data: [
+    { id: "f1", codigo: "pix", nome: "PIX", tipo: "pix" },
+    { id: "f2", codigo: "credito", nome: "Crédito", tipo: "credito" },
+    { id: "f3", codigo: "permuta", nome: "Permuta", tipo: "permuta" },
+  ]}),
+  getFormaPagamentoLabel: (v: string) => v === "credito" ? "Crédito" : v === "pix" ? "PIX" : v === "permuta" ? "Permuta" : "—",
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 const pendente = { id: "saldo", matricula_id: "mat", status: "pendente", valor: 1173, forma_pagamento: "pix", data_vencimento: "2026-08-20" };
@@ -31,6 +42,7 @@ function props() {
     parcelasDetailOpen: false, setParcelasDetailOpen: vi.fn(), selectedParcelas: [], setSelectedParcelas: vi.fn(),
     editPagamentoDialog: false, setEditPagamentoDialog: vi.fn(), editPagForm: {}, setEditPagForm: vi.fn(), onSavePagamento: vi.fn(), updatePagamentoIsPending: false,
     novoPagamentoDialog: false, setNovoPagamentoDialog: vi.fn(), novoPagForm: {}, setNovoPagForm: vi.fn(), onSaveNovoPagamento: vi.fn(), insertPagamentoIsPending: false,
+    permutaItens: {}, onRegistrarPermuta: vi.fn(),
   };
 }
 afterEach(cleanup);
@@ -59,7 +71,7 @@ describe("financeiro do aluno na tela", () => {
     const saldo = screen.getByText(/Saldo pendente:/);
     const historico = screen.getByText("Pagamentos realizados");
     expect(saldo.compareDocumentPosition(historico) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText("Pago pelo aluno").nextSibling?.textContent).toMatch(/797,00/);
+    expect(screen.getByText("Pago dinheiro").nextSibling?.textContent).toMatch(/797,00/);
     expect(screen.getByText(/Total da matrícula:/)).toHaveTextContent("1.970,00");
     expect(screen.getByText(/Crédito · Parcelas não informadas · Pago em/)).toBeInTheDocument();
     expect(screen.getByText(/PIX · Pago em/)).toBeInTheDocument();
@@ -99,5 +111,65 @@ describe("financeiro do aluno na tela", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
     await waitFor(() => expect(p.onConfirmPagamento).toHaveBeenCalled());
     expect(screen.getByLabelText("Valor recebido agora (R$)")).toHaveValue(600);
+  });
+});
+
+// ─── Permuta routing ──────────────────────────────────────────────────────────
+// Radix Dialog só monta o portal após uma transição de estado React — não quando
+// o prop `open` já inicia em true. O wrapper abaixo simula como Alunos.tsx
+// gerencia o novoPagamentoDialog: usando estado real + onNewPagamento que abre.
+
+import { useState as useStateWrapper } from "react";
+
+function NovoPagWrapper({ novoPagForm: initialForm, onRegistrarPermuta: onRegPermuta, onSaveNovoPagamento: onSaveNovoPag }: {
+  novoPagForm: any;
+  onRegistrarPermuta: (id: string) => void;
+  onSaveNovoPagamento: () => void;
+}) {
+  const [dlgOpen, setDlgOpen] = useStateWrapper(false);
+  const p = {
+    ...props(),
+    pagamentos: [], // sem pendências → Novo Pagamento abre o dialog avulso
+    novoPagamentoDialog: dlgOpen,
+    setNovoPagamentoDialog: setDlgOpen,
+    novoPagForm: initialForm,
+    setNovoPagForm: vi.fn(),
+    onNewPagamento: () => setDlgOpen(true),
+    onSaveNovoPagamento: onSaveNovoPag,
+    onRegistrarPermuta: onRegPermuta,
+  };
+  return <AlunoDetailSheet {...p} />;
+}
+
+describe("permuta routing — Fase 3 UI", () => {
+  // T1: safety-net no botão — forma=permuta com matricula_id chama onRegistrarPermuta, NÃO onSaveNovoPagamento
+  it("T1 Lançar Pagamento com forma=permuta redireciona para onRegistrarPermuta (safety-net)", async () => {
+    const onReg = vi.fn();
+    const onSave = vi.fn();
+    render(<NovoPagWrapper novoPagForm={{ forma_pagamento: "permuta", matricula_id: "mat" }} onRegistrarPermuta={onReg} onSaveNovoPagamento={onSave} />);
+    fireEvent.click(screen.getByRole("button", { name: "Novo Pagamento" }));
+    const btn = await screen.findByRole("button", { name: /Lançar Pagamento/i });
+    fireEvent.click(btn);
+    expect(onReg).toHaveBeenCalledWith("mat");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  // T3: PIX continua funcionando normalmente — Lançar Pagamento com forma=pix chama onSaveNovoPagamento
+  it("T3 Lançar Pagamento com forma=pix chama onSaveNovoPagamento (regressão PIX)", async () => {
+    const onReg = vi.fn();
+    const onSave = vi.fn();
+    render(<NovoPagWrapper novoPagForm={{ forma_pagamento: "pix", valor: "500" }} onRegistrarPermuta={onReg} onSaveNovoPagamento={onSave} />);
+    fireEvent.click(screen.getByRole("button", { name: "Novo Pagamento" }));
+    const btn = await screen.findByRole("button", { name: /Lançar Pagamento/i });
+    fireEvent.click(btn);
+    expect(onSave).toHaveBeenCalled();
+    expect(onReg).not.toHaveBeenCalled();
+  });
+
+  // T4: "Permuta" NÃO aparece como opção no confirm dialog
+  it("T4 confirmPagamentoDialog não expõe 'Permuta' como opção", () => {
+    render(<AlunoDetailSheet {...props()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar pagamento" }));
+    expect(screen.queryByRole("option", { name: "Permuta" })).toBeNull();
   });
 });

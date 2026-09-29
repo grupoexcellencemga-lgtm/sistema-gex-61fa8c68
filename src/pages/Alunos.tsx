@@ -21,7 +21,9 @@ import { AlunoFormDialog } from "@/components/alunos/AlunoFormDialog";
 import { MatriculaFormDialog } from "@/components/alunos/MatriculaFormDialog";
 import { AlunoDetailSheet } from "@/components/alunos/AlunoDetailSheet";
 import { AlunoImport } from "@/components/alunos/AlunoImport";
+import { PermutaModal } from "@/components/alunos/PermutaModal";
 import { useAlunoLabel } from "@/hooks/useAlunoLabel";
+import { usePermutaItens } from "@/hooks/usePermutaItens";
 import { calcularPagamentoParcial, calcularPagamentoComTaxa, temTaxaSeparada } from "@/lib/alunoFinanceiro";
 
 const Alunos = () => {
@@ -66,6 +68,9 @@ const Alunos = () => {
     taxa_valor: "",
     taxa_absorvida_por: "" as "" | "empresa" | "aluno",
   });
+
+  const [permutaModalOpen, setPermutaModalOpen] = useState(false);
+  const [permutaModalMatriculaId, setPermutaModalMatriculaId] = useState("");
 
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -275,6 +280,8 @@ const Alunos = () => {
     },
     enabled: !!selectedAluno && !!empresaId,
   });
+
+  const permutaItens = usePermutaItens(pagamentos);
 
   // ── Mutations ──
   const insertMutation = useMutation({
@@ -1857,9 +1864,43 @@ const Alunos = () => {
         setNovoPagamentoDialog={setNovoPagamentoDialog}
         novoPagForm={novoPagForm}
         setNovoPagForm={setNovoPagForm}
-        onSaveNovoPagamento={() => insertPagamento.mutate()}
+        onSaveNovoPagamento={() => {
+          if (novoPagForm.forma_pagamento === "permuta") {
+            if (!novoPagForm.matricula_id) {
+              toast.error("Selecione uma matrícula para registrar permuta.");
+              return;
+            }
+            setNovoPagamentoDialog(false);
+            setPermutaModalMatriculaId(novoPagForm.matricula_id);
+            setPermutaModalOpen(true);
+          } else {
+            insertPagamento.mutate();
+          }
+        }}
         insertPagamentoIsPending={insertPagamento.isPending}
+        permutaItens={permutaItens}
+        onRegistrarPermuta={(matriculaId) => {
+          setPermutaModalMatriculaId(matriculaId);
+          setPermutaModalOpen(true);
+        }}
       />
+
+      {selectedAluno && (
+        <PermutaModal
+          open={permutaModalOpen}
+          onOpenChange={setPermutaModalOpen}
+          matriculaId={permutaModalMatriculaId}
+          matriculaValorFinal={
+            Number(matriculas.find((m: any) => m.id === permutaModalMatriculaId)?.valor_final || 0)
+          }
+          pagamentosMatricula={pagamentos.filter((p: any) => p.matricula_id === permutaModalMatriculaId)}
+          permutaItens={permutaItens}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["pagamentos-aluno", selectedAluno.id] });
+            queryClient.invalidateQueries({ queryKey: ["permuta-itens"] });
+          }}
+        />
+      )}
 
       <AlunoImport
         importDialogOpen={importDialogOpen}
