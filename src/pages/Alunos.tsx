@@ -1815,6 +1815,9 @@ const Alunos = () => {
             parcelas_cartao: "",
             taxa_cartao: "",
             repassar_taxa: false,
+            modalidade_cobranca: "ja_pago",
+            taxa_valor: "",
+            taxa_absorvida_por: "",
           });
           setNovoPagamentoDialog(true);
         }}
