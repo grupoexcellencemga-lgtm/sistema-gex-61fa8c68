@@ -364,14 +364,29 @@ export const AlunoDetailSheet = (props: Props) => {
     else onNewPagamento();
   };
 
-  const totalVencido = pagamentos
-    .filter((p: any) => p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje))
-    .reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
+  // Vencido real: usa resumirMatriculaV2 para descontar permutas entregues do total vencido
+  const totalVencido = useMemo(() => {
+    let vencido = 0;
+    for (const m of matriculas) {
+      const mPags = pagamentos.filter((p: any) => p.matricula_id === m.id);
+      const hasVencido = mPags.some(
+        (p: any) =>
+          p.forma_pagamento !== "permuta" &&
+          (p.status === "vencido" ||
+            (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje)),
+      );
+      if (hasVencido) {
+        const r = resumirMatriculaV2(Number(m.valor_final || 0), mPags, permutaItens);
+        vencido += r.saldoFinanceiro;
+      }
+    }
+    return vencido;
+  }, [matriculas, pagamentos, permutaItens, hoje]);
 
-  // Soma real de todos os pagamentos vinculados a cada matrícula
+  // Soma de pagamentos não-permuta vinculados à matrícula (permutas são créditos, não obrigações)
   const totalPorMatricula = (matriculaId: string) =>
     pagamentos
-      .filter((p: any) => p.matricula_id === matriculaId)
+      .filter((p: any) => p.matricula_id === matriculaId && p.forma_pagamento !== "permuta")
       .reduce((s: number, p: any) => s + Number(p.valor), 0);
 
   return (

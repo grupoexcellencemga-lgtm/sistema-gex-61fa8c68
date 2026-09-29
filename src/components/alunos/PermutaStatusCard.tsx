@@ -239,6 +239,15 @@ export function PermutaStatusCard({ pagamento, itens, onRefresh }: Props) {
               Permuta
             </Badge>
             <span className="font-medium">{formatCurrency(Number(pagamento.valor))}</span>
+            {pagamento.created_at && (
+              <span className="text-xs text-muted-foreground">
+                {new Date(pagamento.created_at).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <Badge
