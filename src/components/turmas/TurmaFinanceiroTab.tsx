@@ -133,8 +133,9 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     type AlunoEntry = {
       alunoId: string;
       nome: string;
-      pago: number;        // caixa: líquido recebido no banco
-      pagoEfetivo: number; // obrigação: pago + taxa absorvida pela empresa
+      pago: number;           // caixa: líquido dinheiro recebido no banco
+      pagoEfetivo: number;    // obrigação total quitada: dinheiro + permuta + probono
+      quitadoPermuta: number; // permuta entregue
       pendente: number;
       vencido: number;
       contratado: number;
@@ -159,6 +160,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       const pago = resumo.quitadoDinheiro;
       // obrigação quitada: dinheiro + permuta entregue
       const pagoEfetivo = resumo.totalQuitado;
+      const quitadoPermuta = resumo.quitadoPermuta;
 
       const pendente = pgtos
         .filter((p: any) => p.status === "pendente")
@@ -190,6 +192,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       if (atual) {
         atual.pago += pago;
         atual.pagoEfetivo += pagoEfetivo;
+        atual.quitadoPermuta += quitadoPermuta;
         atual.pendente += pendente;
         atual.vencido += vencido;
         atual.contratado += contratado;
@@ -207,6 +210,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
           nome: m.alunos?.nome || "—",
           pago,
           pagoEfetivo,
+          quitadoPermuta,
           pendente,
           vencido,
           contratado,
@@ -301,10 +305,11 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         dados.alunoEntries.length
           ? dados.alunoEntries.map((a) => ({
               Aluno: a.nome,
-              "Conta/Banco": a.conta,
               "Contratado": a.contratado,
-              "Recebido": a.pago,
-              "Pendente": a.pendente,
+              "Pago dinheiro": a.pago,
+              "Pago permuta": a.quitadoPermuta,
+              "Total quitado": a.pagoEfetivo,
+              "Pendente (a receber)": a.aReceber,
               "Vencido": a.vencido,
               "Situação": a.situacao,
             }))
@@ -391,11 +396,11 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Aluno</TableHead>
-                <TableHead>Conta / Banco</TableHead>
                 <TableHead className="text-right">Contratado</TableHead>
-                <TableHead className="text-right">Recebido</TableHead>
-                <TableHead className="text-right">Taxa</TableHead>
-                <TableHead className="text-right">A receber</TableHead>
+                <TableHead className="text-right">Pago dinheiro</TableHead>
+                <TableHead className="text-right">Pago permuta</TableHead>
+                <TableHead className="text-right">Total quitado</TableHead>
+                <TableHead className="text-right">Pendente</TableHead>
                 <TableHead className="text-center">Situação</TableHead>
               </TableRow>
               <TableRow className="hover:bg-transparent border-b border-border/50">
@@ -414,20 +419,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                     )}
                   </div>
                 </TableHead>
-                <TableHead className="py-1.5">
-                  {contasUnicas.length > 0 ? (
-                    <select
-                      value={filtroContas[0] || ""}
-                      onChange={(e) => setFiltroContas(e.target.value ? [e.target.value] : [])}
-                      className="h-7 w-full text-xs rounded-md border border-input bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="">Todas as contas</option>
-                      {contasUnicas.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  ) : null}
-                </TableHead>
+                <TableHead />
                 <TableHead />
                 <TableHead />
                 <TableHead />
@@ -475,28 +467,15 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
                       {a.nome}
                     </button>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{a.conta}</TableCell>
                   <TableCell className="text-sm text-right text-muted-foreground">{formatCurrency(a.contratado)}</TableCell>
                   <TableCell className="text-sm text-right font-medium text-emerald-600">
                     {a.pago > 0 ? formatCurrency(a.pago) : "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-right">
-                    {(a.taxaEmpresa > 0 || a.taxaAluno > 0) ? (
-                      <div className="flex flex-col items-end gap-0.5">
-                        {a.taxaEmpresa > 0 && (
-                          <span className="text-xs font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">
-                            -{formatCurrency(a.taxaEmpresa)} Empresa
-                          </span>
-                        )}
-                        {a.taxaAluno > 0 && (
-                          <span className="text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-900/20 px-1.5 py-0.5 rounded">
-                            {formatCurrency(a.taxaAluno)} Aluno
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                  <TableCell className="text-sm text-right font-medium text-violet-600">
+                    {a.quitadoPermuta > 0 ? formatCurrency(a.quitadoPermuta) : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-right font-semibold text-emerald-700">
+                    {a.pagoEfetivo > 0 ? formatCurrency(a.pagoEfetivo) : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-right text-amber-600">
                     {a.aReceber > 0 ? formatCurrency(a.aReceber) : "—"}
