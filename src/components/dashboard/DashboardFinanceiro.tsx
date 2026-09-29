@@ -23,7 +23,7 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
   const { data: receitaMes = 0, isLoading } = useQuery({
     queryKey: ["dash-fin-receita", mes, ano, empresaId],
     queryFn: async () => {
-      const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
+      const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").eq("gera_caixa", true).or("forma_pagamento.not.in.(permuta,probono),forma_pagamento.is.null").is("deleted_at", null).gte("data_pagamento", startStr).lte("data_pagamento", endStr);
       const { data: rec } = await supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", startStr).lte("data", endStr);
       const totalPag = (pag || []).reduce((s, p) => s + Number(p.valor_pago || p.valor), 0);
       const totalRec = (rec || []).reduce((s, r) => s + Number(r.valor), 0);
@@ -69,7 +69,7 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
         const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
         const label = d.toLocaleDateString("pt-BR", { month: "short" });
 
-        const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd);
+        const { data: pag } = await supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").eq("gera_caixa", true).or("forma_pagamento.not.in.(permuta,probono),forma_pagamento.is.null").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd);
         const { data: rec } = await supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
         const { data: desp } = await supabase.from("despesas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd);
 
@@ -97,7 +97,7 @@ export function DashboardFinanceiro({ mes, ano }: Props) {
           continue;
         }
         const [{ data: pag }, { data: rec }, { data: desp }] = await Promise.all([
-          supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd),
+          supabase.from("pagamentos").select("valor, valor_pago").eq("empresa_id", empresaId!).eq("status", "pago").eq("gera_caixa", true).or("forma_pagamento.not.in.(permuta,probono),forma_pagamento.is.null").is("deleted_at", null).gte("data_pagamento", mStart).lte("data_pagamento", mEnd),
           supabase.from("receitas_avulsas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
           supabase.from("despesas").select("valor").eq("empresa_id", empresaId!).is("deleted_at", null).gte("data", mStart).lte("data", mEnd),
         ]);

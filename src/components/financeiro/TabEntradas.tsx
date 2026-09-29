@@ -383,9 +383,11 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   );
 
   const inMonth = (d: string | null | undefined) => isInMonth(d, mes, ano);
+  const isMonetario = (p: any) => p.forma_pagamento !== "permuta" && p.forma_pagamento !== "probono";
 
   const filtered = pagamentos
     .filter((p: any) => inMonth(p.data_pagamento) || inMonth(p.data_vencimento))
+    .filter(isMonetario)
     .filter((p: any) => {
       const match = (val: string, filter: string) =>
         !filter.trim() || val.toLowerCase().includes(filter.toLowerCase());
@@ -408,7 +410,10 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const pagamentosProcessoMes = pagamentosProcesso.filter((p: any) => inMonth(p.data));
   const pagamentosProcessoEmpresarialMes = pagamentosProcessoEmpresarial.filter((p: any) => inMonth(p.data));
 
-  const totalPago = pagMes
+  const pagMonetarioMes = pagMes.filter(isMonetario);
+  const pagPermutaMes = pagMes.filter((p: any) => p.forma_pagamento === "permuta");
+
+  const totalPago = pagMonetarioMes
     .filter((p: any) => p.status === "pago" || Number(p.valor_pago || 0) > 0)
     .reduce((s: number, p: any) => s + getValorPagoEntrada(p), 0);
 
@@ -429,7 +434,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
   const totalEventos = participantesEventosMes.reduce((s: number, p: any) => s + Number(p.valor || 0), 0);
 
   const totalGeral =
-    pagMes.reduce((s: number, p: any) => s + getValorPagoEntrada(p), 0) +
+    pagMonetarioMes.reduce((s: number, p: any) => s + getValorPagoEntrada(p), 0) +
     totalAvulsas +
     totalProcessos +
     totalProcessosEmpresariais +
@@ -1224,6 +1229,43 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
           <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={20} onPageChange={setPage} />
         </CardContent>
       </Card>
+
+      {/* PERMUTAS — informativo, não compõe caixa */}
+      {pagPermutaMes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Receipt className="h-4 w-4" /> Permutas (Informativo — não entram no caixa)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Aluno</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Valor Acordado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagPermutaMes.map((p: any) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium text-sm">{p.alunos?.nome || "—"}</TableCell>
+                    <TableCell className="text-sm">{p.produtos?.nome || "—"}</TableCell>
+                    <TableCell className="text-sm">{formatDate(p.data_vencimento)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{p.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-right text-muted-foreground">{formatCurrency(Number(p.valor || 0))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

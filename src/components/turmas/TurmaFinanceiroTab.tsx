@@ -12,7 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import * as XLSX from "xlsx";
 import { useEmpresa } from "@/contexts/EmpresaContext";
-import { valorPagoAluno } from "@/lib/alunoFinanceiro";
+import { valorPagoAluno, resumirMatriculaV2, PermutaItem } from "@/lib/alunoFinanceiro";
 
 const getValorPago = (p: any) => {
   const pago = p.valor_pago !== null && p.valor_pago !== undefined ? Number(p.valor_pago) : 0;
@@ -85,6 +85,35 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
     },
   });
 
+  const permutaPagIds = useMemo(
+    () => (pagamentos as any[]).filter((p) => p.forma_pagamento === "permuta").map((p) => p.id).filter(Boolean),
+    [pagamentos]
+  );
+
+  const { data: permutaItens = [] } = useQuery<PermutaItem[]>({
+    queryKey: ["turma-fin-permuta-itens", turma.id, permutaPagIds.join(",")],
+    enabled: permutaPagIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("permuta_itens")
+        .select("id, pagamento_id, valor, status, deleted_at")
+        .in("pagamento_id", permutaPagIds as string[])
+        .is("deleted_at", null);
+      if (error) throw error;
+      return (data || []) as PermutaItem[];
+    },
+  });
+
+  const itensPorPagamento = useMemo(() => {
+    const map: Record<string, PermutaItem[]> = {};
+    permutaItens.forEach((item) => {
+      const pid = item.pagamento_id ?? "";
+      if (!map[pid]) map[pid] = [];
+      map[pid].push(item);
+    });
+    return map;
+  }, [permutaItens]);
+
   const { data: despesas = [], isLoading: loadingDesp } = useQuery({
     queryKey: ["turma-fin-despesas", turma.id, empresaId],
     queryFn: async () => {
@@ -124,21 +153,12 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       const pgtos = pagamentos.filter((p: any) => p.matricula_id === m.id);
       const contratado = Number(m.valor_final || 0);
 
-      // Caixa: líquido que entrou no banco.
-      // Quando valor_pago está preenchido já é o líquido (taxa debitada antes do depósito).
-      // Quando não está (registros antigos), calcula: valor - taxa_empresa.
-      const pago = pgtos
-        .filter((p: any) => p.status === "pago")
-        .reduce((s: number, p: any) => {
-          if (p.taxa_absorvida_por === "empresa") {
-            if (p.valor_pago != null) return s + Number(p.valor_pago);
-            return s + Number(p.valor || 0) - Number(p.taxa_valor || 0);
-          }
-          return s + getValorPago(p);
-        }, 0);
+      const resumo = resumirMatriculaV2(contratado, pgtos, itensPorPagamento);
 
-      // Obrigação do aluno: valor bruto pago, taxa da empresa não é dívida do aluno.
-      const pagoEfetivo = pgtos.reduce((s: number, p: any) => s + valorPagoAluno(p), 0);
+      // caixa: dinheiro real recebido (sem permuta/probono)
+      const pago = resumo.quitadoDinheiro;
+      // obrigação quitada: dinheiro + permuta entregue
+      const pagoEfetivo = resumo.totalQuitado;
 
       const pendente = pgtos
         .filter((p: any) => p.status === "pendente")
@@ -181,7 +201,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
         }
         atual.situacao = getSituacao(atual.pagoEfetivo, atual.pendente, atual.vencido, atual.contratado);
       } else {
-        const aReceber = semNoise(Math.max(0, contratado - pagoEfetivo));
+        const aReceber = semNoise(resumo.saldoFinanceiro);
         porAluno.set(chave, {
           alunoId: m.aluno_id,
           nome: m.alunos?.nome || "—",
@@ -223,7 +243,7 @@ export function TurmaFinanceiroTab({ turma }: { turma: any }) {
       totalDespesas,
       liquido,
     };
-  }, [matriculas, pagamentos, despesas]);
+  }, [matriculas, pagamentos, despesas, itensPorPagamento]);
 
   const isLoading = loadingMat || loadingPag || loadingDesp;
 

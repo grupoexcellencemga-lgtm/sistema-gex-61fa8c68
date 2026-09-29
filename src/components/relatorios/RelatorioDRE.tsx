@@ -172,7 +172,10 @@ export function RelatorioDRE() {
     });
 
     // 1. RECEITA BRUTA
-    const receitaPagamentos = filteredPag.reduce((s: number, p: any) => s + Number(p.valor_pago || p.valor || 0), 0);
+    const filteredPagMonetario = filteredPag.filter(
+      (p: any) => p.forma_pagamento !== "permuta" && p.forma_pagamento !== "probono"
+    );
+    const receitaPagamentos = filteredPagMonetario.reduce((s: number, p: any) => s + Number(p.valor_pago || p.valor || 0), 0);
     const receitaEventos = filteredPart.reduce((s: number, pe: any) => s + Number(pe.valor || 0), 0);
     const receitaAvulsas = filteredRA.reduce((s: number, r: any) => s + Number(r.valor || 0), 0);
     const receitaBruta = receitaPagamentos + receitaEventos + receitaAvulsas;
