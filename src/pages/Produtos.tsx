@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -137,11 +138,11 @@ const Produtos = () => {
                 </Select>
               </div>
               <div><Label>Duração</Label><Input value={form.duracao} onChange={(e) => u("duracao", e.target.value)} placeholder="Ex: 6 meses" /></div>
-              <div><Label>Valor à vista (R$)</Label><Input type="number" step="0.01" value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" /></div>
+              <div><Label>Valor à vista (R$)</Label><CurrencyInput value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Parcelas no cartão</Label><Input type="number" value={form.parcelas_cartao} onChange={(e) => u("parcelas_cartao", e.target.value)} placeholder="12" /></div>
-              <div><Label>Valor da parcela (R$)</Label><Input type="number" step="0.01" value={form.valor_parcela} onChange={(e) => u("valor_parcela", e.target.value)} placeholder="Ex: 99.70" /></div>
+              <div><Label>Valor da parcela (R$)</Label><CurrencyInput value={form.valor_parcela} onChange={(e) => u("valor_parcela", e.target.value)} placeholder="Ex: 99,70" /></div>
             </div>
             <div><Label>Responsável</Label>
               <Select value={form.responsavel} onValueChange={(v) => u("responsavel", v)}>

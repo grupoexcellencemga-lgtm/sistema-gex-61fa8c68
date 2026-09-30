@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,7 +105,7 @@ export const AvulsaFormDialog = ({ editingAvulsa, contas, categoriasReceita, onS
           </div>
           <div>
             <Label>Valor (R$) *</Label>
-            <Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} required />
+            <CurrencyInput value={valor} onChange={(e) => setValor(e.target.value)} required />
           </div>
           <div>
             <Label>Data *</Label>

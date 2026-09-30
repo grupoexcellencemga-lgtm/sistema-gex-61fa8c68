@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/core";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -401,7 +402,7 @@ function LeadFormDialog({
             )}
             <div className="space-y-1">
               <Label>Valor de crédito (R$)</Label>
-              <Input value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="Ex.: 250000" type="number" min={0} />
+              <CurrencyInput value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} placeholder="250.000,00" />
             </div>
             <div className="space-y-1">
               <Label>Prazo (meses)</Label>
@@ -904,7 +905,7 @@ function LeadDetailDialog({
                   )}
                   <div className="space-y-1">
                     <Label className="text-xs">Valor crédito (R$)</Label>
-                    <input className="w-full border rounded-md px-3 py-2 text-sm bg-background" type="number" min={0} value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} />
+                    <CurrencyInput className="w-full" value={form.valor_credito} onChange={(e) => set("valor_credito", e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Prazo (meses)</Label>

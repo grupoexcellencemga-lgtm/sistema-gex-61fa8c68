@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -649,26 +650,10 @@ export const TabComissoes = ({ mes, ano }: { mes: number; ano: number }) => {
                                                                 <Label className="text-xs">
                                                                   Valor (R$)
                                                                 </Label>
-                                                                <Input
+                                                                <CurrencyInput
                                                                   className="h-8 text-xs"
-                                                                  type="number"
-                                                                  step="0.01"
-                                                                  value={
-                                                                    pgForm.valor
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    setPgForm(
-                                                                      (f) => ({
-                                                                        ...f,
-                                                                        valor:
-                                                                          e
-                                                                            .target
-                                                                            .value,
-                                                                      })
-                                                                    )
-                                                                  }
+                                                                  value={pgForm.valor}
+                                                                  onChange={(e) => setPgForm((f) => ({ ...f, valor: e.target.value }))}
                                                                 />
                                                               </div>
 

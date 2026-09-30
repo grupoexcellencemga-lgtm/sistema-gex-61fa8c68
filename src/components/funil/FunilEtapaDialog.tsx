@@ -7,6 +7,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -108,13 +109,11 @@ export function FunilEtapaDialog({ open, onClose, onSave, initialData }: Props) 
 
           <div>
             <Label>Meta de valor (R$)</Label>
-            <Input
+            <CurrencyInput
               value={metaValor}
               onChange={(e) => setMetaValor(e.target.value)}
-              placeholder="Ex: 50000 (opcional)"
+              placeholder="50.000,00 (opcional)"
               className="mt-1"
-              type="number"
-              min={0}
             />
             <p className="text-[11px] text-muted-foreground mt-1">
               Quando definida, a coluna mostra uma barra de progresso em relação ao total de valor dos leads.

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1015,7 +1016,7 @@ export const TabFechamento = () => {
                     </div>
                     <div>
                       <Label>Saldo Inicial</Label>
-                      <Input name="saldo_inicial" type="number" step="0.01" defaultValue={editingConta?.saldo_inicial || "0"} />
+                      <CurrencyInput name="saldo_inicial" defaultValue={editingConta?.saldo_inicial || "0"} />
                     </div>
                     {editingConta && (
                       <div className="col-span-2">
@@ -1446,7 +1447,7 @@ export const TabFechamento = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Valor (R$) *</Label>
-                <Input name="valor" type="number" step="0.01" min="0.01" required />
+                <CurrencyInput name="valor" required />
               </div>
               <div>
                 <Label>Data *</Label>

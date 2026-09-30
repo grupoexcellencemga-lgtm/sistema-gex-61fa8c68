@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -702,14 +703,9 @@ export const TabProfissionais = ({ mes, ano }: { mes: number; ano: number }) => 
                                         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                                           <div className="space-y-1">
                                             <Label className="text-xs">Valor (R$)</Label>
-                                            <Input
+                                            <CurrencyInput
                                               value={pgForm.valor}
-                                              onChange={(e) =>
-                                                setPgForm((f) => ({
-                                                  ...f,
-                                                  valor: formatCurrencyInput(e.target.value),
-                                                }))
-                                              }
+                                              onChange={(e) => setPgForm((f) => ({ ...f, valor: e.target.value }))}
                                               placeholder="0,00"
                                             />
                                           </div>

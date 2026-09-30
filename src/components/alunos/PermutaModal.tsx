@@ -3,6 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -151,7 +152,7 @@ export function PermutaModal({
             </div>
             <div className="space-y-2">
               <Label htmlFor="permuta-valor">Valor total da permuta (R$)</Label>
-              <Input
+              <CurrencyInput
                 id="permuta-valor"
                 data-testid="permuta-valor-input"
                 placeholder="0,00"
@@ -205,7 +206,7 @@ export function PermutaModal({
                     value={item.descricao}
                     onChange={(e) => updateItem(idx, { descricao: e.target.value })}
                   />
-                  <Input
+                  <CurrencyInput
                     className="h-8 text-xs"
                     placeholder="Valor R$"
                     data-testid={`item-valor-${idx}`}

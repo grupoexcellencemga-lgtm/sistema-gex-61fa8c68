@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -175,10 +176,7 @@ export function ParticipanteDetailDialog({
               </h3>
               <div className="space-y-2">
                 <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                <CurrencyInput
                   value={payForm.valor}
                   onChange={(e) =>
                     setPayForm((f: any) => ({ ...f, valor: e.target.value }))

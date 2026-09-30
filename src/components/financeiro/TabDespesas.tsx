@@ -10,6 +10,7 @@ import {
 } from "@/components/MetricDetailDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -546,10 +547,8 @@ export const TabDespesas = ({ mes, ano }: { mes: number; ano: number }) => {
 
                     <div>
                       <Label>Valor (R$) *</Label>
-                      <Input
+                      <CurrencyInput
                         name="valor"
-                        type="number"
-                        step="0.01"
                         required
                         defaultValue={editingDespesa?.valor || ""}
                       />

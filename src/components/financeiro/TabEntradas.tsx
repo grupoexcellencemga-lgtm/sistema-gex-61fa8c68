@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricDetailDialog, MetricDetailItem } from "@/components/MetricDetailDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -597,7 +598,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Valor (R$)</Label>
-                <Input name="valor" type="number" step="0.01" required defaultValue={editingPagamento?.valor || ""} />
+                <CurrencyInput name="valor" required defaultValue={editingPagamento?.valor || ""} />
               </div>
 
               <div>
@@ -690,7 +691,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
 
               <div>
                 <Label>Valor (R$)</Label>
-                <Input name="valor" type="number" step="0.01" required defaultValue={editingProcPag?.valor || ""} />
+                <CurrencyInput name="valor" required defaultValue={editingProcPag?.valor || ""} />
               </div>
 
               <div>
@@ -760,7 +761,7 @@ export const TabEntradas = ({ mes, ano }: { mes: number; ano: number }) => {
 
               <div>
                 <Label>Valor (R$)</Label>
-                <Input name="valor" type="number" step="0.01" required defaultValue={editingEvtPag?.valor || ""} />
+                <CurrencyInput name="valor" required defaultValue={editingEvtPag?.valor || ""} />
               </div>
 
               <div>

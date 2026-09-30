@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -518,7 +519,7 @@ export const MatriculaFormDialog = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Valor do Produto</Label>
-                <Input type="number" step="0.01" min="0"
+                <CurrencyInput
                   value={matriculaForm.valor_total}
                   onChange={(e) => setMatriculaForm((p: any) => ({
                     ...p,
@@ -530,7 +531,7 @@ export const MatriculaFormDialog = ({
               </div>
               <div>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Valor Contratado</Label>
-                <Input type="number" step="0.01"
+                <CurrencyInput
                   value={matriculaForm.valor_contratado}
                   onChange={(e) => setMatriculaForm((p) => ({ ...p, valor_contratado: e.target.value }))}
                   placeholder="Valor negociado" />
@@ -624,7 +625,7 @@ export const MatriculaFormDialog = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Taxa da operação (R$)</Label>
-                      <Input type="number" step="0.01"
+                      <CurrencyInput
                         value={matriculaForm.taxa_cartao}
                         onChange={(e) => setMatriculaForm((p: any) => ({ ...p, taxa_cartao: e.target.value }))}
                         placeholder="0,00 — opcional" />
@@ -669,7 +670,7 @@ export const MatriculaFormDialog = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Valor da entrada (R$)</Label>
-                      <Input type="number" step="0.01"
+                      <CurrencyInput
                         value={matriculaForm.entrada_valor}
                         onChange={(e) => setMatriculaForm((p: any) => ({ ...p, entrada_valor: e.target.value }))}
                         placeholder="0,00" />
@@ -729,7 +730,7 @@ export const MatriculaFormDialog = ({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Taxa da operação (R$)</Label>
-                        <Input type="number" step="0.01"
+                        <CurrencyInput
                           value={matriculaForm.entrada_taxa_valor}
                           onChange={(e) => setMatriculaForm((p: any) => ({ ...p, entrada_taxa_valor: e.target.value }))}
                           placeholder="0,00 — opcional" />
@@ -832,7 +833,7 @@ export const MatriculaFormDialog = ({
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <Label>Taxa da operação (R$)</Label>
-                              <Input type="number" step="0.01"
+                              <CurrencyInput
                                 value={matriculaForm.parcelas_taxa_cartao}
                                 onChange={(e) => setMatriculaForm((p: any) => ({ ...p, parcelas_taxa_cartao: e.target.value }))}
                                 placeholder="0,00 — opcional" />

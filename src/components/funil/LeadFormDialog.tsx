@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -113,12 +114,10 @@ export function LeadFormDialog({ open, onOpenChange, form, setForm, onSave, isPe
           </div>
           <div>
             <Label>Valor potencial (R$)</Label>
-            <Input
-              type="number"
-              min={0}
+            <CurrencyInput
               value={form.valor}
               onChange={(e) => u("valor", e.target.value)}
-              placeholder="Ex.: 5000"
+              placeholder="5.000,00"
             />
           </div>
           <div className="col-span-2">

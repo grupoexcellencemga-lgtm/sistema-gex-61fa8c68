@@ -6,6 +6,7 @@ import { isInMonth } from "@/components/MonthFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -2595,9 +2596,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Valor *</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={form.valor}
                   onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))}
                 />
@@ -2883,11 +2882,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label>{payingConta?.tipo === "receber" ? "Valor recebido *" : "Valor pago *"}</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max={String(saldoRestante || valorOriginal)}
+                    <CurrencyInput
                       value={payForm.valor}
                       onChange={(e) => setPayForm((f) => ({ ...f, valor: e.target.value }))}
                     />
@@ -2993,10 +2988,7 @@ export const TabContasPagarReceber = ({ mes, ano }: { mes: number; ano: number }
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Valor da taxa (R$)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                      <CurrencyInput
                         placeholder="0,00"
                         value={payForm.taxa_valor}
                         onChange={(e) => setPayForm((f) => ({ ...f, taxa_valor: e.target.value }))}

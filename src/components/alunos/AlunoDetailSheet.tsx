@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -925,12 +926,8 @@ export const AlunoDetailSheet = (props: Props) => {
 
               <div>
                 <Label htmlFor="valor-recebido">Valor recebido agora (R$)</Label>
-                <input
+                <CurrencyInput
                   id="valor-recebido"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={confirmPagamentoForm.valor_recebido}
                   onChange={(e) => setConfirmPagamentoForm((prev) => ({ ...prev, valor_recebido: e.target.value }))}
                 />
@@ -1053,11 +1050,8 @@ export const AlunoDetailSheet = (props: Props) => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="taxa-confirmacao">Taxa da operação (R$)</Label>
-                  <input
+                  <CurrencyInput
                     id="taxa-confirmacao"
-                    type="number"
-                    step="0.01"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     value={confirmPagamentoForm.taxa_valor}
                     onChange={(e) => setConfirmPagamentoForm((p) => ({ ...p, taxa_valor: e.target.value }))}
                     placeholder="0,00 — opcional"
@@ -1309,7 +1303,7 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" value={editPagForm.valor} onChange={(e) => setEditPagForm((p: any) => ({ ...p, valor: e.target.value }))} />
+                <CurrencyInput value={editPagForm.valor} onChange={(e) => setEditPagForm((p: any) => ({ ...p, valor: e.target.value }))} />
               </div>
               <div>
                 <Label>{editPagForm.status === "pago" ? "Data do pagamento" : "Data de vencimento"}</Label>
@@ -1365,9 +1359,7 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Taxa da operação (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={editPagForm.taxa_valor}
                   onChange={(e) => setEditPagForm((p: any) => ({ ...p, taxa_valor: e.target.value }))}
                   placeholder="0,00 — opcional"
@@ -1469,7 +1461,7 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" value={novoPagForm.valor} onChange={(e) => setNovoPagForm((p: any) => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
+                <CurrencyInput value={novoPagForm.valor} onChange={(e) => setNovoPagForm((p: any) => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
               </div>
               <div>
                 <Label>{novoPagForm.modalidade_cobranca === "a_pagar" ? "1º Vencimento" : "Data do pagamento"}</Label>
@@ -1542,9 +1534,7 @@ export const AlunoDetailSheet = (props: Props) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Taxa da operação (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={novoPagForm.taxa_valor}
                   onChange={(e) => setNovoPagForm((p: any) => ({ ...p, taxa_valor: e.target.value }))}
                   placeholder="0,00 — opcional"

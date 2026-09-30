@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -223,7 +224,7 @@ export function ProcessoEmpFormDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Valor Total do Processo (R$) *</Label>
-              <Input value={form.valor_total} onChange={(e) => setForm(f => ({ ...f, valor_total: formatCurrencyInput(e.target.value) }))} placeholder="0,00" />
+              <CurrencyInput value={form.valor_total} onChange={(e) => setForm(f => ({ ...f, valor_total: e.target.value }))} placeholder="0,00" />
             </div>
 
             <div className="space-y-2">
@@ -252,7 +253,7 @@ export function ProcessoEmpFormDialog({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Valor da Entrada (R$)</Label>
-                      <Input value={form.valor_entrada} onChange={(e) => setForm(f => ({ ...f, valor_entrada: formatCurrencyInput(e.target.value) }))} placeholder="0,00" />
+                      <CurrencyInput value={form.valor_entrada} onChange={(e) => setForm(f => ({ ...f, valor_entrada: e.target.value }))} placeholder="0,00" />
                     </div>
                     {renderPaymentFields()}
                   </div>

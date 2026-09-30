@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -295,12 +296,10 @@ export function LeadDetailSheet({ open, onOpenChange, lead, produtos, comerciais
                 </div>
                 <div>
                   <Label>Valor potencial (R$)</Label>
-                  <Input
-                    type="number"
-                    min={0}
+                  <CurrencyInput
                     value={editForm.valor}
                     onChange={(e) => u("valor", e.target.value)}
-                    placeholder="Ex.: 5000"
+                    placeholder="5.000,00"
                   />
                 </div>
                 <div>

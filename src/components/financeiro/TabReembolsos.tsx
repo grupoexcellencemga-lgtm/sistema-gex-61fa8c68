@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -744,10 +745,8 @@ export const TabReembolsos = ({ mes, ano }: { mes: number; ano: number }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Valor *</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
+                <CurrencyInput
+                  placeholder="0,00"
                   value={form.valor}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, valor: e.target.value }))

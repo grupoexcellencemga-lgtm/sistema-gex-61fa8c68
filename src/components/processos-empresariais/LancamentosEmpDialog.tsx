@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -204,7 +205,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Valor (R$)</Label>
-                  <Input value={novoValor} onChange={(e) => setNovoValor(formatCurrencyInput(e.target.value))} placeholder="0,00" />
+                  <CurrencyInput value={novoValor} onChange={(e) => setNovoValor(e.target.value)} placeholder="0,00" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Data do pagamento</Label>
@@ -276,7 +277,7 @@ export const LancamentosEmpDialog = ({ processo, contas }: { processo: any; cont
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Valor (R$)</Label>
-                    <Input value={editingLanc.valor} onChange={(e) => setEditingLanc((prev: any) => ({ ...prev, valor: formatCurrencyInput(e.target.value) }))} />
+                    <CurrencyInput value={editingLanc.valor} onChange={(e) => setEditingLanc((prev: any) => ({ ...prev, valor: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Data</Label>

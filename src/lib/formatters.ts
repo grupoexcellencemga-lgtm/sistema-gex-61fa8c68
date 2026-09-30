@@ -13,10 +13,21 @@ export const formatCurrency = (v: number): string =>
 export const formatCurrencyNullable = (v: number | null): string =>
   formatCurrency(v ?? 0);
 
-/** Parse a Brazilian currency string "1.234,56" → 1234.56 */
+/** Parse a Brazilian currency string OR normalized numeric string → number.
+ *  Handles: "1.234,56", "1234.56", "1234", "R$ 1.234,56" → 1234.56 */
 export const parseCurrencyToNumber = (v: string): number => {
-  const clean = v.replace(/[^\d,]/g, "").replace(",", ".");
-  return parseFloat(clean) || 0;
+  if (!v) return 0;
+  let s = String(v).replace(/[R$\s%]/g, "").trim();
+  if (!s) return 0;
+  if (s.includes(",")) {
+    // pt-BR: dots are thousand-separators, comma is decimal
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    // US/plain: multiple dots = thousand-separators; single dot = decimal
+    const dots = (s.match(/\./g) || []).length;
+    if (dots > 1) s = s.replace(/\./g, "");
+  }
+  return parseFloat(s) || 0;
 };
 
 /** Live mask for currency input fields: digits → "1.234,56" */

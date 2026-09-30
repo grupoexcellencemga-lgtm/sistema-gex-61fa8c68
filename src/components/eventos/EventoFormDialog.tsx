@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -207,7 +208,7 @@ export function EventoFormDialog({ open, onOpenChange, form, setForm, onSubmit, 
               <div className="mt-4 space-y-4">
                 <div className="space-y-2">
                   <Label>Valor por participante (R$)</Label>
-                  <Input type="number" step="0.01" min="0" value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" />
+                  <CurrencyInput value={form.valor} onChange={(e) => u("valor", e.target.value)} placeholder="0,00" />
                 </div>
                 <div className="space-y-2">
                   <Label>Chave PIX (opcional)</Label>
