@@ -627,6 +627,10 @@ export const AlunoDetailSheet = (props: Props) => {
                             ? group.pgs.filter((p: any) => p.status !== "pago").reduce((s: number, p: any) => s + Number(p.valor), 0)
                             : (resumo as any).saldoFinanceiro;
                           const grpSaldoDisponivel = group.id === "__orphan__" ? 0 : (resumo as any).saldoDisponivelNovoPagamento;
+                          // Quantidade de pagamentos não-permuta ainda pendentes neste grupo
+                          const nonPermutaPendingCount = rowItems.filter(
+                            (ri) => ri.data.forma_pagamento !== "permuta" && ri.data.status !== "pago",
+                          ).length;
 
                           return (
                             <div key={group.id} className="space-y-1.5">
@@ -698,6 +702,12 @@ export const AlunoDetailSheet = (props: Props) => {
 
                                   const valorTaxaMaquina = getValorTaxaMaquina(p);
                                   const isVencido = p.status === "vencido" || (p.status === "pendente" && p.data_vencimento && p.data_vencimento < hoje);
+                                  // Para um único pagamento pendente não-permuta, exibe o valor líquido
+                                  // já descontadas as permutas entregues (grpPendente = saldoFinanceiro)
+                                  const valorEfetivo =
+                                    !isPermuta && p.status !== "pago" && nonPermutaPendingCount === 1
+                                      ? grpPendente
+                                      : Number(p.valor);
 
                                   return (
                                     <div key={p.id}>
@@ -712,7 +722,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                             <p className="font-medium">
                                               {p.status === "pago" && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor)
                                                 ? formatCurrency(Number(p.valor_pago))
-                                                : formatCurrency(Number(p.valor))}
+                                                : formatCurrency(valorEfetivo)}
                                             </p>
                                             {p.status === "pago" && !temTaxaSeparada(p) && p.valor_pago != null && Number(p.valor_pago) < Number(p.valor) && (
                                               <span className="text-xs text-muted-foreground">parcial de {formatCurrency(Number(p.valor))}</span>
@@ -749,7 +759,7 @@ export const AlunoDetailSheet = (props: Props) => {
                                               variant="outline"
                                               size="sm"
                                               className="h-7 text-xs"
-                                              onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: Number(p.valor) || 0 })}
+                                              onClick={() => openConfirmPagamentoDialog(p, { multa: 0, juros: 0, total: valorEfetivo || 0 })}
                                             >
                                               Registrar pagamento
                                             </Button>
