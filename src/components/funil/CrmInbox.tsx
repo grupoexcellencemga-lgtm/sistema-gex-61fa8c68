@@ -35,6 +35,7 @@ type Mensagem = {
   conteudo: string;
   tipo: "texto" | "imagem" | "audio" | "video" | "documento" | "sticker";
   media_url: string | null;
+  media_storage_path?: string | null;
   media_mime: string | null;
   media_nome: string | null;
   quoted_message_id: string | null;
@@ -416,6 +417,25 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
   const mensagens = aba === "finalizadas" ? mensagensProtocolo : mensagensLead;
   const msgsLoading = aba === "finalizadas" ? msgsProtoLoading : msgsLeadLoading;
 
+  const mediaPathsKey = mensagens
+    .filter((m) => m.media_storage_path)
+    .map((m) => `${m.id}:${m.media_storage_path}`)
+    .join("|");
+  const { data: signedMediaUrls = {} } = useQuery<Record<string, string>>({
+    queryKey: ["crm-media-signed", mediaPathsKey],
+    queryFn: async () => {
+      const entries = await Promise.all(mensagens.filter((m) => m.media_storage_path).map(async (m) => {
+        const { data, error } = await supabase.storage.from("midia_crm").createSignedUrl(m.media_storage_path!, 55 * 60);
+        if (error || !data?.signedUrl) return [m.id, ""] as const;
+        return [m.id, data.signedUrl] as const;
+      }));
+      return Object.fromEntries(entries.filter(([, url]) => Boolean(url)));
+    },
+    enabled: Boolean(mediaPathsKey),
+    staleTime: 45 * 60 * 1000,
+  });
+  const mediaSrc = (msg: Mensagem) => signedMediaUrls[msg.id] || msg.media_url || null;
+
   // Realtime: novas mensagens
   useEffect(() => {
     if (!selectedLeadId || aba === "finalizadas") return;
@@ -657,19 +677,19 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
         .upload(path, bytes, { contentType: mime, upsert: true });
       if (uploadErr) throw new Error("Erro no upload: " + uploadErr.message);
 
-      const { data: pub } = supabase.storage.from("midia_crm").getPublicUrl(path);
-      const mediaUrl = pub.publicUrl;
+      const previewUrl = URL.createObjectURL(file);
 
-      // Otimista: adiciona localmente
+      // Otimista: o blob local só existe no navegador; no banco persistimos apenas o caminho privado.
       const tempId = `temp-${Date.now()}`;
       queryClient.setQueryData<Mensagem[]>(["mensagens-crm", selectedLeadId], (old = []) => [
         ...old,
-        { id: tempId, conteudo: file.name, tipo, media_url: mediaUrl, media_mime: mime, media_nome: file.name, direcao: "saida", canal: "whatsapp", lido: null, created_at: new Date().toISOString() },
+        { id: tempId, conteudo: file.name, tipo, media_url: previewUrl, media_storage_path: path, media_mime: mime, media_nome: file.name, direcao: "saida", canal: "whatsapp", lido: null, created_at: new Date().toISOString() },
       ]);
 
       const { error } = await supabase.functions.invoke("enviar-mensagem", {
-        body: { lead_id: selectedLeadId, tipo, media_url: mediaUrl, media_mime: mime, media_nome: file.name },
+        body: { lead_id: selectedLeadId, tipo, media_storage_path: path, media_mime: mime, media_nome: file.name },
       });
+      setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["mensagens-crm", selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["crm-leads", quadroId, empresaId], exact: false });
@@ -1481,7 +1501,9 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
             ) : mensagens.length === 0 ? (
               <p className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem neste protocolo.</p>
             ) : (
-              mensagensFiltradas.map((msg) => (
+              mensagensFiltradas.map((msg) => {
+                const src = mediaSrc(msg);
+                return (
                 <div key={msg.id} className={cn("flex group", msg.direcao === "saida" ? "justify-end" : "justify-start")}>
                   {/* Botão de citar — lado esquerdo para mensagens enviadas */}
                   {msg.direcao === "saida" && aba !== "finalizadas" && canReply && (
@@ -1521,24 +1543,24 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       </div>
                     )}
                     {/* Mídia */}
-                    {msg.media_url && (msg.tipo === "imagem" || msg.tipo === "sticker") && (
+                    {src && (msg.tipo === "imagem" || msg.tipo === "sticker") && (
                       <img
-                        src={msg.media_url}
+                        src={src}
                         alt={msg.media_nome ?? "imagem"}
                         className="rounded-lg max-w-full max-h-64 object-contain mb-1 cursor-zoom-in"
                         loading="lazy"
-                        onClick={() => setLightboxUrl(msg.media_url!)}
+                        onClick={() => setLightboxUrl(src)}
                       />
                     )}
-                    {msg.media_url && msg.tipo === "audio" && (
-                      <AudioMessagePlayer src={msg.media_url} outgoing={msg.direcao === "saida" && !msg.is_nota_interna} />
+                    {src && msg.tipo === "audio" && (
+                      <AudioMessagePlayer src={src} outgoing={msg.direcao === "saida" && !msg.is_nota_interna} />
                     )}
-                    {msg.media_url && msg.tipo === "video" && (
-                      <video controls src={msg.media_url} className="rounded-lg max-w-full max-h-48 mb-1" />
+                    {src && msg.tipo === "video" && (
+                      <video controls src={src} className="rounded-lg max-w-full max-h-48 mb-1" />
                     )}
-                    {msg.media_url && msg.tipo === "documento" && (
+                    {src && msg.tipo === "documento" && (
                       <a
-                        href={msg.media_url}
+                        href={src}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
@@ -1554,10 +1576,10 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                       <p className="whitespace-pre-wrap break-words">{highlightText(msg.conteudo, msgSearch)}</p>
                     )}
                     {/* Fallback: sem mídia e sem texto útil */}
-                    {!msg.media_url && ["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
+                    {!src && ["[Imagem]","[Audio]","[Video]","[Documento]","[Sticker]","[Mídia]"].includes(msg.conteudo) && (
                       <p className="whitespace-pre-wrap break-words italic opacity-70">{msg.conteudo}</p>
                     )}
-                    {!msg.media_url && msg.tipo === "texto" && !msg.conteudo && (
+                    {!src && msg.tipo === "texto" && !msg.conteudo && (
                       <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
                     )}
                     <p className={cn(
@@ -1582,7 +1604,8 @@ export function CrmInbox({ quadroId, etapas, canal, onLeadClick }: CrmInboxProps
                     </button>
                   )}
                 </div>
-              ))
+                );
+              })
             )}
             <div ref={bottomRef} />
           </div>
