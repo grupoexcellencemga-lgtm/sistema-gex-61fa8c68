@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useSearchParams } from "react-router-dom";
 import { exportToCSV } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
@@ -75,6 +76,8 @@ function pctChange(atual: number, anterior: number): { pct: number; direction: "
 }
 
 const Relatorios = () => {
+  const { empresa } = useEmpresa();
+  const empresaId = empresa?.id;
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "geral";
 
@@ -91,15 +94,17 @@ const Relatorios = () => {
   const range = useMemo(() => getDateRange(preset, customStart, customEnd), [preset, customStart, customEnd]);
 
   const { data: metrics, isLoading } = useQuery({
-    queryKey: ["relatorios-data", range.inicio, range.fim],
+    queryKey: ["relatorios-data", empresaId, range.inicio, range.fim],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("relatorios_data", {
+      const { data, error } = await (supabase as any).rpc("relatorios_data", {
         _data_inicio: range.inicio,
         _data_fim: range.fim,
-      } as any);
+        _empresa_id: empresaId!,
+      });
       if (error) throw error;
       return data as any;
     },
+    enabled: !!empresaId,
   });
 
   const m = metrics || {};

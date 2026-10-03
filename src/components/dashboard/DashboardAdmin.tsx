@@ -133,7 +133,7 @@ export function DashboardAdmin({ mes, ano }: Props) {
           return (data || []).map((p) => ({ nome: (p.alunos as { nome: string } | null)?.nome || "—", data: p.data_vencimento || "", valor: formatCurrency(Number(p.valor)) }));
         }
         case "comissoes": {
-          const { data } = await supabase.from("comissoes").select("valor_comissao, created_at, comerciais(nome)").is("deleted_at", null).eq("status", "pendente").gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
+          const { data } = await supabase.from("comissoes").select("valor_comissao, created_at, comerciais(nome)").eq("empresa_id", empresaId!).is("deleted_at", null).eq("status", "pendente").gte("created_at", startStr).lt("created_at", new Date(ano, mes + 1, 1).toISOString());
           return (data || []).map((c) => ({ nome: (c.comerciais as { nome: string } | null)?.nome || "—", data: c.created_at, valor: formatCurrency(Number(c.valor_comissao)) }));
         }
         case "processos": {
