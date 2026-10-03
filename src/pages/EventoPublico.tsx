@@ -13,14 +13,8 @@ const EventoPublico = () => {
     queryKey: ["evento-publico", slug],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("eventos")
-        .select(
-          "id, nome, descricao, data, local, pago, valor, limite_participantes, tipo, status, banner_url, pagina_secoes, link_pagamento, pagina_publica_ativa"
-        )
-        .eq("slug", slug)
-        .eq("pagina_publica_ativa", true)
-        .is("deleted_at", null)
-        .single();
+        .rpc("get_evento_publico", { p_slug: slug })
+        .maybeSingle();
       if (error) throw error;
       return data;
     },

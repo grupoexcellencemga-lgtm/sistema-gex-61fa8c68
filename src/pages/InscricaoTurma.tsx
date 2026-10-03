@@ -18,16 +18,14 @@ const InscricaoTurma = () => {
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", observacoes: "" });
   const [submitted, setSubmitted] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
+  const [payment, setPayment] = useState<{ pix_chave: string | null; asaas_link_pagamento: string | null }>({ pix_chave: null, asaas_link_pagamento: null });
 
   const { data: turma, isLoading, error } = useQuery({
     queryKey: ["inscricao-turma", turmaId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("turmas")
-        .select("id, nome, cidade, modalidade, data_inicio, data_fim, status, empresa_id, pix_chave, asaas_link_pagamento, descricao, pergunta_inscricao, produtos(nome, valor)")
-        .eq("id", turmaId)
-        .is("deleted_at", null)
-        .single();
+        .rpc("get_turma_inscricao", { p_turma_id: turmaId })
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -37,23 +35,26 @@ const InscricaoTurma = () => {
   const inscrever = useMutation({
     mutationFn: async () => {
       if (!form.nome.trim()) throw new Error("Nome é obrigatório");
-      const { error } = await (supabase as any).from("inscricoes_turmas").insert({
-        turma_id: turmaId,
-        empresa_id: turma?.empresa_id ?? null,
-        nome: form.nome.trim(),
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        observacoes: form.observacoes.trim() || null,
-        utm_source: utmSource ?? null,
+      const { data, error } = await (supabase as any).rpc("inscrever_turma_publico", {
+        p_turma_id: turmaId,
+        p_nome: form.nome.trim(),
+        p_email: form.email.trim() || null,
+        p_telefone: form.telefone.trim() || null,
+        p_observacoes: form.observacoes.trim() || null,
+        p_utm_source: utmSource ?? null,
       });
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => setSubmitted(true),
+    onSuccess: (data: any) => {
+      setPayment({ pix_chave: data?.pix_chave ?? null, asaas_link_pagamento: data?.asaas_link_pagamento ?? null });
+      setSubmitted(true);
+    },
     onError: (e: any) => toast.error(e.message || "Erro ao realizar inscrição"),
   });
 
   const encerrada = turma?.status === "finalizada" || turma?.status === "cancelada";
-  const produto = turma?.produtos;
+  const produto = turma ? { nome: turma.produto_nome, valor: turma.produto_valor } : null;
   const valor = produto?.valor ? Number(produto.valor) : null;
 
   if (isLoading) return (
@@ -80,7 +81,7 @@ const InscricaoTurma = () => {
         <h1 className="text-2xl font-bold">Inscrição realizada!</h1>
         <p className="text-muted-foreground">
           Seu interesse na turma <strong>{turma.nome}</strong> foi registrado.
-          {!turma.pix_chave && !turma.asaas_link_pagamento && " Em breve entraremos em contato com mais informações."}
+          {!payment.pix_chave && !payment.asaas_link_pagamento && " Em breve entraremos em contato com mais informações."}
         </p>
         {turma.data_inicio && (
           <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
@@ -93,7 +94,7 @@ const InscricaoTurma = () => {
           </p>
         )}
 
-        {(turma.pix_chave || turma.asaas_link_pagamento) && (
+        {(payment.pix_chave || payment.asaas_link_pagamento) && (
           <div className="pt-2 w-full space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-border" />
@@ -101,7 +102,7 @@ const InscricaoTurma = () => {
               <div className="flex-1 h-px bg-border" />
             </div>
 
-            {turma.pix_chave && (
+            {payment.pix_chave && (
               <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 p-4 space-y-3 text-left">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
@@ -118,11 +119,11 @@ const InscricaoTurma = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-2 bg-white dark:bg-emerald-900/30 rounded-xl border border-emerald-200 dark:border-emerald-700 px-3 py-2.5">
-                  <span className="text-sm font-mono flex-1 text-foreground tracking-wide">{turma.pix_chave}</span>
+                  <span className="text-sm font-mono flex-1 text-foreground tracking-wide">{payment.pix_chave}</span>
                   <button
                     className={cn("shrink-0 h-7 px-2 gap-1 text-xs rounded flex items-center", pixCopiado ? "text-emerald-600" : "text-muted-foreground hover:text-foreground")}
                     onClick={() => {
-                      navigator.clipboard.writeText(turma.pix_chave);
+                      navigator.clipboard.writeText(payment.pix_chave);
                       setPixCopiado(true);
                       toast.success("Chave PIX copiada!");
                       setTimeout(() => setPixCopiado(false), 3000);
@@ -138,10 +139,10 @@ const InscricaoTurma = () => {
               </div>
             )}
 
-            {turma.asaas_link_pagamento && (
+            {payment.asaas_link_pagamento && (
               <button
                 className="w-full flex items-center justify-center gap-2 border-2 rounded-lg h-12 text-sm font-semibold px-4 hover:bg-muted/50 transition-colors"
-                onClick={() => window.open(turma.asaas_link_pagamento, "_blank", "noopener,noreferrer")}
+                onClick={() => window.open(payment.asaas_link_pagamento, "_blank", "noopener,noreferrer")}
               >
                 <CreditCard className="h-4 w-4" />
                 Pagar no Crédito
