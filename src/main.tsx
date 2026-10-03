@@ -1,20 +1,26 @@
 import "core-js/stable";
 import ResizeObserverPolyfill from "resize-observer-polyfill";
+import { createRoot } from "react-dom/client";
+import "./index.css";
 
-// Synchronously patch ResizeObserver BEFORE anything else runs
 if (typeof window !== "undefined" && !window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverPolyfill as unknown as typeof ResizeObserver;
 }
 
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
-import "./index.css";
+async function bootstrap() {
+  const isDemo = window.location.pathname.startsWith("/demo");
+  const RootComponent = isDemo
+    ? (await import("./demo/DemoRoot")).default
+    : (await import("./App")).default;
 
-const rootEl = document.getElementById("root");
+  let rootEl = document.getElementById("root");
+  if (!rootEl) {
+    rootEl = document.createElement("div");
+    rootEl.id = "root";
+    document.body.appendChild(rootEl);
+  }
 
-if (rootEl) {
-  createRoot(rootEl).render(<App />);
-} else {
-  document.body.innerHTML = '<div id="root"></div>';
-  createRoot(document.getElementById("root")!).render(<App />);
+  createRoot(rootEl).render(<RootComponent />);
 }
+
+void bootstrap();

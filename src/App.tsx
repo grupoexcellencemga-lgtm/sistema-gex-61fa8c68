@@ -51,6 +51,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Inscricao = lazy(() => import("./pages/Inscricao"));
 const InscricaoTurma = lazy(() => import("./pages/InscricaoTurma"));
 const EventoPublico = lazy(() => import("./pages/EventoPublico"));
+const DemoApp = lazy(() => import("./demo/DemoApp"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,7 +98,8 @@ const AppRoutes = () => {
   if (
     location.pathname.startsWith("/inscricao/") ||
     location.pathname.startsWith("/inscricao-turma/") ||
-    location.pathname.startsWith("/e/")
+    location.pathname.startsWith("/e/") ||
+    location.pathname.startsWith("/demo")
   ) {
     return (
       <Suspense fallback={<LoadingScreen />}>
@@ -105,6 +107,7 @@ const AppRoutes = () => {
           <Route path="/inscricao/:eventoId" element={<Inscricao />} />
           <Route path="/inscricao-turma/:turmaId" element={<InscricaoTurma />} />
           <Route path="/e/:slug" element={<EventoPublico />} />
+          <Route path="/demo/*" element={<DemoApp />} />
         </Routes>
       </Suspense>
     );
@@ -188,3 +191,4 @@ const App = () => (
 );
 
 export default App;
+
