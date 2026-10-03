@@ -139,7 +139,8 @@ const Metas = () => {
 
   const atualizarMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("atualizar_metas_ativas");
+      if (!empresaId) throw new Error("Selecione uma empresa");
+      const { error } = await (supabase as any).rpc("atualizar_metas_ativas", { p_empresa_id: empresaId });
       if (error) throw error;
     },
     onSuccess: () => {

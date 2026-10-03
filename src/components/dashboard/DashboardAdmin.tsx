@@ -70,12 +70,17 @@ export function DashboardAdmin({ mes, ano }: Props) {
   })();
 
   const { data: metrics, isLoading } = useQuery<DashboardMetrics>({
-    queryKey: ["dashboard-metrics", mes, ano],
+    queryKey: ["dashboard-metrics", empresaId, mes, ano],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("dashboard_metrics", { _mes: mes, _ano: ano });
+      const { data, error } = await (supabase as any).rpc("dashboard_metrics", {
+        _mes: mes,
+        _ano: ano,
+        _empresa_id: empresaId!,
+      });
       if (error) throw error;
       return data as unknown as DashboardMetrics;
     },
+    enabled: !!empresaId,
   });
 
   const { data: detailData } = useQuery<MetricDetailItem[] | null>({
